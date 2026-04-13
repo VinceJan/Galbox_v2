@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Galbox.App.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="24">
+            <!-- Header -->
+            <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <!-- Scraper Settings -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="刮削源设置" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <StackPanel Spacing="4">
+                    <CheckBox Content="Bangumi（中文优先）" IsChecked="True"/>
+                    <CheckBox Content="VNDB（封面补充）" IsChecked="True"/>
+                    <CheckBox Content="ymgal（中文补充）" IsChecked="True"/>
+                    <CheckBox Content="cngal（国内资讯）" IsChecked="True"/>
+                </StackPanel>
+                <Button Content="登录 Bangumi 账号" Margin="0,8,0,0"/>
+            </StackPanel>
+
+            <!-- Launch Behavior Settings -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="启动游戏行为" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <RadioButtons Header="启动时">
+                    <RadioButton Content="无行为" GroupName="LaunchBehavior"/>
+                    <RadioButton Content="最小化" GroupName="LaunchBehavior" IsChecked="True"/>
+                    <RadioButton Content="最小化到托盘" GroupName="LaunchBehavior"/>
+                </RadioButtons>
+                <RadioButtons Header="退出时">
+                    <RadioButton Content="最大化至桌面" GroupName="ExitBehavior" IsChecked="True"/>
+                    <RadioButton Content="保留在托盘" GroupName="ExitBehavior"/>
+                    <RadioButton Content="最小化" GroupName="ExitBehavior"/>
+                </RadioButtons>
+            </StackPanel>
+
+            <!-- Process Monitor Settings -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="进程监控设置" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <ToggleSwitch Header="启用进程监控" IsOn="True"/>
+                <ToggleSwitch Header="高级内存监控（可能影响性能）" IsOn="False"/>
+                <ToggleSwitch Header="自动存档备份" IsOn="True"/>
+                <RadioButtons Header="备份频率">
+                    <RadioButton Content="每次启动" GroupName="BackupFrequency"/>
+                    <RadioButton Content="每次退出" GroupName="BackupFrequency" IsChecked="True"/>
+                    <RadioButton Content="手动备份" GroupName="BackupFrequency"/>
+                </RadioButtons>
+            </StackPanel>
+
+            <!-- Screenshot Settings -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="截图设置" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <TextBox Header="截图保存路径"
+                         Text="C:\Users\...\Galbox\screenshots"
+                         IsReadOnly="True"/>
+                <Button Content="选择文件夹"/>
+            </StackPanel>
+
+            <!-- Boss Key Settings -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="老板键设置" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <TextBox Header="快捷键组合"
+                         Text="Alt + Shift + H"/>
+                <Button Content="更改快捷键"/>
+            </StackPanel>
+
+            <!-- About Section -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="关于" Style="{StaticResource SubtitleTextBlockStyle}"/>
+                <TextBlock Text="Galbox v1.0.0"/>
+                <TextBlock Text="Galgame 聚合平台客户端"
+                           Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                <HyperlinkButton Content="GitHub"/>
+                <HyperlinkButton Content="反馈问题"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+
+</Page>

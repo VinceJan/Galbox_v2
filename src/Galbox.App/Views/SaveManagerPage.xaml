@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Galbox.App.Views.SaveManagerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="存档管理" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,16"/>
+
+        <!-- Game Selector -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,16">
+            <ComboBox x:Name="GameSelector"
+                      PlaceholderText="选择游戏"
+                      Width="300"
+                      SelectionChanged="GameSelector_SelectionChanged"/>
+            <Button Content="创建快照" Style="{StaticResource AccentButtonStyle}" Click="CreateSnapshot_Click"/>
+            <Button Content="新建分支" Click="CreateBranch_Click"/>
+        </StackPanel>
+
+        <!-- Timeline View -->
+        <ScrollViewer Grid.Row="2">
+            <StackPanel Spacing="16">
+                <!-- Timeline Header -->
+                <TextBlock Text="存档时间线" Style="{StaticResource SubtitleTextBlockStyle}"/>
+
+                <!-- Timeline Placeholder -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="8"
+                        Padding="24"
+                        Height="400">
+                    <TextBlock Text="存档时间线视图"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                </Border>
+
+                <!-- Branches Section -->
+                <TextBlock Text="分支存档管理" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,24,0,0"/>
+
+                <!-- Branch Cards -->
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <Border Width="200"
+                            Height="150"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="8"
+                            Padding="12">
+                        <StackPanel VerticalAlignment="Bottom">
+                            <TextBlock Text="A路线存档组" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            <TextBlock Text="5个存档" Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Width="200"
+                            Height="150"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="8"
+                            Padding="12">
+                        <StackPanel VerticalAlignment="Bottom">
+                            <TextBlock Text="B路线存档组" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                            <TextBlock Text="3个存档" Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Add Branch Card -->
+                    <Border Width="200"
+                            Height="150"
+                            Background="{ThemeResource SystemControlBackgroundAccentBrush}"
+                            CornerRadius="8">
+                        <Button Content="新建分支"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                Foreground="White"/>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+
+</Page>
