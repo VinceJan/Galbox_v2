@@ -43,7 +43,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public void InitializeNavigation()
     {
-        _navigationService = App.Current.Services.GetRequiredService<INavigationService>();
+        _navigationService = App.Services.GetRequiredService<INavigationService>();
         _navigationService.Initialize(ContentFrame, NavigationView);
 
         // Navigate to home page on startup

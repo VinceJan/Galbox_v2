@@ -1,0 +1,607 @@
+﻿<Page x:ConnectionId='1'
+    x:Class="Galbox.App.Views.SaveManagerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:converters="using:Galbox.App.Converters"
+    xmlns:models="using:Galbox.Data.Entities"
+    xmlns:viewmodels="using:Galbox.App.ViewModels"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <!-- Register Converters -->
+        <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+        <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
+        <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
+        <converters:EmptyStringToBooleanConverter x:Key="EmptyStringToBooleanConverter"/>
+        <converters:PathToImageConverter x:Key="PathToImageConverter"/>
+        <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter"/>
+        <converters:ByteSizeConverter x:Key="ByteSizeConverter"/>
+
+        <!-- Styles -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+
+        <Style x:Key="GameListItemStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="BackupItemStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <!-- Game List Item Template -->
+        <DataTemplate x:Key="GameListItemTemplate">
+            <Border Style="{StaticResource GameListItemStyle}">
+                <Grid ColumnSpacing="12" Height="56">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="48"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Cover Thumbnail -->
+                    <Border
+                        Grid.Column="0"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        CornerRadius="4"
+                        Width="48"
+                        Height="56">
+                        <Image
+                            Source="{Binding CoverImagePath, Converter={StaticResource PathToImageConverter}}"
+                            Stretch="UniformToFill"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Game Info -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock
+                            Text="{Binding DisplayName}"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis"
+                            MaxLines="1"/>
+                        <TextBlock
+                            Text="{Binding StatusText}"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <!-- Status Indicator -->
+                    <Border
+                        Grid.Column="2"
+                        Background="{ThemeResource SystemAccentColor}"
+                        CornerRadius="12"
+                        Padding="8,4"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasSaves, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock
+                            Text="{Binding BackupCount}"
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            Foreground="White"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Backup Item Template -->
+        <DataTemplate x:Key="BackupItemTemplate">
+            <Border Style="{StaticResource BackupItemStyle}">
+                <Grid RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Backup Header -->
+                    <Grid Grid.Row="0" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock
+                                Text="{Binding Name}"
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                TextTrimming="CharacterEllipsis"/>
+                            <TextBlock
+                                Text="{Binding CreatedTime, Converter={StaticResource DateTimeFormatConverter}}"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <TextBlock
+                            Grid.Column="1"
+                            Text="{Binding FormattedSize}"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Description -->
+                    <TextBlock
+                        Grid.Row="1"
+                        Text="{Binding Description}"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap"
+                        MaxHeight="40"
+                        Visibility="{Binding Description, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                    <!-- Actions -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                        <Button x:ConnectionId='3'
+                                                        
+                            Tag="{Binding}"
+                            Background="{ThemeResource SystemAccentColor}"
+                            CornerRadius="4"
+                            Padding="12,6"
+                            ToolTipService.ToolTip="Restore this backup">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon FontSize="12" Glyph="&#xE10E;"/>
+                                <TextBlock Text="Restore" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:ConnectionId='4'
+                                                      
+                            Tag="{Binding}"
+                            Background="{ThemeResource SystemControlBackgroundAccentBrush}"
+                            CornerRadius="4"
+                            Padding="12,6"
+                            ToolTipService.ToolTip="Quick switch - backup current and restore this">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon FontSize="12" Glyph="&#xE8AB;"/>
+                                <TextBlock Text="Quick Switch" FontSize="12"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:ConnectionId='5'
+                                                       
+                            Tag="{Binding}"
+                            Background="Transparent"
+                            CornerRadius="4"
+                            Padding="12,6"
+                            ToolTipService.ToolTip="Delete this backup">
+                            <FontIcon FontSize="12" Glyph="&#xE74D;" Foreground="{ThemeResource SystemErrorTextColor}"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid x:ConnectionId='7' x:Name="RootGrid">
+        <!-- Loading Indicator -->
+        <ProgressRing x:ConnectionId='8'
+                                                                
+            Width="48"
+            Height="48"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+                                                                                                                           />
+
+        <!-- Error Message -->
+        <InfoBar x:ConnectionId='9'
+            Title="Error"
+                                                                  
+            Severity="Error"
+                                                                                                                           
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Margin="16"/>
+
+        <!-- Success Message -->
+        <InfoBar x:ConnectionId='10'
+            Title="Success"
+                                                                    
+            Severity="Success"
+                                                                                                                             
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Margin="16,16,16,48"/>
+
+        <!-- Backup Progress Overlay -->
+        <Border x:ConnectionId='11'
+            Background="{ThemeResource SystemControlBackgroundAltHighBrush}"
+            Opacity="0.9"
+                                                                                                                                    
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            CornerRadius="12"
+            Padding="24">
+            <StackPanel Spacing="16" Width="300">
+                <TextBlock
+                    Text="Backup Operation"
+                    FontSize="18"
+                    FontWeight="Bold"
+                    HorizontalAlignment="Center"/>
+                <TextBlock x:ConnectionId='30'
+                                                                                 
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    HorizontalAlignment="Center"/>
+                <ProgressBar x:ConnectionId='31'
+                                                                          
+                    Maximum="100"
+                    ShowError="False"
+                    ShowPaused="False"/>
+                <TextBlock x:ConnectionId='32'
+                                                                         
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    HorizontalAlignment="Center">
+                    <Run Text="%"/>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid x:ConnectionId='12'
+                                                                                                                                  
+            Padding="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Title -->
+                <TextBlock
+                    Grid.Column="0"
+                    Text="Save Manager"
+                    FontSize="24"
+                    FontWeight="Bold"/>
+
+                <!-- Games Count -->
+                <TextBlock
+                    Grid.Column="1"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Margin="16,0,0,0"
+                    VerticalAlignment="Center">
+                    <Run x:ConnectionId='28'                                                          />
+                    <Run Text="of"/>
+                    <Run x:ConnectionId='29'                                                       />
+                    <Run Text="games"/>
+                </TextBlock>
+
+                <!-- Search Box -->
+                <TextBox x:ConnectionId='25'
+                    Grid.Column="2"
+                                                                                                           
+                    PlaceholderText="Search games..."
+                    Width="300"
+                    CornerRadius="8"
+                    HorizontalAlignment="Right"
+                    Margin="0,0,16,0"/>
+
+                <!-- Action Buttons -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+                    <!-- Auto Backup Toggle -->
+                    <ToggleSwitch x:ConnectionId='26'
+                                                                                
+                        OffContent="Auto-backup: Off"
+                        OnContent="Auto-backup: On"
+                        Margin="0,0,8,0"/>
+
+                    <!-- Refresh Button -->
+                    <Button x:ConnectionId='27'
+                                              
+                        Width="40"
+                        Height="40"
+                        Padding="0"
+                        ToolTipService.ToolTip="Refresh">
+                        <FontIcon FontSize="16" Glyph="&#xE72C;"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Two-Column Layout -->
+            <Grid Grid.Row="2" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: Game List -->
+                <Border
+                    Grid.Column="0"
+                    Style="{StaticResource CardStyle}"
+                    Padding="12">
+                    <Grid RowSpacing="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Game List Header -->
+                        <TextBlock
+                            Grid.Row="0"
+                            Text="Games"
+                            FontSize="16"
+                            FontWeight="SemiBold"/>
+
+                        <!-- Game List -->
+                        <ListView x:ConnectionId='24'
+                            Grid.Row="1"
+                                                                                       
+                                                                                       
+                            SelectionMode="Single"
+                            ItemTemplate="{StaticResource GameListItemTemplate}"
+                            IsItemClickEnabled="True"
+                                                       >
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
+                    </Grid>
+                </Border>
+
+                <!-- Right: Backup Details -->
+                <Border x:ConnectionId='14'
+                    Grid.Column="1"
+                    Style="{StaticResource CardStyle}"
+                    Padding="16"
+                                                                                                                                         >
+                    <Grid RowSpacing="16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Selected Game Header -->
+                        <Grid Grid.Row="0" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="20" Glyph="&#xE74E;" Foreground="{ThemeResource SystemAccentColor}"/>
+                                <TextBlock x:ConnectionId='23'
+                                                                                                  
+                                    FontSize="18"
+                                    FontWeight="SemiBold"
+                                    VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <TextBlock
+                                Grid.Column="1"
+                                FontSize="14"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center">
+                                <Run x:ConnectionId='22'                                                               />
+                                <Run Text="backups"/>
+                            </TextBlock>
+
+                            <Button x:ConnectionId='21'
+                                Grid.Column="2"
+                                                             
+                                Background="Transparent"
+                                Padding="8"
+                                ToolTipService.ToolTip="Clear selection">
+                                <FontIcon FontSize="16" Glyph="&#xE711;"/>
+                            </Button>
+                        </Grid>
+
+                        <!-- Create Backup Section -->
+                        <Border
+                            Grid.Row="1"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            CornerRadius="8"
+                            Padding="12">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox x:ConnectionId='19'
+                                    Grid.Column="0"
+                                                                                                                                    
+                                    PlaceholderText="Backup description (optional)..."
+                                    VerticalAlignment="Center"/>
+
+                                <Button x:ConnectionId='20'
+                                    Grid.Column="1"
+                                                               
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    CornerRadius="8"
+                                    Padding="16,8"
+                                                                                                                                                      >
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon FontSize="14" Glyph="&#xE74E;"/>
+                                        <TextBlock Text="Create Backup" FontSize="14"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- Backup List -->
+                        <ScrollViewer Grid.Row="2">
+                            <StackPanel>
+                                <!-- Loading Indicator for Backups -->
+                                <ProgressRing x:ConnectionId='16'
+                                                                                               
+                                    Width="32"
+                                    Height="32"
+                                    HorizontalAlignment="Center"
+                                    Margin="24"
+                                                                                                                                                          />
+
+                                <!-- Backup Items -->
+                                <ListView x:ConnectionId='17'
+                                                                                                     
+                                    SelectedItem="{Binding SelectedBackup, Mode=TwoWay}"
+                                    SelectionMode="Single"
+                                    ItemTemplate="{StaticResource BackupItemTemplate}"
+                                                                                                                                                                 >
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                </ListView>
+
+                                <!-- Empty State for Backups -->
+                                <StackPanel x:ConnectionId='18'
+                                                                                                                                                                      
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Margin="48"
+                                    Spacing="12">
+                                    <FontIcon FontSize="48" Glyph="&#xE74E;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock
+                                        Text="No backups for this game"
+                                        FontSize="14"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        HorizontalAlignment="Center"/>
+                                    <TextBlock
+                                        Text="Create a backup to protect your save progress"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                        HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Selected Backup Details -->
+                        <Border
+                            Grid.Row="3"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            CornerRadius="8"
+                            Padding="12"
+                            Visibility="{Binding SelectedBackup, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Backup Icon -->
+                                <Border
+                                    Grid.Column="0"
+                                    Background="{ThemeResource SystemAccentColor}"
+                                    CornerRadius="8"
+                                    Width="48"
+                                    Height="48">
+                                    <FontIcon FontSize="24" Glyph="&#xE74E;" Foreground="White"/>
+                                </Border>
+
+                                <!-- Backup Details -->
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock
+                                        Text="{Binding SelectedBackup.Name}"
+                                        FontSize="14"
+                                        FontWeight="SemiBold"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="16">
+                                        <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                            <Run Text="Created: "/>
+                                            <Run Text="{Binding SelectedBackup.CreatedTime, Converter={StaticResource DateTimeFormatConverter}}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                            <Run Text="Size: "/>
+                                            <Run Text="{Binding SelectedBackup.FormattedSize}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <TextBlock
+                                        Text="{Binding SelectedBackup.Description}"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                        TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Right: No Game Selected State -->
+                <Border x:ConnectionId='15'
+                    Grid.Column="1"
+                    Style="{StaticResource CardStyle}"
+                    Padding="24"
+                                                                                                                                                >
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="16">
+                        <FontIcon FontSize="64" Glyph="&#xE74E;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock
+                            Text="Select a game to manage its saves"
+                            FontSize="16"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            HorizontalAlignment="Center"/>
+                        <TextBlock
+                            Text="Click on a game from the list to view and manage its save backups"
+                            FontSize="14"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            HorizontalAlignment="Center"
+                            TextWrapping="Wrap"
+                            MaxWidth="300"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Empty State for Games -->
+            <StackPanel x:ConnectionId='13'
+                Grid.Row="2"
+                                                                                                                                             
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="16">
+                <FontIcon FontSize="48" Glyph="&#xE8FD;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock
+                    Text="No games in library"
+                    FontSize="16"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    HorizontalAlignment="Center"/>
+                <TextBlock
+                    Text="Add games to your library to manage their save backups"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>
+

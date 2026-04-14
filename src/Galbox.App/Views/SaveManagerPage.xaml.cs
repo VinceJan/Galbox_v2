@@ -26,7 +26,7 @@ public sealed partial class SaveManagerPage : Page
         InitializeComponent();
 
         // Get ViewModel from DI container
-        ViewModel = App.Current.Services.GetRequiredService<SaveManagerViewModel>();
+        ViewModel = App.Services.GetRequiredService<SaveManagerViewModel>();
 
         // Set DataContext for any binding fallback
         DataContext = ViewModel;

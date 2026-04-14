@@ -46,6 +46,29 @@
         <SolidColorBrush x:Key="FixPatchColor" Color="#2196F3"/>
         <SolidColorBrush x:Key="AdultPatchColor" Color="#E91E63"/>
         <SolidColorBrush x:Key="OtherPatchColor" Color="#9E9E9E"/>
+
+        <!-- Patch Details Flyout -->
+        <Flyout x:Key="PatchDetailsFlyoutKey"
+            Placement="Bottom"
+            ShouldConstrainToRootBounds="False">
+            <Border
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                CornerRadius="8"
+                Padding="16"
+                MinWidth="400"
+                MaxWidth="500">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        Text="Patch Details"
+                        FontSize="18"
+                        FontWeight="Bold"/>
+                    <TextBlock
+                        Text="{x:Bind ViewModel.PatchDetailContent, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        FontSize="14"/>
+                </StackPanel>
+            </Border>
+        </Flyout>
     </Page.Resources>
 
     <Grid x:Name="RootGrid" Padding="24">
@@ -186,7 +209,7 @@
                             IsItemClickEnabled="True"
                             ItemClick="OnGameItemClick">
                             <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="models:GameInfo">
+                                <DataTemplate>
                                     <Grid Padding="8" ColumnSpacing="8">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -201,25 +224,25 @@
                                             Width="48"
                                             Height="48">
                                             <Image
-                                                Source="{x:Bind CoverImagePath, Converter={StaticResource PathToImageConverter}}"
+                                                Source="{Binding CoverImagePath, Converter={StaticResource PathToImageConverter}}"
                                                 Stretch="UniformToFill"/>
                                         </Border>
 
                                         <!-- Game Name -->
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock
-                                                Text="{x:Bind DisplayName}"
+                                                Text="{Binding DisplayName}"
                                                 FontSize="13"
                                                 FontWeight="SemiBold"
                                                 TextTrimming="CharacterEllipsis"
                                                 MaxLines="1"/>
                                             <TextBlock
-                                                Text="{x:Bind Developer}"
+                                                Text="{Binding Developer}"
                                                 FontSize="11"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                 TextTrimming="CharacterEllipsis"
                                                 MaxLines="1"
-                                                Visibility="{x:Bind Developer, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                                Visibility="{Binding Developer, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -271,7 +294,7 @@
                                 FontSize="16"
                                 FontWeight="SemiBold">
                                 <Run Text="Available Patches for"/>
-                                <Run Text="{x:Bind ViewModel.SelectedGame.DisplayName, Mode=OneWay}" Foreground="{ThemeResource SystemAccentColor}"/>
+                                <Run Text="{Binding SelectedGame.DisplayName}" Foreground="{ThemeResource SystemAccentColor}"/>
                             </TextBlock>
 
                             <!-- Patch Type Filter -->
@@ -296,7 +319,7 @@
                             CornerRadius="8"
                             Padding="12"
                             Margin="0,0,0,12"
-                            Visibility="{x:Bind ViewModel.SelectedGame, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
+                            Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}">
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -311,18 +334,18 @@
                                     Width="80"
                                     Height="100">
                                     <Image
-                                        Source="{x:Bind ViewModel.SelectedGame.CoverImagePath, Mode=OneWay, Converter={StaticResource PathToImageConverter}}"
+                                        Source="{Binding SelectedGame.CoverImagePath, Converter={StaticResource PathToImageConverter}}"
                                         Stretch="UniformToFill"/>
                                 </Border>
 
                                 <!-- Game Details -->
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock
-                                        Text="{x:Bind ViewModel.SelectedGame.DisplayName, Mode=OneWay}"
+                                        Text="{Binding SelectedGame.DisplayName}"
                                         FontSize="18"
                                         FontWeight="Bold"/>
                                     <TextBlock
-                                        Text="{x:Bind ViewModel.SelectedGame.Developer, Mode=OneWay}"
+                                        Text="{Binding SelectedGame.Developer}"
                                         FontSize="14"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         Margin="0,4,0,0"/>
@@ -340,7 +363,7 @@
                                     Grid.Column="2"
                                     Content="View Game"
                                     Command="{x:Bind ViewModel.NavigateToGameCommand}"
-                                    CommandParameter="{x:Bind ViewModel.SelectedGame, Mode=OneWay}"
+                                    CommandParameter="{Binding SelectedGame}"
                                     VerticalAlignment="Center"
                                     CornerRadius="8"/>
                             </Grid>
@@ -349,7 +372,7 @@
                         <!-- No Game Selected Message -->
                         <StackPanel
                             Grid.Row="1"
-                            Visibility="{x:Bind ViewModel.SelectedGame, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}"
+                            Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Margin="0,0,0,12">
@@ -361,7 +384,7 @@
                         </StackPanel>
 
                         <!-- Patches List -->
-                        <ScrollViewer Grid.Row="2" Visibility="{x:Bind ViewModel.SelectedGame, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
+                        <ScrollViewer Grid.Row="2" Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}">
                             <ItemsRepeater
                                 ItemsSource="{x:Bind ViewModel.FilteredPatches, Mode=OneWay}"
                                 Margin="0,0,0,8">
@@ -369,7 +392,7 @@
                                     <StackLayout Orientation="Vertical" Spacing="12"/>
                                 </ItemsRepeater.Layout>
                                 <ItemsRepeater.ItemTemplate>
-                                    <DataTemplate x:DataType="models:PatchRecord">
+                                    <DataTemplate>
                                         <Border
                                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                                             CornerRadius="8"
@@ -434,7 +457,6 @@
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                                     <!-- Download Button -->
                                                     <Button
-                                                        Content="Download"
                                                         Command="{Binding ViewModel.DownloadPatchCommand, ElementName=RootGrid}"
                                                         CommandParameter="{Binding}"
                                                         Visibility="{Binding Status, Converter={StaticResource PatchStatusToVisibilityConverter}, ConverterParameter=Available}"
@@ -450,7 +472,6 @@
 
                                                     <!-- Install Button -->
                                                     <Button
-                                                        Content="Install"
                                                         Command="{Binding ViewModel.InstallPatchCommand, ElementName=RootGrid}"
                                                         CommandParameter="{Binding}"
                                                         Visibility="{Binding Status, Converter={StaticResource PatchStatusToVisibilityConverter}, ConverterParameter=Downloaded}"
@@ -479,7 +500,6 @@
 
                                                     <!-- Details Button -->
                                                     <Button
-                                                        Content="Details"
                                                         Command="{Binding ViewModel.ShowPatchDetailsCommand, ElementName=RootGrid}"
                                                         CommandParameter="{Binding}"
                                                         CornerRadius="8"
@@ -522,30 +542,6 @@
                     </Grid>
                 </Border>
             </Grid>
-
-            <!-- Patch Details Flyout -->
-            <Flyout
-                x:Name="PatchDetailsFlyout"
-                Placement="Bottom"
-                ShouldConstrainToRootBounds="False">
-                <Border
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    CornerRadius="8"
-                    Padding="16"
-                    MinWidth="400"
-                    MaxWidth="500">
-                    <StackPanel Spacing="12">
-                        <TextBlock
-                            Text="Patch Details"
-                            FontSize="18"
-                            FontWeight="Bold"/>
-                        <TextBlock
-                            Text="{x:Bind ViewModel.PatchDetailContent, Mode=OneWay}"
-                            TextWrapping="Wrap"
-                            FontSize="14"/>
-                    </StackPanel>
-                </Border>
-            </Flyout>
         </Grid>
     </Grid>
 </Page>

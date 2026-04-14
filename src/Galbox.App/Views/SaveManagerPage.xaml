@@ -46,7 +46,7 @@
         </Style>
 
         <!-- Game List Item Template -->
-        <DataTemplate x:Key="GameListItemTemplate" x:DataType="viewmodels:GameSaveInfo">
+        <DataTemplate x:Key="GameListItemTemplate">
             <Border Style="{StaticResource GameListItemStyle}">
                 <Grid ColumnSpacing="12" Height="56">
                     <Grid.ColumnDefinitions>
@@ -63,7 +63,7 @@
                         Width="48"
                         Height="56">
                         <Image
-                            Source="{x:Bind CoverImagePath, Converter={StaticResource PathToImageConverter}}"
+                            Source="{Binding CoverImagePath, Converter={StaticResource PathToImageConverter}}"
                             Stretch="UniformToFill"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"/>
@@ -72,13 +72,13 @@
                     <!-- Game Info -->
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                         <TextBlock
-                            Text="{x:Bind DisplayName}"
+                            Text="{Binding DisplayName}"
                             FontSize="14"
                             FontWeight="SemiBold"
                             TextTrimming="CharacterEllipsis"
                             MaxLines="1"/>
                         <TextBlock
-                            Text="{x:Bind StatusText}"
+                            Text="{Binding StatusText}"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
@@ -90,9 +90,9 @@
                         CornerRadius="12"
                         Padding="8,4"
                         VerticalAlignment="Center"
-                        Visibility="{x:Bind HasSaves, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        Visibility="{Binding HasSaves, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <TextBlock
-                            Text="{x:Bind BackupCount}"
+                            Text="{Binding BackupCount}"
                             FontSize="12"
                             FontWeight="SemiBold"
                             Foreground="White"/>
@@ -102,7 +102,7 @@
         </DataTemplate>
 
         <!-- Backup Item Template -->
-        <DataTemplate x:Key="BackupItemTemplate" x:DataType="models:GameSaveBackup">
+        <DataTemplate x:Key="BackupItemTemplate">
             <Border Style="{StaticResource BackupItemStyle}">
                 <Grid RowSpacing="8">
                     <Grid.RowDefinitions>
@@ -120,19 +120,19 @@
 
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock
-                                Text="{x:Bind Name}"
+                                Text="{Binding Name}"
                                 FontSize="14"
                                 FontWeight="SemiBold"
                                 TextTrimming="CharacterEllipsis"/>
                             <TextBlock
-                                Text="{x:Bind CreatedTime, Converter={StaticResource DateTimeFormatConverter}}"
+                                Text="{Binding CreatedTime, Converter={StaticResource DateTimeFormatConverter}}"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
 
                         <TextBlock
                             Grid.Column="1"
-                            Text="{x:Bind FormattedSize}"
+                            Text="{Binding FormattedSize}"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                             VerticalAlignment="Center"/>
@@ -141,18 +141,18 @@
                     <!-- Description -->
                     <TextBlock
                         Grid.Row="1"
-                        Text="{x:Bind Description}"
+                        Text="{Binding Description}"
                         FontSize="12"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         TextWrapping="Wrap"
                         MaxHeight="40"
-                        Visibility="{x:Bind Description, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                        Visibility="{Binding Description, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
 
                     <!-- Actions -->
                     <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
                         <Button
                             Click="OnRestoreBackupClick"
-                            Tag="{x:Bind}"
+                            Tag="{Binding}"
                             Background="{ThemeResource SystemAccentColor}"
                             CornerRadius="4"
                             Padding="12,6"
@@ -165,7 +165,7 @@
 
                         <Button
                             Click="OnQuickSwitchClick"
-                            Tag="{x:Bind}"
+                            Tag="{Binding}"
                             Background="{ThemeResource SystemControlBackgroundAccentBrush}"
                             CornerRadius="4"
                             Padding="12,6"
@@ -178,7 +178,7 @@
 
                         <Button
                             Click="OnDeleteBackupClick"
-                            Tag="{x:Bind}"
+                            Tag="{Binding}"
                             Background="Transparent"
                             CornerRadius="4"
                             Padding="12,6"
@@ -470,7 +470,7 @@
                                 <!-- Backup Items -->
                                 <ListView
                                     ItemsSource="{x:Bind ViewModel.SelectedGameBackups, Mode=OneWay}"
-                                    SelectedItem="{x:Bind ViewModel.SelectedBackup, Mode=TwoWay}"
+                                    SelectedItem="{Binding SelectedBackup, Mode=TwoWay}"
                                     SelectionMode="Single"
                                     ItemTemplate="{StaticResource BackupItemTemplate}"
                                     Visibility="{x:Bind ViewModel.IsLoadingBackups, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
@@ -511,7 +511,7 @@
                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                             CornerRadius="8"
                             Padding="12"
-                            Visibility="{x:Bind ViewModel.SelectedBackup, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
+                            Visibility="{Binding SelectedBackup, Converter={StaticResource NullToVisibilityConverter}}">
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -531,21 +531,21 @@
                                 <!-- Backup Details -->
                                 <StackPanel Grid.Column="1" Spacing="4">
                                     <TextBlock
-                                        Text="{x:Bind ViewModel.SelectedBackup.Name, Mode=OneWay}"
+                                        Text="{Binding SelectedBackup.Name}"
                                         FontSize="14"
                                         FontWeight="SemiBold"/>
                                     <StackPanel Orientation="Horizontal" Spacing="16">
                                         <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
                                             <Run Text="Created: "/>
-                                            <Run Text="{x:Bind ViewModel.SelectedBackup.CreatedTime, Mode=OneWay, Converter={StaticResource DateTimeFormatConverter}}"/>
+                                            <Run Text="{Binding SelectedBackup.CreatedTime, Converter={StaticResource DateTimeFormatConverter}}"/>
                                         </TextBlock>
                                         <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
                                             <Run Text="Size: "/>
-                                            <Run Text="{x:Bind ViewModel.SelectedBackup.FormattedSize, Mode=OneWay}"/>
+                                            <Run Text="{Binding SelectedBackup.FormattedSize}"/>
                                         </TextBlock>
                                     </StackPanel>
                                     <TextBlock
-                                        Text="{x:Bind ViewModel.SelectedBackup.Description, Mode=OneWay}"
+                                        Text="{Binding SelectedBackup.Description}"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                         TextWrapping="Wrap"/>

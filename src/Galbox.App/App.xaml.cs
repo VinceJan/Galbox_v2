@@ -24,7 +24,7 @@ public partial class App : Application
     /// <summary>
     /// The main window instance.
     /// </summary>
-    private MainWindow? _mainWindow;
+    public MainWindow? MainWindow { get; private set; }
 
     /// <summary>
     /// Creates the App instance and initializes DI.
@@ -161,15 +161,15 @@ public partial class App : Application
             }
 
             // Create and initialize the main window
-            _mainWindow = new MainWindow();
-            _mainWindow.InitializeNavigation();
-            _mainWindow.Activate();
+            MainWindow = new MainWindow();
+            MainWindow.InitializeNavigation();
+            MainWindow.Activate();
 
             // Set the window handle for process monitor hotkey registration
             var processMonitor = Services.GetService<IProcessMonitorService>();
-            if (processMonitor != null && _mainWindow.WindowHandle != IntPtr.Zero)
+            if (processMonitor != null && MainWindow.WindowHandle != IntPtr.Zero)
             {
-                processMonitor.SetHotkeyWindowHandle(_mainWindow.WindowHandle);
+                processMonitor.SetHotkeyWindowHandle(MainWindow.WindowHandle);
             }
         }
         catch (Exception ex)

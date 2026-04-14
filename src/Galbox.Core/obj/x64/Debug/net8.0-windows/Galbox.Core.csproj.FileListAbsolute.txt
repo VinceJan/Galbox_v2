@@ -1,0 +1,13 @@
+E:\tmp\Galbox_v2\src\Galbox.Core\bin\x64\Debug\net8.0-windows\Galbox.Core.deps.json
+E:\tmp\Galbox_v2\src\Galbox.Core\bin\x64\Debug\net8.0-windows\Galbox.Core.dll
+E:\tmp\Galbox_v2\src\Galbox.Core\bin\x64\Debug\net8.0-windows\Galbox.Core.pdb
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.csproj.AssemblyReference.cache
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.GeneratedMSBuildEditorConfig.editorconfig
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.AssemblyInfoInputs.cache
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.AssemblyInfo.cs
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.csproj.CoreCompileInputs.cache
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.sourcelink.json
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.dll
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\refint\Galbox.Core.dll
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\Galbox.Core.pdb
+E:\tmp\Galbox_v2\src\Galbox.Core\obj\x64\Debug\net8.0-windows\ref\Galbox.Core.dll

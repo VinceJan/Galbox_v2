@@ -56,14 +56,8 @@ public partial class LibraryViewModel : ObservableObject
     /// Selected view mode: true for Table, false for List (Grid).
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsTableView))]
     [NotifyPropertyChangedFor(nameof(IsGridView))]
     private bool _isTableView = false;
-
-    /// <summary>
-    /// Gets whether table view is selected.
-    /// </summary>
-    public bool IsTableView => _isTableView;
 
     /// <summary>
     /// Gets whether grid/list view is selected.

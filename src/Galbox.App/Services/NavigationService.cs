@@ -152,11 +152,8 @@ public class NavigationService : INavigationService
         if (_contentFrame == null)
             return;
 
-        // Remove all back stack entries
-        while (_contentFrame.CanGoBack)
-        {
-            _contentFrame.RemoveBackEntry();
-        }
+        // WinUI3: Clear the back stack directly
+        _contentFrame.BackStack.Clear();
 
         _logger.LogInformation("Navigation history cleared");
     }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -292,7 +293,7 @@ public class ErrorCheckingService : IErrorCheckingService
             results[game.Id] = errors;
         }).ConfigureAwait(false);
 
-        return results;
+        return new Dictionary<int, List<GameErrorInfo>>(results);
     }
 
     /// <summary>

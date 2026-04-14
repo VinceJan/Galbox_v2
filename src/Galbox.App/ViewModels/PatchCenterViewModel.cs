@@ -440,19 +440,22 @@ public partial class PatchCenterViewModel : ObservableObject
     /// <summary>
     /// Handles selected game changed - loads patches for that game.
     /// </summary>
-    partial async void OnSelectedGameChanged(GameInfo? value)
+    partial void OnSelectedGameChanged(GameInfo? value)
     {
         if (value != null)
         {
-            try
+            _ = Task.Run(async () =>
             {
-                await LoadPatchesForGameAsync(value.Id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading patches for game {GameId}", value.Id);
-                ErrorMessage = $"Failed to load patches: {ex.Message}";
-            }
+                try
+                {
+                    await LoadPatchesForGameAsync(value.Id).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading patches for game: {GameId}", value.Id);
+                    ErrorMessage = $"Failed to load patches: {ex.Message}";
+                }
+            });
         }
         else
         {

@@ -95,7 +95,7 @@
                 <!-- Quick Launch Section -->
                 <Border
                     Style="{StaticResource QuickLaunchCardStyle}"
-                    Visibility="{x:Bind ViewModel.QuickLaunchGame, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
+                    Visibility="{Binding QuickLaunchGame, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -111,7 +111,7 @@
                             Width="120"
                             Height="180">
                             <Image
-                                Source="{x:Bind ViewModel.QuickLaunchGame.CoverImagePath, Mode=OneWay, Converter={StaticResource PathToImageConverter}}"
+                                Source="{Binding QuickLaunchGame.CoverImagePath, Mode=OneWay, Converter={StaticResource PathToImageConverter}}"
                                 Stretch="UniformToFill"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"/>
@@ -120,31 +120,31 @@
                         <!-- Game Info -->
                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8">
                             <TextBlock
-                                Text="{x:Bind ViewModel.QuickLaunchGame.DisplayName, Mode=OneWay}"
+                                Text="{Binding QuickLaunchGame.DisplayName, Mode=OneWay}"
                                 FontSize="20"
                                 FontWeight="SemiBold"
                                 TextWrapping="Wrap"/>
 
                             <TextBlock
-                                Text="{x:Bind ViewModel.QuickLaunchGame.Developer, Mode=OneWay}"
+                                Text="{Binding QuickLaunchGame.Developer, Mode=OneWay}"
                                 FontSize="14"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Visibility="{x:Bind ViewModel.QuickLaunchGame.Developer, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                Visibility="{Binding QuickLaunchGame.Developer, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
 
                             <TextBlock
                                 FontSize="13"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Visibility="{x:Bind ViewModel.QuickLaunchGame.LastSessionTime, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
+                                Visibility="{Binding QuickLaunchGame.LastSessionTime, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
                                 <Run Text="Last played: "/>
-                                <Run Text="{x:Bind ViewModel.QuickLaunchGame.LastSessionTime, Mode=OneWay, Converter={StaticResource DateTimeFormatConverter}}"/>
+                                <Run Text="{Binding QuickLaunchGame.LastSessionTime, Mode=OneWay, Converter={StaticResource DateTimeFormatConverter}}"/>
                             </TextBlock>
                         </StackPanel>
 
                         <!-- Launch Button -->
                         <Button
                             Grid.Column="2"
-                            Command="{x:Bind ViewModel.NavigateToGameCommand}"
-                            CommandParameter="{x:Bind ViewModel.QuickLaunchGame, Mode=OneWay}"
+                            Command="{Binding NavigateToGameCommand}"
+                            CommandParameter="{Binding QuickLaunchGame, Mode=OneWay}"
                             VerticalAlignment="Center"
                             Style="{StaticResource LaunchButtonStyle}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -178,7 +178,7 @@
                         <StackLayout Orientation="Horizontal" Spacing="12"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="models:GameInfo">
+                        <DataTemplate>
                             <Button
                                 Click="OnGameItemClick"
                                 Padding="0"
@@ -235,7 +235,7 @@
                         <StackLayout Orientation="Horizontal" Spacing="12"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="models:GameInfo">
+                        <DataTemplate>
                             <Button
                                 Click="OnGameItemClick"
                                 Padding="0"
@@ -302,7 +302,7 @@
                         <StackLayout Orientation="Horizontal" Spacing="12"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="models:GameInfo">
+                        <DataTemplate>
                             <Button
                                 Click="OnGameItemClick"
                                 Padding="0"

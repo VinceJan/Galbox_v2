@@ -268,9 +268,9 @@ POST /vn
 
 ## ymgal API
 
-*状态: 待研究实现*
+*状态: 待研究实现 - 当前使用 Stub 服务*
 
-ymgal (Yumei Galgame) 是中文 Galgame 数据库，API 结构待研究。
+ymgal (Yumei Galgame) 是中文 Galgame 数据库，API 结构待研究。在正式 API 可用前，使用 Stub 服务进行开发测试。
 
 ### 基础信息
 
@@ -278,6 +278,11 @@ ymgal (Yumei Galgame) 是中文 Galgame 数据库，API 结构待研究。
 |------|-----|
 | 网站 | `https://www.ymgal.games/` |
 | 状态 | 待研究 |
+| Stub 服务 | `Galbox.Core/Api/YmgalApi.cs` |
+
+### Stub 服务接口规范
+
+Stub 服务用于开发测试阶段，模拟 API 响应。
 
 **预期端点:**
 
@@ -286,13 +291,104 @@ GET /api/search?q={title}
 GET /api/game/{id}
 ```
 
+**搜索响应模型 (Stub):**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {
+      "id": "ymgal-001",
+      "name": "游戏名称",
+      "nameCn": "中文名称",
+      "cover": "https://...",
+      "developer": "制作公司",
+      "releaseDate": "2023-01-01",
+      "description": "游戏简介..."
+    }
+  ]
+}
+```
+
+**详情响应模型 (Stub):**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "ymgal-001",
+    "name": "游戏名称",
+    "nameCn": "中文名称",
+    "cover": "https://...",
+    "developer": "制作公司",
+    "releaseDate": "2023-01-01",
+    "description": "详细简介...",
+    "tags": ["恋爱", "冒险"],
+    "characters": [
+      {
+        "id": "char-001",
+        "name": "角色名",
+        "avatar": "https://..."
+      }
+    ],
+    "screenshots": [
+      "https://..."
+    ]
+  }
+}
+```
+
+### Stub 服务实现示例
+
+```csharp
+public class YmgalApi : ApiClient, IYmgalApi
+{
+    private const bool UseStub = true; // 开发阶段使用 Stub
+    
+    public async Task<YmgalSearchResponse?> SearchAsync(
+        string title, 
+        CancellationToken cancellationToken = default)
+    {
+        if (UseStub)
+        {
+            return GetStubSearchResponse(title);
+        }
+        
+        var url = $"https://www.ymgal.games/api/search?q={Uri.EscapeDataString(title)}";
+        return await GetJsonAsync<YmgalSearchResponse>(url, cancellationToken);
+    }
+    
+    private YmgalSearchResponse GetStubSearchResponse(string title)
+    {
+        // 返回模拟数据用于开发测试
+        return new YmgalSearchResponse
+        {
+            Code = 200,
+            Message = "success",
+            Data = new List<YmgalGameItem>
+            {
+                new YmgalGameItem
+                {
+                    Id = "stub-001",
+                    Name = title,
+                    NameCn = $"{title} (中文)",
+                    // ... 其他字段
+                }
+            }
+        };
+    }
+}
+```
+
 ---
 
 ## cngal API
 
-*状态: 待研究实现*
+*状态: 待研究实现 - 当前使用 Stub 服务*
 
-cngal (Chinese Galgame) 是中文 Galgame 数据库，API 结构待研究。
+cngal (Chinese Galgame) 是中文 Galgame 数据库，API 结构待研究。在正式 API 可用前，使用 Stub 服务进行开发测试。
 
 ### 基础信息
 
@@ -300,6 +396,9 @@ cngal (Chinese Galgame) 是中文 Galgame 数据库，API 结构待研究。
 |------|-----|
 | 网站 | `https://www.cngal.org/` |
 | 状态 | 待研究 |
+| Stub 服务 | `Galbox.Core/Api/CngalApi.cs` |
+
+### Stub 服务接口规范
 
 **预期端点:**
 
@@ -308,105 +407,595 @@ GET /api/search?keyword={title}
 GET /api/game/{id}
 ```
 
+**搜索响应模型 (Stub):**
+
+```json
+{
+  "success": true,
+  "result": [
+    {
+      "id": 12345,
+      "name": "游戏名称",
+      "nameCn": "中文名称",
+      "cover": "https://...",
+      "developer": "制作公司",
+      "pubulishDate": "2023-01-01",
+      "introduction": "游戏简介..."
+    }
+  ]
+}
+```
+
+**详情响应模型 (Stub):**
+
+```json
+{
+  "success": true,
+  "result": {
+    "id": 12345,
+    "name": "游戏名称",
+    "nameCn": "中文名称",
+    "cover": "https://...",
+    "developer": {
+      "name": "制作公司",
+      "link": "https://..."
+    },
+    "pubulishDate": "2023-01-01",
+    "introduction": "详细简介...",
+    "tags": [
+      {
+        "name": "恋爱",
+        "link": "https://..."
+      }
+    ],
+    "characters": [
+      {
+        "name": "角色名",
+        "image": "https://..."
+      }
+    ],
+    "pictures": [
+      "https://..."
+    ]
+  }
+}
+```
+
+### Stub 服务模式说明
+
+Stub 服务模式用于以下场景：
+- **开发阶段**：API 尚未正式发布或结构未确定
+- **离线测试**：无网络环境下的功能测试
+- **速率限制规避**：避免频繁请求真实 API
+- **模拟异常场景**：测试错误处理逻辑
+
+**切换机制：**
+
+```csharp
+// 在配置文件中控制
+public class ApiOptions
+{
+    public bool UseStubMode { get; set; } = true;
+    public bool UseYmgalStub { get; set; } = true;
+    public bool UseCngalStub { get; set; } = true;
+}
+
+// 在 DI 注册时配置
+services.Configure<ApiOptions>(configuration.GetSection("Api"));
+services.AddScoped<IYmgalApi, YmgalApi>();
+services.AddScoped<ICngalApi, CngalApi>();
+```
+
 ---
 
 ## 自定义 API
 
-以下为计划中的自定义服务 API（待实现）。
+以下为计划中的自定义服务 API（待实现）。所有自定义 API 均需认证。
+
+### 基础信息
+
+| 属性 | 值 |
+|------|-----|
+| 基础 URL | `https://api.moyu.moe` (待定) |
+| 认证方式 | API Key / JWT Token |
+| 响应格式 | JSON |
+| 编码 | UTF-8 |
+
+### 认证说明
+
+自定义 API 支持两种认证方式：
+
+**方式一：API Key**
+```http
+X-API-Key: {your_api_key}
+```
+
+**方式二：JWT Bearer Token**
+```http
+Authorization: Bearer {your_jwt_token}
+```
+
+**获取 API Key：**
+1. 在 Galbox 设置中注册开发者账号
+2. 在开发者控制台创建应用
+3. 获取 API Key 和 Secret
+
+---
 
 ### moyu.moe 补丁 API
 
 *计划功能：汉化补丁、修复补丁查询*
 
-**预期端点:**
+#### 获取游戏补丁列表
 
 ```
-GET /api/patches?game={gameId}
-GET /api/patch/{patchId}/download
+GET /api/v1/patches
 ```
 
-**响应模型:**
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| gameId | string | 是 | 游戏 ID（支持 Bangumi ID） |
+| type | string | 否 | 补丁类型：Translation, Fix, Mod |
+| version | string | 否 | 游戏版本筛选 |
+| page | int | 否 | 页码，默认 1 |
+| limit | int | 否 | 每页数量，默认 20，最大 100 |
+
+**请求示例：**
+```http
+GET /api/v1/patches?gameId=bgm-12345&type=Translation&page=1&limit=10
+X-API-Key: your_api_key
+```
+
+**响应模型：**
 
 ```json
 {
-  "patches": [
-    {
-      "id": "patch-001",
-      "name": "汉化补丁 v1.0",
-      "type": "Translation",
-      "version": "1.0",
-      "size": 104857600,
-      "downloadUrl": "https://...",
-      "description": "补丁说明"
-    }
-  ]
+  "success": true,
+  "data": {
+    "total": 5,
+    "page": 1,
+    "limit": 10,
+    "patches": [
+      {
+        "id": "patch-001",
+        "name": "汉化补丁 v1.0",
+        "type": "Translation",
+        "version": "1.0",
+        "gameVersion": "1.0.0",
+        "size": 104857600,
+        "sizeFormatted": "100 MB",
+        "downloadUrl": "https://...",
+        "mirrorUrls": [
+          "https://mirror1...",
+          "https://mirror2..."
+        ],
+        "description": "补丁说明",
+        "author": "汉化组名称",
+        "releaseDate": "2023-01-01",
+        "updateDate": "2023-06-01",
+        "downloads": 1234,
+        "rating": 4.5,
+        "tags": ["简体中文", "完整汉化"]
+      }
+    ]
+  }
 }
 ```
+
+#### 获取补丁详情
+
+```
+GET /api/v1/patches/{patchId}
+```
+
+**响应模型：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "patch-001",
+    "name": "汉化补丁 v1.0",
+    "type": "Translation",
+    "version": "1.0",
+    "gameVersion": "1.0.0",
+    "size": 104857600,
+    "description": "详细补丁说明...",
+    "installGuide": "安装说明...",
+    "changelog": [
+      {
+        "version": "1.0",
+        "date": "2023-01-01",
+        "changes": ["初始版本"]
+      }
+    ],
+    "screenshots": ["https://..."],
+    "requirements": ["游戏本体 v1.0.0"],
+    "author": {
+      "name": "汉化组名称",
+      "url": "https://..."
+    }
+  }
+}
+```
+
+#### 下载补丁
+
+```
+GET /api/v1/patches/{patchId}/download
+```
+
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| mirror | int | 否 | 镜像服务器编号 |
+
+**响应：**
+- 成功：重定向到下载链接 (HTTP 302)
+- 或返回签名下载 URL：
+
+```json
+{
+  "success": true,
+  "data": {
+    "downloadUrl": "https://...",
+    "expiresAt": "2024-01-01T00:00:00Z",
+    "signature": "..."
+  }
+}
+```
+
+#### 错误码
+
+| 错误码 | HTTP状态 | 描述 |
+|--------|----------|------|
+| PATCH_NOT_FOUND | 404 | 补丁不存在 |
+| GAME_NOT_FOUND | 404 | 游戏不存在 |
+| DOWNLOAD_LIMIT_EXCEEDED | 429 | 下载次数超限 |
+| INVALID_VERSION | 400 | 游戏版本不匹配 |
+
+---
 
 ### 流程图 API
 
 *计划功能：游戏流程图查询*
 
-**预期端点:**
+#### 获取游戏流程图
 
 ```
-GET /api/flowchart?game={gameId}
+GET /api/v1/flowcharts/{gameId}
 ```
 
-**响应模型:**
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| includeHidden | bool | 否 | 是否包含隐藏路线，默认 false |
+| language | string | 否 | 语言，默认 zh-CN |
+
+**请求示例：**
+```http
+GET /api/v1/flowcharts/bgm-12345?includeHidden=true&language=zh-CN
+X-API-Key: your_api_key
+```
+
+**响应模型：**
 
 ```json
 {
-  "gameId": "game-123",
-  "nodes": [
-    {
-      "id": "node-1",
-      "label": "起始点",
-      "type": "start",
-      "choices": [
-        {
-          "text": "选项A",
-          "nextNodeId": "node-2"
+  "success": true,
+  "data": {
+    "gameId": "bgm-12345",
+    "version": "1.0",
+    "lastUpdated": "2023-01-01",
+    "metadata": {
+      "totalRoutes": 5,
+      "totalEndings": 12,
+      "estimatedCompletionTime": "20h"
+    },
+    "nodes": [
+      {
+        "id": "node-1",
+        "label": "起始点",
+        "type": "start",
+        "position": { "x": 100, "y": 50 },
+        "metadata": {
+          "chapter": "序章",
+          "description": "游戏开始"
+        },
+        "choices": [
+          {
+            "id": "choice-1",
+            "text": "选项A",
+            "nextNodeId": "node-2",
+            "condition": null
+          },
+          {
+            "id": "choice-2",
+            "text": "选项B",
+            "nextNodeId": "node-3",
+            "condition": {
+              "flag": "route_b_unlocked",
+              "value": true
+            }
+          }
+        ]
+      },
+      {
+        "id": "node-2",
+        "label": "路线A",
+        "type": "route",
+        "position": { "x": 200, "y": 100 },
+        "metadata": {
+          "character": "角色A",
+          "routeType": "romance"
         }
-      ]
-    }
-  ],
-  "edges": [
-    {
-      "from": "node-1",
-      "to": "node-2",
-      "label": "选择A"
-    }
-  ]
+      },
+      {
+        "id": "end-1",
+        "label": "Good End",
+        "type": "ending",
+        "position": { "x": 300, "y": 150 },
+        "metadata": {
+          "endingType": "good",
+          "cg": ["cg-001", "cg-002"]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-1",
+        "from": "node-1",
+        "to": "node-2",
+        "label": "选择A",
+        "style": {
+          "color": "#4CAF50",
+          "dashed": false
+        }
+      }
+    ],
+    "routes": [
+      {
+        "id": "route-a",
+        "name": "角色A路线",
+        "color": "#FF5722",
+        "nodeIds": ["node-2", "node-4", "end-1"],
+        "achievement": "ach-route-a"
+      }
+    ]
+  }
 }
 ```
+
+#### 节点类型说明
+
+| 类型 | 描述 |
+|------|------|
+| start | 游戏起始点 |
+| route | 路线节点 |
+| branch | 分支节点 |
+| ending | 结局节点 |
+| event | 特殊事件节点 |
+
+#### 错误码
+
+| 错误码 | HTTP状态 | 描述 |
+|--------|----------|------|
+| FLOWCHART_NOT_FOUND | 404 | 流程图不存在 |
+| GAME_NOT_SUPPORTED | 400 | 游戏不支持流程图 |
+
+---
 
 ### 成就 API
 
 *计划功能：社区成就系统*
 
-**预期端点:**
+#### 获取游戏成就列表
 
 ```
-GET /api/achievements?game={gameId}
-POST /api/achievements/report
+GET /api/v1/achievements
 ```
 
-**响应模型:**
+**请求参数：**
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| gameId | string | 是 | 游戏 ID |
+| includeHidden | bool | 否 | 是否包含隐藏成就，默认 false |
+| includeProgress | bool | 否 | 是否包含用户进度，需登录 |
+
+**请求示例：**
+```http
+GET /api/v1/achievements?gameId=bgm-12345&includeProgress=true
+Authorization: Bearer {jwt_token}
+```
+
+**响应模型：**
 
 ```json
 {
-  "achievements": [
-    {
-      "id": "ach-001",
-      "name": "全 CG 收集",
-      "description": "解锁所有 CG",
-      "iconUrl": "https://...",
-      "progress": 80,
-      "unlocked": false
-    }
-  ]
+  "success": true,
+  "data": {
+    "gameId": "bgm-12345",
+    "totalAchievements": 50,
+    "totalPoints": 1000,
+    "userProgress": {
+      "unlocked": 25,
+      "totalPoints": 500,
+      "completionPercentage": 50
+    },
+    "achievements": [
+      {
+        "id": "ach-001",
+        "name": "全 CG 收集",
+        "description": "解锁所有 CG",
+        "iconUrl": "https://...",
+        "iconLockedUrl": "https://...",
+        "type": "normal",
+        "points": 50,
+        "progress": {
+          "current": 80,
+          "total": 100,
+          "percentage": 80
+        },
+        "unlocked": false,
+        "unlockedAt": null,
+        "rarity": 0.15,
+        "isHidden": false
+      },
+      {
+        "id": "ach-002",
+        "name": "???",
+        "description": "???",
+        "iconUrl": "https://...",
+        "iconLockedUrl": "https://...",
+        "type": "hidden",
+        "points": 100,
+        "progress": null,
+        "unlocked": false,
+        "unlockedAt": null,
+        "rarity": 0.01,
+        "isHidden": true
+      },
+      {
+        "id": "ach-003",
+        "name": "真结局",
+        "description": "达成真结局",
+        "iconUrl": "https://...",
+        "iconLockedUrl": "https://...",
+        "type": "story",
+        "points": 30,
+        "progress": null,
+        "unlocked": true,
+        "unlockedAt": "2023-06-15T10:30:00Z",
+        "rarity": 0.45,
+        "isHidden": false
+      }
+    ]
+  }
 }
+```
+
+#### 上报成就进度
+
+```
+POST /api/v1/achievements/report
+```
+
+**请求头：**
+```http
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+```
+
+**请求体：**
+```json
+{
+  "gameId": "bgm-12345",
+  "achievementId": "ach-001",
+  "progress": {
+    "current": 80,
+    "total": 100
+  },
+  "metadata": {
+    "unlockedCgs": ["cg-001", "cg-002", "..."],
+    "lastUnlockedAt": "2023-06-15T10:30:00Z"
+  }
+}
+```
+
+**响应模型：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "achievementId": "ach-001",
+    "unlocked": false,
+    "progress": {
+      "current": 80,
+      "total": 100,
+      "percentage": 80
+    },
+    "notification": null
+  }
+}
+```
+
+**成就解锁响应：**
+```json
+{
+  "success": true,
+  "data": {
+    "achievementId": "ach-001",
+    "unlocked": true,
+    "progress": {
+      "current": 100,
+      "total": 100,
+      "percentage": 100
+    },
+    "notification": {
+      "title": "成就解锁！",
+      "message": "全 CG 收集",
+      "iconUrl": "https://...",
+      "points": 50
+    }
+  }
+}
+```
+
+#### 成就类型说明
+
+| 类型 | 描述 |
+|------|------|
+| story | 剧情相关成就 |
+| normal | 普通成就 |
+| hidden | 隐藏成就 |
+| rare | 稀有成就 |
+| community | 社区成就 |
+
+#### 错误码
+
+| 错误码 | HTTP状态 | 描述 |
+|--------|----------|------|
+| ACHIEVEMENT_NOT_FOUND | 404 | 成就不存在 |
+| UNAUTHORIZED | 401 | 未登录 |
+| INVALID_PROGRESS | 400 | 进度数据无效 |
+| ACHIEVEMENT_ALREADY_UNLOCKED | 409 | 成就已解锁 |
+| RATE_LIMITED | 429 | 上报过于频繁 |
+
+---
+
+### 通用错误响应格式
+
+所有自定义 API 使用统一的错误响应格式：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "错误描述信息",
+    "details": {
+      "field": "具体字段错误"
+    }
+  },
+  "requestId": "req-12345"
+}
+```
+
+### 通用请求头规范
+
+```http
+User-Agent: Galbox/1.0
+Accept: application/json
+Content-Type: application/json
+Accept-Language: zh-CN,zh;q=0.9,en;q=0.8
+X-Request-Id: {uuid}  // 可选，用于追踪
+X-Client-Version: 1.0.0  // 可选，客户端版本
 ```
 
 ---
@@ -605,4 +1194,4 @@ public class NewSourceApi : ApiClient
 
 ---
 
-*文档版本: 1.0.0-beta | 最后更新: 2024*
+*文档版本: 1.1.0 | 最后更新: 2026-04-14*

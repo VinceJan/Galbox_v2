@@ -72,6 +72,7 @@ public sealed partial class PatchCenterPage : Page
     /// </summary>
     public void ShowPatchDetailsFlyout(FrameworkElement target)
     {
-        PatchDetailsFlyout.ShowAt(target);
+        var flyout = (Flyout)Resources["PatchDetailsFlyoutKey"];
+        flyout.ShowAt(target);
     }
 }

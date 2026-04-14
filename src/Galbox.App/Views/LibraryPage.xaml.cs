@@ -5,8 +5,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
+using System.Runtime.InteropServices;
 using Windows.Storage.Pickers;
 using WinRT;
+using WinRT.Interop;
 
 namespace Galbox.App.Views;
 
@@ -34,7 +36,7 @@ public sealed partial class LibraryPage : Page
         InitializeComponent();
 
         // Get ViewModel from DI container
-        ViewModel = App.Current.Services.GetRequiredService<LibraryViewModel>();
+        ViewModel = App.Services.GetRequiredService<LibraryViewModel>();
 
         // Set DataContext for any binding fallback
         DataContext = ViewModel;

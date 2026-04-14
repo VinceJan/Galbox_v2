@@ -4,13 +4,96 @@
 
 ## 目录
 
-1. [项目结构概述](#项目结构概述)
-2. [架构设计](#架构设计)
-3. [核心服务说明](#核心服务说明)
-4. [数据库设计](#数据库设计)
-5. [扩展刮削源](#扩展刮削源)
-6. [贡献指南](#贡献指南)
-7. [代码风格规范](#代码风格规范)
+1. [项目架构概述](#项目结构概述)
+2. [技术栈详情](#技术栈详情)
+3. [开发环境配置](#开发环境配置)
+4. [编译与构建](#编译与构建)
+5. [调试方法](#调试方法)
+6. [架构设计](#架构设计)
+7. [核心服务说明](#核心服务说明)
+8. [数据库设计](#数据库设计)
+9. [扩展刮削源](#扩展刮削源)
+10. [贡献指南](#贡献指南)
+11. [代码风格规范](#代码风格规范)
+
+---
+
+## 技术栈详情
+
+### 核心技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| .NET | 8.0 | 运行时框架 |
+| WinUI 3 | Windows App SDK 1.5+ | UI 框架 |
+| Entity Framework Core | 8.0 | ORM 数据访问 |
+| SQLite | 3.x | 本地数据库 |
+| CommunityToolkit.Mvvm | 8.x | MVVM 框架 |
+| Microsoft.Extensions.DependencyInjection | 8.0 | 依赖注入容器 |
+| Microsoft.Extensions.Logging | 8.0 | 日志框架 |
+
+### UI 框架
+
+- **WinUI 3**: Windows App SDK 提供的现代原生 UI 框架
+- **MVVM 模式**: 使用 CommunityToolkit.Mvvm (Source Generators)
+- **Fluent Design**: 遵循 Windows 11 设计语言
+
+### 数据存储
+
+- **SQLite**: 轻量级嵌入式数据库
+- **EF Core**: Code First 模式，自动创建数据库结构
+- **JSON 配置**: 用户设置和应用配置
+
+### 网络通信
+
+- **HttpClient**: HTTP 请求处理
+- **System.Text.Json**: JSON 序列化/反序列化
+- **API 集成**: Bangumi、VNDB、ymgal、cngal
+
+### 架构模式
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Galbox.App (表现层)                      │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│   │    Views    │  │ ViewModels  │  │   Services (App)    │ │
+│   │   (XAML)    │  │  (MVVM)     │  │ Navigation, UI等    │ │
+│   └─────────────┘  └─────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Galbox.Core (业务逻辑层)                  │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │ API Clients, Helpers, Models, Interfaces             │   │
+│   │ BangumiApi, VndbApi, StringMatcher 等               │   │
+│   └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Galbox.Data (数据访问层)                  │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │ Entities, DbContext, Migrations                     │   │
+│   │ GameInfo, GalboxDbContext, 等                       │   │
+│   └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 主要 NuGet 依赖
+
+```xml
+<!-- Galbox.App.csproj -->
+<PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+<PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.*" />
+<PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.*" />
+
+<!-- Galbox.Data.csproj -->
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.*" />
+
+<!-- Galbox.Core.csproj -->
+<PackageReference Include="System.Text.Json" Version="8.0.*" />
+```
 
 ---
 
@@ -767,19 +850,379 @@ Closes #123
 
 ## 开发环境配置
 
+### 系统要求
+
+- **操作系统**: Windows 10 (1809+) 或 Windows 11
+- **架构**: x64
+- **磁盘空间**: 至少 10GB 可用空间
+
 ### 必需工具
 
-- Visual Studio 2022 (17.8+)
-- .NET 8.0 SDK
-- Windows App SDK 1.5+
+#### 1. Visual Studio 2022 (17.8+)
+
+下载地址: https://visualstudio.microsoft.com/
+
+**需要安装的工作负载:**
+
+- .NET 桌面开发 (使用 .NET 8)
+- Windows 应用程序开发 (Windows App SDK)
+
+**可选但推荐的组件:**
+- C++ 桌面开发 (某些原生库可能需要)
+- Git 集成
+
+#### 2. .NET 8.0 SDK
+
+下载地址: https://dotnet.microsoft.com/download/dotnet/8.0
+
+验证安装:
+```bash
+dotnet --version
+# 应显示 8.0.x
+```
+
+#### 3. Windows App SDK 1.5+
+
+VS 2022 安装时会自动包含，也可手动下载：
+https://learn.microsoft.com/windows/apps/windows-app-sdk/downloads
 
 ### 推荐扩展
 
-- XAML Styler
-- C# Dev Kit
-- EditorConfig
+在 Visual Studio 中通过 **扩展 > 管理扩展** 安装：
 
-### 调试配置
+| 扩展名 | 用途 |
+|--------|------|
+| XAML Styler | XAML 代码格式化 |
+| C# Dev Kit | 增强的 C# 开发体验 |
+| EditorConfig | 代码风格统一 |
+| ReSharper (可选) | 代码分析和重构 |
+| GitLab/GitHub Extension | Git 集成 |
+
+### 克隆和配置项目
+
+```bash
+# 克隆仓库
+git clone https://github.com/your-org/Galbox_v2.git
+cd Galbox_v2
+
+# 恢复依赖
+dotnet restore
+
+# 打开解决方案
+# 方式1: 使用 VS 打开 Galbox_v2.sln
+# 方式2: 使用 VS Code
+code .
+```
+
+### 项目配置
+
+#### 数据库位置
+
+数据库文件默认存储在:
+```
+%LOCALAPPDATA%\Packages\Galbox_*\LocalState\galbox.db
+```
+
+开发时可修改 `App.xaml.cs` 中的数据库路径：
+```csharp
+var dbPath = Path.Combine(GetAppDataPath(), "galbox.db");
+```
+
+#### 日志配置
+
+日志级别在 `App.xaml.cs` 中配置：
+```csharp
+services.AddLogging(builder =>
+{
+    builder.AddDebug();
+    builder.SetMinimumLevel(LogLevel.Information);
+});
+```
+
+### 常见问题
+
+#### 问题: Windows App SDK 未找到
+
+解决方案:
+1. 确保安装了 Windows App SDK 1.5+
+2. 检查 NuGet 包是否正确还原
+3. 清理并重新构建解决方案
+
+```bash
+dotnet clean
+dotnet restore
+dotnet build
+```
+
+#### 问题: SQLite 数据库锁定
+
+解决方案:
+1. 确保没有其他进程占用数据库文件
+2. 检查是否有未释放的 DbContext
+
+#### 问题: WinUI 3 设计器无法加载
+
+解决方案:
+1. 重启 Visual Studio
+2. 清理解决方案后重新构建
+3. 检查 XAML 语法错误
+
+---
+
+## 编译与构建
+
+### 前置条件
+
+- .NET 8.0 SDK 已安装
+- Windows App SDK 已安装
+- 项目依赖已还原
+
+### 开发环境构建
+
+```bash
+# 进入项目目录
+cd Galbox_v2
+
+# 还原 NuGet 包
+dotnet restore
+
+# 调试构建
+dotnet build
+
+# 或指定配置
+dotnet build -c Debug
+
+# 运行应用
+dotnet run --project src/Galbox.App
+```
+
+### 发布构建
+
+```bash
+# 发布为自包含应用
+dotnet publish src/Galbox.App -c Release -r win-x64 --self-contained
+
+# 发布为框架依赖应用 (体积更小)
+dotnet publish src/Galbox.App -c Release -r win-x64 --self-contained false
+
+# 输出位置
+# src/Galbox.App/bin/Release/net8.0-windows10.0.19041.0/win-x64/publish/
+```
+
+### 发布参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `-c Release` | 使用 Release 配置 |
+| `-r win-x64` | 目标平台 Windows x64 |
+| `--self-contained` | 包含 .NET 运行时 |
+| `-p:PublishSingleFile=true` | 打包为单个可执行文件 |
+| `-p:PublishTrimmed=true` | 裁剪未使用的程序集 |
+
+### MSIX 打包 (可选)
+
+在 Visual Studio 中创建打包项目：
+
+1. 添加新项目 > Windows 应用程序打包项目
+2. 添加对 Galbox.App 的引用
+3. 配置应用标识和签名证书
+4. 构建 > 创建应用包
+
+### 构建输出目录结构
+
+```
+publish/
+├── Galbox.exe              # 主可执行文件
+├── Galbox.dll              # 应用程序集
+├── Galbox.Data.dll         # 数据层
+├── Galbox.Core.dll         # 核心层
+├── *.dll                   # 依赖程序集
+├── galbox.db               # 数据库 (首次运行创建)
+├── Assets/                 # 资源文件
+└── runtimes/               # 原生运行时
+```
+
+---
+
+## 调试方法
+
+### Visual Studio 调试
+
+#### 启动调试
+
+1. 在 Visual Studio 中打开解决方案
+2. 设置 `Galbox.App` 为启动项目
+3. 按 `F5` 启动调试，或 `Ctrl+F5` 运行不调试
+
+#### 断点调试
+
+- 在代码行左侧点击设置断点 (红点)
+- 按 `F9` 切换当前行断点
+- 运行时会在断点处暂停
+
+**调试快捷键:**
+
+| 快捷键 | 功能 |
+|--------|------|
+| F5 | 继续执行 |
+| F10 | 单步跳过 |
+| F11 | 单步进入 |
+| Shift+F11 | 跳出 |
+| Shift+F5 | 停止调试 |
+
+#### 条件断点
+
+右键断点 > 条件，设置条件表达式：
+```csharp
+gameId == 123  // 当 gameId 等于 123 时触发
+string.IsNullOrEmpty(name)  // 当 name 为空时触发
+```
+
+#### 日志点 (Tracepoint)
+
+右键代码行 > 添加日志点，不暂停执行但输出日志：
+```
+Game {gameId} loaded at {DateTime.Now}
+```
+
+### 输出窗口调试
+
+使用 `Debug.WriteLine` 或 `ILogger` 输出调试信息：
+
+```csharp
+using Microsoft.Extensions.Logging;
+
+public class GameScrapingService
+{
+    private readonly ILogger<GameScrapingService> _logger;
+    
+    public async Task<ScrapingResult> SearchGameAsync(string gameName)
+    {
+        _logger.LogInformation("开始搜索游戏: {GameName}", gameName);
+        // ...
+        _logger.LogDebug("搜索完成，找到 {Count} 个结果", results.Count);
+    }
+}
+```
+
+### 数据库调试
+
+#### 查看 SQLite 数据库
+
+推荐工具:
+- **DB Browser for SQLite**: https://sqlitebrowser.org/
+- **SQLite Studio**: https://sqlitestudio.pl/
+
+#### 查看 EF Core SQL
+
+在 `App.xaml.cs` 中启用敏感数据日志：
+
+```csharp
+services.AddDbContext<GalboxDbContext>(options =>
+{
+    options.UseSqlite($"Data Source={dbPath}")
+           .EnableSensitiveDataLogging()      // 显示参数值
+           .EnableDetailedErrors();           // 详细错误信息
+});
+```
+
+### XAML 热重载
+
+WinUI 3 支持运行时 XAML 热重载：
+
+1. 确保选项 > 调试 > XAML 热重载 已启用
+2. 运行应用后修改 XAML 文件
+3. 保存后界面自动更新
+
+**注意:** C# 代码修改需要重新启动应用。
+
+### 实时可视化树
+
+在运行时检查 UI 结构：
+
+1. 调试运行时按 `Ctrl+Shift+F9`
+2. 或在调试工具栏点击 "实时可视化树"
+3. 可以查看控件属性和层级结构
+
+### 异常处理
+
+#### 捕获全局异常
+
+在 `App.xaml.cs` 中：
+
+```csharp
+public App()
+{
+    this.UnhandledException += OnUnhandledException;
+    TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+}
+
+private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+{
+    _logger?.LogCritical(e.Exception, "未处理的异常: {Message}", e.Message);
+    // 可选：显示错误对话框
+}
+
+private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+{
+    _logger?.LogError(e.Exception, "未观察的任务异常");
+    e.SetObserved(); // 防止应用崩溃
+}
+```
+
+### 性能分析
+
+#### 使用 Visual Studio 诊断工具
+
+1. 调试 > 性能探查器
+2. 选择分析类型：
+   - CPU 使用率
+   - 内存使用率
+   - .NET 对象分配
+
+#### 应用程序性能提示
+
+```csharp
+// 使用 ValueTask 避免异步方法的小额开销
+public ValueTask<GameInfo?> GetGameAsync(int id)
+
+// 使用 StringBuilder 进行字符串拼接
+var sb = new StringBuilder();
+foreach (var item in items) sb.Append(item);
+
+// 避免在循环中分配
+private static readonly JsonSerializerOptions JsonOptions = new() { ... };
+```
+
+### 常见调试场景
+
+#### 场景1: 刮削服务无响应
+
+检查步骤:
+1. 查看输出窗口的 HTTP 请求日志
+2. 检查网络连接和 API 可用性
+3. 确认 User-Agent 配置正确
+4. 检查 CancellationToken 是否正确传递
+
+#### 场景2: 数据库操作失败
+
+检查步骤:
+1. 查看 EF Core 生成的 SQL 语句
+2. 检查数据库文件权限
+3. 验证实体验证规则
+4. 确认 DbContext 生命周期
+
+#### 场景3: UI 绑定不更新
+
+检查步骤:
+1. 确认 ViewModel 实现 INotifyPropertyChanged
+2. 使用 CommunityToolkit.Mvvm 的 [ObservableProperty]
+3. 检查绑定模式 (OneWay/TwoWay)
+4. 验证 DataContext 是否正确设置
+
+### 调试配置文件
+
+#### app.manifest
 
 项目使用 `app.manifest` 配置应用权限：
 
@@ -787,30 +1230,28 @@ Closes #123
 <Identity Name="Galbox.App" Publisher="CN=YourPublisher" Version="1.0.0.0" />
 ```
 
----
+#### launchSettings.json
 
-## 构建和发布
+调试启动配置位于 `Properties/launchSettings.json`：
 
-### 本地构建
-
-```bash
-# 构建解决方案
-dotnet build
-
-# 运行应用
-dotnet run --project src/Galbox.App
+```json
+{
+  "profiles": {
+    "Galbox.App": {
+      "commandName": "MsixPackage",
+      "commandLineArgs": ""
+    },
+    "Galbox.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
 ```
 
-### 发布打包
-
-```bash
-# 创建发布包
-dotnet publish src/Galbox.App -c Release -r win-x64 --self-contained
-
-# 或使用 MSIX 打包
-# 在 Visual Studio 中使用 Packaging Project
-```
+**两种调试模式:**
+- **Packaged (MsixPackage)**: 以 MSIX 包形式运行，数据存储在应用数据目录
+- **Unpackaged (Project)**: 以普通应用运行，数据存储在本地目录
 
 ---
 
-*文档版本: 1.0.0-beta | 最后更新: 2026-04-13*
+*文档版本: 1.1.0 | 最后更新: 2026-04-14*

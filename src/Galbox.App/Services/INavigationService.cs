@@ -56,4 +56,9 @@ public interface INavigationService
     /// Gets the current navigation parameter.
     /// </summary>
     object? CurrentParameter { get; }
+
+    /// <summary>
+    /// Selects a navigation item by key.
+    /// </summary>
+    void SelectNavigationItem(string key);
 }

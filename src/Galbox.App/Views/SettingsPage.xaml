@@ -6,6 +6,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:converters="using:Galbox.App.Converters"
     xmlns:models="using:Galbox.Data.Entities"
+    xmlns:viewmodels="using:Galbox.App.ViewModels"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
@@ -192,7 +193,7 @@
                             SelectionMode="None"
                             Margin="0,8,0,0">
                             <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="models:SourcePriorityItem">
+                                <DataTemplate x:DataType="viewmodels:SourcePriorityItem">
                                     <Grid ColumnSpacing="8" Padding="4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>

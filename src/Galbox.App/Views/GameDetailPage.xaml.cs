@@ -3,6 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using System;
+using System.Collections.Specialized;
+using Microsoft.UI.Xaml;
+using Windows.UI.Text;
 
 namespace Galbox.App.Views;
 
@@ -26,10 +29,51 @@ public sealed partial class GameDetailPage : Page
         InitializeComponent();
 
         // Get ViewModel from DI container
-        ViewModel = App.Current.Services.GetRequiredService<GameDetailViewModel>();
+        ViewModel = App.Services.GetRequiredService<GameDetailViewModel>();
 
         // Set DataContext for any binding fallback
         DataContext = ViewModel;
+
+        // Subscribe to Executables collection changes for dynamic menu population
+        ViewModel.Executables.CollectionChanged += OnExecutablesCollectionChanged;
+    }
+
+    /// <summary>
+    /// Handles changes to the Executables collection and updates the MenuFlyout.
+    /// </summary>
+    private void OnExecutablesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        PopulateAlternativeExecutablesMenu();
+    }
+
+    /// <summary>
+    /// Populates the AlternativeExecutablesMenu with MenuFlyoutItem elements.
+    /// Note: MenuFlyoutItemsRepeater doesn't exist in WinUI3, so we populate dynamically.
+    /// </summary>
+    private void PopulateAlternativeExecutablesMenu()
+    {
+        if (AlternativeExecutablesMenu == null)
+            return;
+
+        AlternativeExecutablesMenu.Items.Clear();
+
+        foreach (var executable in ViewModel.Executables)
+        {
+            var menuItem = new MenuFlyoutItem
+            {
+                Text = executable.Name,
+                Command = ViewModel.LaunchAlternativeCommand,
+                CommandParameter = executable
+            };
+
+            // Set icon based on whether it's the default executable
+            menuItem.Icon = new FontIcon
+            {
+                Glyph = executable.IsDefault ? "\uE73E" : "\uE75C" // Checkmark or Play
+            };
+
+            AlternativeExecutablesMenu.Items.Add(menuItem);
+        }
     }
 
     /// <summary>
@@ -45,10 +89,14 @@ public sealed partial class GameDetailPage : Page
             if (e.Parameter is int gameId && gameId > 0)
             {
                 await ViewModel.LoadGameDataAsync(gameId);
+                // Populate the menu after data is loaded
+                PopulateAlternativeExecutablesMenu();
             }
             else if (e.Parameter is string gameIdStr && int.TryParse(gameIdStr, out var parsedGameId))
             {
                 await ViewModel.LoadGameDataAsync(parsedGameId);
+                // Populate the menu after data is loaded
+                PopulateAlternativeExecutablesMenu();
             }
             else
             {

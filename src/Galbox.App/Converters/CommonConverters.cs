@@ -7,6 +7,15 @@ using System;
 namespace Galbox.App.Converters;
 
 /// <summary>
+/// Interface for multi-value converters (WinUI3 doesn't provide built-in IMultiValueConverter).
+/// </summary>
+public interface IMultiValueConverter
+{
+    object Convert(object[] values, Type targetType, object parameter, string language);
+    object[] ConvertBack(object value, Type[] targetTypes, object parameter, string language);
+}
+
+/// <summary>
 /// Converts a boolean value to its inverse (true -> false, false -> true).
 /// </summary>
 public class InverseBooleanConverter : IValueConverter
@@ -184,11 +193,6 @@ public class DateTimeFormatConverter : IValueConverter
             var format = parameter as string ?? "yyyy-MM-dd";
             return dateTime.ToString(format);
         }
-        if (value is DateTime? nullableDateTime && nullableDateTime.HasValue)
-        {
-            var format = parameter as string ?? "yyyy-MM-dd";
-            return nullableDateTime.Value.ToString(format);
-        }
         return string.Empty;
     }
 
@@ -309,10 +313,6 @@ public class RatingConverter : IValueConverter
         if (value is double rating)
         {
             return $"{rating:F1}/10";
-        }
-        if (value is double? nullableRating && nullableRating.HasValue)
-        {
-            return $"{nullableRating.Value:F1}/10";
         }
         return "N/A";
     }

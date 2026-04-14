@@ -154,7 +154,7 @@ public partial class SettingsViewModel : ObservableObject
     private int _monitoringIntervalMs = 1000;
 
     [ObservableProperty]
-    private ScreenshotFormat _screenshotFormat = ScreenshotFormat.Png;
+    private Data.Entities.ScreenshotFormat _screenshotFormat = Data.Entities.ScreenshotFormat.Png;
 
     [ObservableProperty]
     private int _jpgQuality = 90;
@@ -415,12 +415,12 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// Loads boss key modifiers from flags.
     /// </summary>
-    private void LoadBossKeyModifiers(BossKeyModifiers modifiers)
+    private void LoadBossKeyModifiers(Data.Entities.BossKeyModifiers modifiers)
     {
-        BossKeyAlt = modifiers.HasFlag(BossKeyModifiers.Alt);
-        BossKeyCtrl = modifiers.HasFlag(BossKeyModifiers.Ctrl);
-        BossKeyShift = modifiers.HasFlag(BossKeyModifiers.Shift);
-        BossKeyWin = modifiers.HasFlag(BossKeyModifiers.Win);
+        BossKeyAlt = modifiers.HasFlag(Data.Entities.BossKeyModifiers.Alt);
+        BossKeyCtrl = modifiers.HasFlag(Data.Entities.BossKeyModifiers.Ctrl);
+        BossKeyShift = modifiers.HasFlag(Data.Entities.BossKeyModifiers.Shift);
+        BossKeyWin = modifiers.HasFlag(Data.Entities.BossKeyModifiers.Win);
     }
 
     /// <summary>
@@ -629,13 +629,13 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// Gets boss key modifiers from toggle states.
     /// </summary>
-    private BossKeyModifiers GetBossKeyModifiers()
+    private Data.Entities.BossKeyModifiers GetBossKeyModifiers()
     {
-        var modifiers = BossKeyModifiers.None;
-        if (BossKeyAlt) modifiers |= BossKeyModifiers.Alt;
-        if (BossKeyCtrl) modifiers |= BossKeyModifiers.Ctrl;
-        if (BossKeyShift) modifiers |= BossKeyModifiers.Shift;
-        if (BossKeyWin) modifiers |= BossKeyModifiers.Win;
+        var modifiers = Data.Entities.BossKeyModifiers.None;
+        if (BossKeyAlt) modifiers |= Data.Entities.BossKeyModifiers.Alt;
+        if (BossKeyCtrl) modifiers |= Data.Entities.BossKeyModifiers.Ctrl;
+        if (BossKeyShift) modifiers |= Data.Entities.BossKeyModifiers.Shift;
+        if (BossKeyWin) modifiers |= Data.Entities.BossKeyModifiers.Win;
         return modifiers;
     }
 
@@ -778,7 +778,7 @@ public partial class SettingsViewModel : ObservableObject
             if (BossKeyShift) parts.Add("Shift");
             if (BossKeyWin) parts.Add("Win");
             parts.Add(BossKeyKey.ToUpperInvariant());
-            return parts.Join(" + ");
+            return string.Join(" + ", parts);
         }
     }
 

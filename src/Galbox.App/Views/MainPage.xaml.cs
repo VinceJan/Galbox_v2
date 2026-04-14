@@ -25,7 +25,7 @@ public sealed partial class MainPage : Page
         InitializeComponent();
 
         // Get ViewModel from DI container
-        ViewModel = App.Current.Services.GetRequiredService<MainViewModel>();
+        ViewModel = App.Services.GetRequiredService<MainViewModel>();
 
         // Set DataContext for any binding fallback
         DataContext = ViewModel;

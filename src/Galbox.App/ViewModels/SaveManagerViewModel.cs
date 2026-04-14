@@ -270,19 +270,22 @@ public partial class SaveManagerViewModel : ObservableObject
     /// <summary>
     /// Handles selected game changed - loads its backups.
     /// </summary>
-    partial async void OnSelectedGameChanged(GameSaveInfo? value)
+    partial void OnSelectedGameChanged(GameSaveInfo? value)
     {
         if (value != null)
         {
-            try
+            _ = Task.Run(async () =>
             {
-                await LoadBackupsForGameAsync(value.Id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error loading backups for game: {GameId}", value.Id);
-                ErrorMessage = $"Failed to load backups: {ex.Message}";
-            }
+                try
+                {
+                    await LoadBackupsForGameAsync(value.Id).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading backups for game: {GameId}", value.Id);
+                    ErrorMessage = $"Failed to load backups: {ex.Message}";
+                }
+            });
         }
         else
         {

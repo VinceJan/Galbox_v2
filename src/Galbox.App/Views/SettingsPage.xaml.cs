@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
 using WinRT;
+using WinRT.Interop;
 
 namespace Galbox.App.Views;
 
@@ -28,7 +29,7 @@ public sealed partial class SettingsPage : Page
         InitializeComponent();
 
         // Get ViewModel from DI container
-        ViewModel = App.Current.Services.GetRequiredService<SettingsViewModel>();
+        ViewModel = App.Services.GetRequiredService<SettingsViewModel>();
 
         // Set DataContext for any binding fallback
         DataContext = ViewModel;

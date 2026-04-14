@@ -47,7 +47,7 @@
         </Style>
 
         <!-- Game Card Template for Grid View - Not used, inline template used instead -->
-        <DataTemplate x:Key="GameGridCardTemplate" x:DataType="models:GameInfo">
+        <DataTemplate x:Key="GameGridCardTemplate">
             <Grid>
                 <Button
                     Click="OnGameItemClick"
@@ -293,11 +293,10 @@
                             MinItemHeight="220"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="models:GameInfo">
+                        <DataTemplate>
                             <Grid
                                 PointerEntered="OnGameCardPointerEntered"
-                                PointerExited="OnGameCardPointerExited"
-                                Tag="{x:Bind Id}">
+                                PointerExited="OnGameCardPointerExited">
                                 <!-- Main Card Button -->
                                 <Button
                                     Click="OnGameItemClick"
@@ -310,7 +309,7 @@
                                         <Grid>
                                             <!-- Cover Image -->
                                             <Image
-                                                Source="{x:Bind CoverImagePath, Converter={StaticResource PathToImageConverter}}"
+                                                Source="{Binding CoverImagePath, Converter={StaticResource PathToImageConverter}}"
                                                 Stretch="UniformToFill"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
@@ -324,7 +323,7 @@
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Top"
                                                 Margin="4"
-                                                Visibility="{x:Bind IsFavorite, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                Visibility="{Binding IsFavorite, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                 <FontIcon FontSize="12" Glyph="&#xE191;" Foreground="White"/>
                                             </Border>
 
@@ -337,7 +336,7 @@
                                                 Padding="8,8"
                                                 Height="40">
                                                 <TextBlock
-                                                    Text="{x:Bind DisplayName}"
+                                                    Text="{Binding DisplayName}"
                                                     FontSize="13"
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap"
@@ -361,7 +360,7 @@
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     Visibility="Collapsed"
-                                    Tag="{x:Bind}">
+                                    Tag="{Binding}">
                                     <FontIcon FontSize="18" Glyph="&#xE768;" Foreground="White"/>
                                 </Button>
                             </Grid>
@@ -469,7 +468,7 @@
                         ItemClick="OnGameItemClick"
                         Margin="0,40,0,0">
                         <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:GameInfo">
+                            <DataTemplate>
                                 <Grid ColumnSpacing="8" Padding="12,4" Height="56" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="60"/>
@@ -489,7 +488,7 @@
                                         Width="48"
                                         Height="56">
                                         <Image
-                                            Source="{x:Bind CoverImagePath, Converter={StaticResource PathToImageConverter}}"
+                                            Source="{Binding CoverImagePath, Converter={StaticResource PathToImageConverter}}"
                                             Stretch="UniformToFill"
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"/>
@@ -498,7 +497,7 @@
                                     <!-- Name (CN) -->
                                     <TextBlock
                                         Grid.Column="1"
-                                        Text="{x:Bind NameCn}"
+                                        Text="{Binding NameCn}"
                                         FontSize="13"
                                         FontWeight="SemiBold"
                                         TextTrimming="CharacterEllipsis"
@@ -508,7 +507,7 @@
                                     <!-- Name (Original) -->
                                     <TextBlock
                                         Grid.Column="2"
-                                        Text="{x:Bind NameOriginal}"
+                                        Text="{Binding NameOriginal}"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         TextTrimming="CharacterEllipsis"
@@ -526,7 +525,7 @@
                                     <!-- Added Date -->
                                     <TextBlock
                                         Grid.Column="4"
-                                        Text="{x:Bind AddedTime, Converter={StaticResource DateTimeFormatConverter}}"
+                                        Text="{Binding AddedTime, Converter={StaticResource DateTimeFormatConverter}}"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         VerticalAlignment="Center"/>
@@ -534,7 +533,7 @@
                                     <!-- Last Played -->
                                     <TextBlock
                                         Grid.Column="5"
-                                        Text="{x:Bind LastSessionTime, Converter={StaticResource DateTimeFormatConverter}}"
+                                        Text="{Binding LastSessionTime, Converter={StaticResource DateTimeFormatConverter}}"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         VerticalAlignment="Center"/>
@@ -542,7 +541,7 @@
                                     <!-- Play Time -->
                                     <TextBlock
                                         Grid.Column="6"
-                                        Text="{x:Bind FormattedPlayTime}"
+                                        Text="{Binding FormattedPlayTime}"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         VerticalAlignment="Center"/>
