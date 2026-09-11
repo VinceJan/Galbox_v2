@@ -112,6 +112,7 @@ public static class CheckRunner
         var passed = results.Count(r => r.Status == CheckStatus.Pass);
         var failed = results.Count(r => r.Status == CheckStatus.Fail);
         var errors = results.Count(r => r.Status == CheckStatus.Error);
+        var skipped = results.Count(r => r.Status == CheckStatus.Skip);
 
         Console.WriteLine();
         Console.WriteLine(new string('=', Width));
@@ -129,7 +130,18 @@ public static class CheckRunner
         Console.WriteLine($" PASSED : {passed}");
         Console.WriteLine($" FAILED : {failed}");
         Console.WriteLine($" ERRORS : {errors}");
+        Console.WriteLine($" SKIPPED: {skipped}");
         Console.WriteLine($" TOTAL  : {results.Count}");
+
+        if (skipped > 0)
+        {
+            // A SKIP is not a pass. Print the stated reason so it can never be mistaken for one.
+            Console.WriteLine(" SKIPPED CHECKS (not measured - reason stated, NOT a pass):");
+            foreach (var result in results.Where(r => r.Status == CheckStatus.Skip))
+            {
+                Console.WriteLine($"   {result.Id}: {result.Actual}");
+            }
+        }
 
         if (failed + errors > 0)
         {
@@ -152,6 +164,7 @@ public static class CheckRunner
     {
         CheckStatus.Pass => "PASS",
         CheckStatus.Fail => "FAIL",
+        CheckStatus.Skip => "SKIP",
         _ => "ERROR"
     };
 }

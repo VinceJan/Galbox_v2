@@ -86,7 +86,21 @@ internal static class Program
             // with a real contract. These three checks pin the contract down.
             new A40YmgalSearchCheck(),
             new A41CngalSearchCheck(),
-            new A42MetadataSourceContractCheck()
+            new A42MetadataSourceContractCheck(),
+
+            // --- moyu.moe patch discovery (A60+; A43-A59 are reserved for other work lines) -
+            // The upstream research report (_product/design/moyu-moe-integration-research.md) found
+            // `Disallow: /api` in moyu.moe/robots.txt, so the only surface this block may ever
+            // exercise is the official /v2/moyu face. A63 is the assertion that enforces it - the
+            // compliance promise is a test, not a comment.
+            new A60MoyuServiceResolutionCheck(),
+            new A61MoyuMissingKeyCheck(),
+            new A62MoyuKeyProtectionCheck(),
+            new A63MoyuComplianceGuardCheck(),
+            new A64MoyuSizeAndAnchorCheck(),
+            new A65MoyuDownloadWatchCheck(),
+            new A66MoyuBrowserLaunchCheck(),
+            new A67MoyuConditionalRequestCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
@@ -153,6 +167,18 @@ internal static class Program
             ("IProcessMonitorService", typeof(IProcessMonitorService))
         };
 
+        // The moyu patch-source registrations are resolved by name for the same reason the checks
+        // do it: this project has to stay buildable while the feature is still being implemented.
+        var moyuServiceTypes = new (string Name, string TypeName)[]
+        {
+            ("MoyuHttpClient", "Galbox.Core.Api.MoyuHttpClient"),
+            ("MoyuApi", "Galbox.Core.Api.MoyuApi"),
+            ("MoyuOptions", "Galbox.Core.Api.MoyuOptions"),
+            ("IMoyuKeyStore", "Galbox.Core.Api.IMoyuKeyStore"),
+            ("MoyuDownloadWatcher", "Galbox.Core.Api.MoyuDownloadWatcher"),
+            ("MoyuBrowserLauncher", "Galbox.Core.Api.MoyuBrowserLauncher")
+        };
+
         var failures = 0;
         foreach (var (name, type) in serviceTypes)
         {
@@ -180,6 +206,35 @@ internal static class Program
         var navigationType = Type.GetType("Galbox.App.Services.INavigationService, Galbox.App");
         Console.WriteLine($"   [INFO]    INavigationService type present in Galbox.App assembly: {navigationType is not null}"
                         + " (intentionally not registered: it requires Microsoft.UI.Xaml.Controls)");
+
+        // --- moyu registrations: reported, but NOT counted as preflight failures -------------
+        // App.xaml.cs and this replica must agree, otherwise the shipping app could fail to build
+        // its container while every check here still passes. A missing entry is reported here and
+        // then measured properly by A60; it is not double-counted as a container failure, because
+        // the container really does build and every pre-existing service still resolves.
+        Console.WriteLine(" moyu patch-source registrations (UI-free replica of App.xaml.cs):");
+        foreach (var (name, typeName) in moyuServiceTypes)
+        {
+            var type = Type.GetType(typeName + ", Galbox.Core");
+            if (type is null)
+            {
+                Console.WriteLine($"   [ABSENT]  {name,-24} type is not present in Galbox.Core yet");
+                continue;
+            }
+
+            try
+            {
+                var instance = context.Services.GetService(type);
+                Console.WriteLine(instance is null
+                    ? $"   [MISSING] {name,-24} type exists but is NOT registered"
+                    : $"   [OK]      {name,-24} {instance.GetType().Name}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"   [FAILED]  {name,-24} {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
         Console.WriteLine($" Preflight failures : {failures}");
         Console.WriteLine(new string('=', width));
     }
