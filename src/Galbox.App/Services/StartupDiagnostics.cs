@@ -13,7 +13,11 @@ namespace Galbox.App.Services;
 /// was left with a live process, a live message loop and <b>no window and no error</b>.
 ///
 /// This class exists so that can never happen silently again:
-///   * every startup step is appended to <c>%LocalAppData%\Galbox\logs\startup-YYYYMMDD.log</c>
+///   * every startup step is appended to
+///     <c>%LocalAppData%\Galbox\logs\startup-YYYYMMDD.log</c> - or, when <c>GALBOX_DATA_DIR</c> is
+///     set, to <c>{that folder}\logs\startup-YYYYMMDD.log</c> (see <see cref="GalboxDataDirectory"/>)
+///   * every line carries the process id, so lines written by two instances that share one log file
+///     can no longer be mistaken for each other
 ///   * a failure that happens before the main window exists also raises a modal message box,
 ///     because at that point there is no UI left to report through
 /// </summary>
@@ -44,25 +48,44 @@ public static class StartupDiagnostics
     private static readonly object SyncRoot = new();
 
     /// <summary>
-    /// Folder that holds the startup logs: <c>%LocalAppData%\Galbox\logs</c>.
+    /// Folder that holds the startup logs: <c>%LocalAppData%\Galbox\logs</c>, or
+    /// <c>{GALBOX_DATA_DIR}\logs</c> when the data folder was overridden.
     /// </summary>
-    public static string LogDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Galbox",
-        "logs");
+    /// <remarks>
+    /// Following the data folder is what keeps a second instance out of this instance's log: two
+    /// Galbox processes that were started against different <c>GALBOX_DATA_DIR</c> values write to
+    /// two different files, so a reader can no longer pick up the other process's lines.
+    /// </remarks>
+    public static string LogDirectory => ResolveWritableLogDirectory();
 
     /// <summary>
     /// Log file for the current day: <c>startup-YYYYMMDD.log</c>.
     /// </summary>
-    public static string CurrentLogPath => Path.Combine(LogDirectory, $"startup-{DateTime.Now:yyyyMMdd}.log");
+    public static string CurrentLogPath
+        => Path.Combine(LogDirectory, $"{GalboxDataDirectory.StartupLogFilePrefix}{DateTime.Now:yyyyMMdd}.log");
 
     /// <summary>
-    /// Appends one timestamped line to the startup log. Never throws: diagnostics must not be
+    /// Process id of the instance writing, prefixed to every line as <c>[pid:NNNN]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The day-stamped log file is shared by every Galbox instance on the machine that uses the same
+    /// data folder, so a line's provenance is not obvious from the file alone. With the pid in the
+    /// line, "two startup sequences begin" is immediately readable as two different processes rather
+    /// than one process that started twice.
+    /// </remarks>
+    public static int ProcessId => Environment.ProcessId;
+
+    /// <summary>
+    /// Appends one line to the startup log. Never throws: diagnostics must not be
     /// able to break the startup path they are supposed to observe.
     /// </summary>
+    /// <remarks>
+    /// <see cref="TryAppend"/> adds the shared <c>timestamp [pid] [tid]</c> prefix, so every line of
+    /// the log - including the multi-line exception blocks - is attributed to one process.
+    /// </remarks>
     public static void Log(string message)
     {
-        TryAppend($"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [tid:{Environment.CurrentManagedThreadId}] {message}");
+        TryAppend(message);
     }
 
     /// <summary>
@@ -135,14 +158,60 @@ public static class StartupDiagnostics
         }
     }
 
+    /// <summary>
+    /// The log folder this process will write to: the one belonging to its data folder, falling
+    /// back to <c>%LocalAppData%\Galbox\logs</c> when that folder cannot be created.
+    /// </summary>
+    /// <remarks>
+    /// The fallback exists so that a broken <c>GALBOX_DATA_DIR</c> cannot silence the diagnostics of
+    /// the very startup that is failing: before this change the log always went to the default
+    /// folder, and losing it would be a regression in exactly the situation where it is worth most.
+    /// </remarks>
+    private static string ResolveWritableLogDirectory()
+    {
+        var preferred = GalboxDataDirectory.ResolveLogDirectory();
+
+        try
+        {
+            Directory.CreateDirectory(preferred);
+            return preferred;
+        }
+        catch (Exception)
+        {
+            // fall through to the historical location
+        }
+
+        try
+        {
+            var fallback = GalboxDataDirectory.ResolveLogDirectory(null);
+            Directory.CreateDirectory(fallback);
+            return fallback;
+        }
+        catch (Exception)
+        {
+            return preferred;
+        }
+    }
+
     private static void TryAppend(string text)
     {
         try
         {
             lock (SyncRoot)
             {
-                Directory.CreateDirectory(LogDirectory);
-                File.AppendAllText(CurrentLogPath, text + Environment.NewLine, Encoding.UTF8);
+                // Every line carries the process id, so a reader of a shared log file can tell two
+                // instances apart even when they append to the same second.
+                var stamp = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [pid:{Environment.ProcessId}] "
+                          + $"[tid:{Environment.CurrentManagedThreadId}] ";
+
+                var builder = new StringBuilder();
+                foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+                {
+                    builder.Append(stamp).Append(line).Append(Environment.NewLine);
+                }
+
+                var logPath = CurrentLogPath;
+                File.AppendAllText(logPath, builder.ToString(), Encoding.UTF8);
             }
         }
         catch
