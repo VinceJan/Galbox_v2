@@ -9,5 +9,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- Read-only RAR / 7z / tar support for the local patch installer.
+         SharpCompress is MIT licensed and pure managed; RAR creation is intentionally not used.
+         1.0.0 is the first release that fixes GHSA-6c8g-7p36-r338 (zip slip in the library's own
+         WriteToDirectory helper). The engine never calls WriteToDirectory - it performs its own
+         path-safe extraction - but a vulnerable dependency is unacceptable regardless. -->
+    <PackageReference Include="SharpCompress" Version="1.0.0" />
   </ItemGroup>
 </Project>
