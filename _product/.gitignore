@@ -1,0 +1,12 @@
+# 私人内容：不随公开仓库发布
+# 这个仓库是公开的（github.com/VinceJan/Galbox_v2）
+# 下列文件仅存在于本地，供开发时参考，不会被 git 跟踪
+
+# 与 AI 的原始对话记录（含个人表述）
+claude-code-输入历史.txt
+
+# 内部待决策清单（含隐私/合规讨论）
+OPEN-QUESTIONS.md
+
+# 内部交接与工作说明
+HANDOFF.md
