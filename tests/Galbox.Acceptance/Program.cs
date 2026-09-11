@@ -72,7 +72,16 @@ internal static class Program
             new A16DeleteGameCheck(),
             new A17MissingFolderCheck(),
             new A18WindowTitleCheck(),
-            new A19PageLoadSmokeCheck()
+            new A19PageLoadSmokeCheck(),
+
+            // Game health diagnosis: real repair capability for the items that can be repaired
+            // automatically, an honest classification for the ones that cannot, and a Chinese
+            // diagnosis text (the "8 个诊断项全部标记为不可自动修复 + 文案未本地化" defect of the spec).
+            new A70HealthDiagnosisCheck(),
+            new A71ChinesePathRenameCheck(),
+            new A72CompatibilityModeCheck(),
+            new A73AutoFixHonestyCheck(),
+            new A74DiagnosisLocalizationCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
