@@ -108,7 +108,14 @@ public partial class App : Application
 
         // Services
         services.AddSingleton<INavigationService, NavigationService>();
-        services.AddTransient<IGameScrapingService, GameScrapingService>();
+
+        // Scraping settings (threshold / enabled sources / priority / auto-scrape-on-add).
+        // Registered as a singleton so every scraping consumer reads the same user settings.
+        services.AddSingleton<IScrapingSettingsProvider, ScrapingSettingsProvider>();
+
+        // Registered as a singleton so the declared Bangumi/VNDB rate limiting and the
+        // 30-minute in-memory cache actually apply across a batch (D16).
+        services.AddSingleton<IGameScrapingService, GameScrapingService>();
         services.AddSingleton<ISaveManagementService, SaveManagementService>();
         services.AddSingleton<IProcessMonitorService, ProcessMonitorService>();
 
@@ -173,21 +180,34 @@ public partial class App : Application
             var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
             await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
 
-            // Add missing columns for EngineType if not exists (SQLite migration)
+            // Add missing columns for EngineType / VndbId if not exists (SQLite migration)
             try
             {
-                // Check if EngineType column exists
+                // Columns that were added to GameInfo after the first release. EnsureCreatedAsync
+                // does not alter an existing table, so each one is added explicitly.
+                var requiredColumns = new (string Name, string Definition)[]
+                {
+                    ("EngineType", "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0"),
+                    ("VndbId", "ALTER TABLE Games ADD COLUMN VndbId TEXT NULL")
+                };
+
                 var connection = dbContext.Database.GetDbConnection();
                 await connection.OpenAsync().ConfigureAwait(false);
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT name FROM pragma_table_info('Games') WHERE name='EngineType'";
-                var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
-                if (result == null || result == DBNull.Value)
+
+                foreach (var (columnName, alterStatement) in requiredColumns)
                 {
-                    // Column doesn't exist, add it
-                    command.CommandText = "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0";
-                    await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                    using var command = connection.CreateCommand();
+                    command.CommandText =
+                        $"SELECT name FROM pragma_table_info('Games') WHERE name='{columnName}'";
+                    var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+
+                    if (result == null || result == DBNull.Value)
+                    {
+                        command.CommandText = alterStatement;
+                        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                    }
                 }
+
                 await connection.CloseAsync().ConfigureAwait(false);
             }
             catch (Exception ex)

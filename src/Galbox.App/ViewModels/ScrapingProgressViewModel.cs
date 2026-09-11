@@ -22,9 +22,14 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _currentCts;
 
     /// <summary>
-    /// Flag to track whether events have been unsubscribed.
+    /// Flag to track whether events are currently subscribed.
     /// </summary>
-    private bool _eventsSubscribed = true;
+    /// <remarks>
+    /// D13 fix: this used to be initialized to <c>true</c> while <see cref="SubscribeEvents"/>
+    /// starts with <c>if (_eventsSubscribed) return;</c>, so the progress events were
+    /// <b>never</b> wired up and the view never updated.
+    /// </remarks>
+    private bool _eventsSubscribed;
 
     /// <summary>
     /// Flag to track whether the object has been disposed.
@@ -229,6 +234,43 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _preserveCharacters;
 
+    /// <summary>
+    /// Per-source diagnostics of the last scrape (query, success, item count, elapsed, error).
+    /// D12: this is what makes "the API rejected us" different from "the game is not in the database".
+    /// </summary>
+    public ObservableCollection<SourceDiagnosticItem> SourceDiagnostics { get; } = new();
+
+    /// <summary>
+    /// Candidate results from the last scrape, best score first.
+    /// D11: results below the auto-accept threshold stay reachable here instead of
+    /// being silently discarded.
+    /// </summary>
+    public ObservableCollection<CandidateMatchItem> Candidates { get; } = new();
+
+    /// <summary>
+    /// Whether the last run produced any candidate rows.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasCandidates;
+
+    /// <summary>
+    /// Game id the candidate list belongs to (used when applying a candidate).
+    /// </summary>
+    [ObservableProperty]
+    private int _candidateGameId;
+
+    /// <summary>
+    /// Human readable status of the candidate application.
+    /// </summary>
+    [ObservableProperty]
+    private string? _applyStatusMessage;
+
+    /// <summary>
+    /// Diagnostic detail of the currently selected source row.
+    /// </summary>
+    [ObservableProperty]
+    private string? _selectedDiagnosticDetail;
+
     #endregion
 
     #region Commands
@@ -239,7 +281,20 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task StartBatchScrapingAsync(IEnumerable<int>? gameIds)
     {
-        if (gameIds == null || !gameIds.Any())
+        await ScrapeGamesAsync(gameIds ?? Enumerable.Empty<int>());
+    }
+
+    /// <summary>
+    /// Scrapes the given games and reports progress.
+    /// </summary>
+    /// <remarks>
+    /// This is the single entry point used by the scraping page (game detail "scrape" button,
+    /// auto-scrape on add, and the batch command).
+    /// </remarks>
+    public async Task ScrapeGamesAsync(IEnumerable<int> gameIds)
+    {
+        var ids = gameIds?.Where(id => id > 0).Distinct().ToList() ?? new List<int>();
+        if (ids.Count == 0)
         {
             ErrorMessage = "未选择要刮削的游戏";
             return;
@@ -250,13 +305,16 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
         IsRunning = true;
 
         // Enqueue games
-        _autoScrapingService.EnqueueGames(gameIds);
+        _autoScrapingService.EnqueueGames(ids);
 
+        _currentCts?.Dispose();
         _currentCts = new CancellationTokenSource();
 
         try
         {
-            await _autoScrapingService.StartScrapingAsync(_currentCts.Token).ConfigureAwait(false);
+            // No ConfigureAwait(false) here: this runs from the UI thread and the
+            // ObservableProperty setters below must fire on it.
+            await _autoScrapingService.StartScrapingAsync(_currentCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -265,7 +323,7 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            ErrorMessage = "刮削失败：{ex.Message}";
+            ErrorMessage = $"刮削失败：{ex.Message}";
             _logger.LogError(ex, "Batch scraping failed");
         }
         finally
@@ -274,6 +332,97 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
             IsComplete = true;
             UpdateSummaryMessage();
         }
+    }
+
+    /// <summary>
+    /// Manually searches for a name and shows every candidate, regardless of score.
+    /// </summary>
+    /// <param name="gameName">Name to search for.</param>
+    /// <param name="gameId">Optional game id, so a candidate can be applied afterwards.</param>
+    public async Task SearchManuallyAsync(string? gameName, int gameId = 0)
+    {
+        if (string.IsNullOrWhiteSpace(gameName))
+        {
+            ErrorMessage = "请输入游戏名称进行搜索";
+            return;
+        }
+
+        try
+        {
+            Candidates.Clear();
+            SourceDiagnostics.Clear();
+            HasCandidates = false;
+            ApplyStatusMessage = null;
+            ErrorMessage = null;
+
+            var result = await _gameScrapingService.SearchGameAsync(gameName);
+
+            FillDiagnostics(result);
+            FillCandidates(result.SourceResults.SelectMany(r => r.Value.Items), gameId);
+
+            if (!result.HasResults)
+            {
+                // D12: never collapse an API failure into "no results".
+                ErrorMessage = result.Errors.Count > 0
+                    ? "未找到匹配项（数据源报错）：" + string.Join(" | ", result.Errors)
+                    : "未找到匹配项";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"搜索失败：{ex.Message}";
+            _logger.LogError(ex, "Manual search failed for {GameName}", gameName);
+        }
+    }
+
+    /// <summary>
+    /// Applies a candidate result to a game (manual review path, D11).
+    /// </summary>
+    [RelayCommand]
+    private async Task ApplyCandidateAsync(CandidateMatchItem? candidate)
+    {
+        if (candidate == null)
+        {
+            return;
+        }
+
+        var gameId = candidate.GameId > 0 ? candidate.GameId : CandidateGameId;
+        if (gameId <= 0)
+        {
+            ApplyStatusMessage = "无法应用：缺少游戏 ID";
+            return;
+        }
+
+        try
+        {
+            // The accepted candidate may come from Bangumi while the VNDB id is the
+            // cross-system key, so hand over the best VNDB candidate id as well.
+            var vndbId = Candidates
+                .Where(c => c.Metadata.Source == ScraperSource.Vndb && !string.IsNullOrWhiteSpace(c.Metadata.SourceId))
+                .OrderByDescending(c => c.MatchScore)
+                .Select(c => c.Metadata.SourceId)
+                .FirstOrDefault();
+
+            await _autoScrapingService.ApplyMetadataAsync(gameId, candidate.Metadata, null, default, vndbId);
+            ApplyStatusMessage = $"已应用「{candidate.Title}」到游戏 {gameId}";
+            _logger.LogInformation("Applied candidate {Title} to game {GameId}", candidate.Title, gameId);
+        }
+        catch (Exception ex)
+        {
+            ApplyStatusMessage = $"应用失败:{ex.Message}";
+            _logger.LogError(ex, "Failed to apply candidate metadata to game {GameId}", gameId);
+        }
+    }
+
+    /// <summary>
+    /// Shows the full error detail of a source row.
+    /// </summary>
+    [RelayCommand]
+    private void ShowDiagnosticDetail(SourceDiagnosticItem? diagnostic)
+    {
+        SelectedDiagnosticDetail = diagnostic == null
+            ? null
+            : diagnostic.BuildDetail();
     }
 
     /// <summary>
@@ -302,7 +451,7 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
     {
         GamesNeedingReview.Clear();
 
-        var results = await _autoScrapingService.GetGamesNeedingReviewAsync().ConfigureAwait(false);
+        var results = await _autoScrapingService.GetGamesNeedingReviewAsync();
 
         foreach (var result in results)
         {
@@ -360,7 +509,7 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
         {
             var preview = await _autoScrapingService.PreviewMergeAsync(
                 SelectedGameForReview.GameId,
-                SelectedMatch.Metadata).ConfigureAwait(false);
+                SelectedMatch.Metadata);
 
             foreach (var change in preview.Changes)
             {
@@ -409,7 +558,7 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
             await _autoScrapingService.ApplyMetadataAsync(
                 gameId,
                 SelectedMatch.Metadata,
-                preserveFields).ConfigureAwait(false);
+                preserveFields);
 
             // Remove from review list
             GamesNeedingReview.Remove(SelectedGameForReview);
@@ -471,45 +620,7 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task ManualSearchAsync(string? gameName)
     {
-        if (string.IsNullOrWhiteSpace(gameName))
-        {
-            ErrorMessage = "请输入游戏名称进行搜索";
-            return;
-        }
-
-        try
-        {
-            AvailableMatches.Clear();
-            SelectedMatch = null;
-            ChangePreview.Clear();
-
-            var result = await _gameScrapingService.SearchGameAsync(gameName).ConfigureAwait(false);
-
-            if (result.HasResults)
-            {
-                // Collect all matches from all sources
-                foreach (var sourceResult in result.SourceResults)
-                {
-                    foreach (var item in sourceResult.Value.Items)
-                    {
-                        AvailableMatches.Add(new MetadataMatchItem(item));
-                    }
-                }
-
-                // Select best match
-                var bestMatch = AvailableMatches.OrderByDescending(m => m.MatchScore).FirstOrDefault();
-                SelectedMatch = bestMatch;
-            }
-            else
-            {
-                ErrorMessage = "未找到匹配项";
-            }
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Search failed: {ex.Message}";
-            _logger.LogError(ex, "Manual search failed for {GameName}", gameName);
-        }
+        await SearchManuallyAsync(gameName, CandidateGameId);
     }
 
     #endregion
@@ -558,21 +669,79 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
         // Ensure UI updates happen on the correct thread
         if (_dispatcherQueue != null)
         {
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                // Add to results collection
-                GameResults.Add(new GameScrapingResultItem(e.Result));
-
-                _logger.LogDebug("Game completed: {GameId} - {Status}", e.Result.GameId, e.Result.Status);
-            });
+            _dispatcherQueue.TryEnqueue(() => HandleGameCompleted(e.Result));
         }
         else
         {
-            // Direct update if no dispatcher available
-            GameResults.Add(new GameScrapingResultItem(e.Result));
-
-            _logger.LogDebug("Game completed: {GameId} - {Status}", e.Result.GameId, e.Result.Status);
+            // Direct update if no dispatcher available (e.g., during tests)
+            HandleGameCompleted(e.Result);
         }
+    }
+
+    /// <summary>
+    /// Adds a finished game to the view and exposes its diagnostics and candidates.
+    /// </summary>
+    private void HandleGameCompleted(GameScrapingResult result)
+    {
+        GameResults.Add(new GameScrapingResultItem(result));
+
+        // D12: surface the per-source outcome so a source failure is not shown as "not found".
+        if (result.SourceResults.Count > 0)
+        {
+            FillDiagnostics(result.SourceResults, result.GameName);
+        }
+
+        if (result.Errors.Count > 0)
+        {
+            ErrorMessage = string.Join(" | ", result.Errors);
+        }
+
+        // D11: keep every candidate reachable so a below-threshold (but correct)
+        // result can still be applied manually.
+        FillCandidates(result.AllMatches, result.GameId);
+
+        if (result.Status == GameScrapingStatus.NoMatch && result.Errors.Count == 0)
+        {
+            ErrorMessage = $"「{result.GameName}」未找到匹配项（各数据源均正常返回，但没有相似结果）";
+        }
+
+        _logger.LogDebug("Game completed: {GameId} - {Status}", result.GameId, result.Status);
+    }
+
+    /// <summary>
+    /// Fills the source diagnostics list from an aggregated search result.
+    /// </summary>
+    private void FillDiagnostics(ScrapingResult result)
+    {
+        FillDiagnostics(result.SourceResults, null);
+    }
+
+    private void FillDiagnostics(
+        Dictionary<ScraperSource, SourceScrapingResult> sourceResults,
+        string? gameName)
+    {
+        SourceDiagnostics.Clear();
+
+        foreach (var pair in sourceResults)
+        {
+            SourceDiagnostics.Add(new SourceDiagnosticItem(pair.Key, pair.Value, gameName));
+        }
+    }
+
+    /// <summary>
+    /// Fills the candidate list, best score first.
+    /// </summary>
+    private void FillCandidates(IEnumerable<GameMetadata> matches, int gameId)
+    {
+        Candidates.Clear();
+
+        foreach (var match in matches.OrderByDescending(m => m.MatchScore))
+        {
+            Candidates.Add(new CandidateMatchItem(match, gameId));
+        }
+
+        CandidateGameId = gameId;
+        HasCandidates = Candidates.Count > 0;
     }
 
     private void OnBatchCompleted(object? sender, BatchScrapingResultEventArgs e)
@@ -620,6 +789,12 @@ public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
         IsComplete = false;
         SummaryMessage = null;
         ErrorMessage = null;
+        SourceDiagnostics.Clear();
+        Candidates.Clear();
+        HasCandidates = false;
+        CandidateGameId = 0;
+        ApplyStatusMessage = null;
+        SelectedDiagnosticDetail = null;
     }
 
     private void UpdateSummaryMessage()
@@ -913,5 +1088,186 @@ public class MetadataFieldPreview
             return "(empty)";
 
         return value.Length > maxLength ? value.Substring(0, maxLength) + "..." : value;
+    }
+}
+
+/// <summary>
+/// Display row for one scraping source of the last run.
+/// Implements the product contract "every request is traceable"
+/// (source + query + success flag + error message).
+/// </summary>
+public class SourceDiagnosticItem
+{
+    /// <summary>
+    /// The source this row describes.
+    /// </summary>
+    public ScraperSource Source { get; }
+
+    /// <summary>
+    /// Source name for display.
+    /// </summary>
+    public string SourceName { get; }
+
+    /// <summary>
+    /// The name that was actually sent to the source.
+    /// </summary>
+    public string SearchQuery { get; }
+
+    /// <summary>
+    /// Whether the source answered with at least one candidate.
+    /// </summary>
+    public bool HasResults { get; }
+
+    /// <summary>
+    /// Number of candidates returned.
+    /// </summary>
+    public int ItemCount { get; }
+
+    /// <summary>
+    /// Round-trip time in milliseconds.
+    /// </summary>
+    public long ElapsedMilliseconds { get; }
+
+    /// <summary>
+    /// Short error text, if the source failed.
+    /// </summary>
+    public string? ErrorMessage { get; }
+
+    /// <summary>
+    /// Full exception / response body, if available.
+    /// </summary>
+    public string? ExtendedErrorInfo { get; }
+
+    /// <summary>
+    /// One-line status text for the row.
+    /// </summary>
+    public string StatusText => HasResults
+        ? $"OK · {ItemCount} 条 · {ElapsedMilliseconds} ms"
+        : !string.IsNullOrEmpty(ErrorMessage)
+            ? $"失败 · {ElapsedMilliseconds} ms"
+            : $"无结果 · {ElapsedMilliseconds} ms";
+
+    /// <summary>
+    /// Whether the error details can be expanded.
+    /// </summary>
+    public bool HasDetail => !string.IsNullOrWhiteSpace(ExtendedErrorInfo) || !string.IsNullOrWhiteSpace(ErrorMessage);
+
+    /// <summary>
+    /// Creates a diagnostic row from a source result.
+    /// </summary>
+    public SourceDiagnosticItem(ScraperSource source, SourceScrapingResult result, string? gameName)
+    {
+        Source = source;
+        SourceName = source.ToString();
+        SearchQuery = string.IsNullOrWhiteSpace(result.SearchQuery) ? gameName ?? string.Empty : result.SearchQuery;
+        ItemCount = result.Items.Count;
+        HasResults = ItemCount > 0;
+        ElapsedMilliseconds = result.ElapsedMilliseconds;
+        ErrorMessage = result.ErrorMessage;
+        ExtendedErrorInfo = result.ExtendedErrorInfo;
+    }
+
+    /// <summary>
+    /// Builds the expandable detail text for this row.
+    /// </summary>
+    public string BuildDetail()
+    {
+        var lines = new List<string>
+        {
+            $"来源: {SourceName}",
+            $"搜索关键词: {SearchQuery}",
+            $"返回条目: {ItemCount}",
+            $"耗时: {ElapsedMilliseconds} ms"
+        };
+
+        if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            lines.Add($"错误: {ErrorMessage}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ExtendedErrorInfo))
+        {
+            lines.Add("完整错误信息:");
+            lines.Add(ExtendedErrorInfo!);
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+}
+
+/// <summary>
+/// Display row for one candidate metadata result.
+/// </summary>
+public class CandidateMatchItem
+{
+    /// <summary>
+    /// The metadata that would be applied.
+    /// </summary>
+    public GameMetadata Metadata { get; }
+
+    /// <summary>
+    /// Game id this candidate was found for.
+    /// </summary>
+    public int GameId { get; }
+
+    /// <summary>
+    /// Match score against the search term.
+    /// </summary>
+    public double MatchScore { get; }
+
+    /// <summary>
+    /// Score formatted for display.
+    /// </summary>
+    public string MatchScoreText => $"{MatchScore:F2}%";
+
+    /// <summary>
+    /// Candidate title (Chinese name preferred).
+    /// </summary>
+    public string Title { get; }
+
+    /// <summary>
+    /// Original title.
+    /// </summary>
+    public string OriginalTitle { get; }
+
+    /// <summary>
+    /// Source name.
+    /// </summary>
+    public string SourceName { get; }
+
+    /// <summary>
+    /// Source id, useful when looking the entry up on the website.
+    /// </summary>
+    public string SourceId { get; }
+
+    /// <summary>
+    /// Whether this candidate would be auto-accepted.
+    /// </summary>
+    public bool IsAutoAccepted { get; }
+
+    /// <summary>
+    /// Short field summary (developer / date / whether a cover exists).
+    /// </summary>
+    public string Summary { get; }
+
+    /// <summary>
+    /// Creates a candidate row.
+    /// </summary>
+    public CandidateMatchItem(GameMetadata metadata, int gameId, double autoAcceptThreshold = -1)
+    {
+        Metadata = metadata;
+        GameId = gameId;
+        MatchScore = metadata.MatchScore;
+        Title = metadata.TitleCn ?? metadata.TitleOriginal ?? "Unknown";
+        OriginalTitle = metadata.TitleOriginal ?? string.Empty;
+        SourceName = metadata.Source.ToString();
+        SourceId = metadata.SourceId;
+        IsAutoAccepted = autoAcceptThreshold < 0 || MatchScore >= autoAcceptThreshold;
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(metadata.Developer)) parts.Add(metadata.Developer!);
+        if (metadata.ReleaseDate.HasValue) parts.Add(metadata.ReleaseDate.Value.ToString("yyyy-MM-dd"));
+        if (!string.IsNullOrWhiteSpace(metadata.CoverImageUrl)) parts.Add("有封面");
+        Summary = parts.Count > 0 ? string.Join(" · ", parts) : "无附加信息";
     }
 }

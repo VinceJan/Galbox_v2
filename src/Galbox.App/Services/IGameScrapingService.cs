@@ -282,4 +282,10 @@ public class AutoScrapeResult
     /// Errors that occurred during scraping.
     /// </summary>
     public List<string> Errors { get; set; } = new();
+
+    /// <summary>
+    /// Per-source outcome of the search: query used, success flag, item count,
+    /// elapsed time and error text (D12 - lets the UI explain a failure).
+    /// </summary>
+    public Dictionary<ScraperSource, SourceScrapingResult> SourceResults { get; set; } = new();
 }

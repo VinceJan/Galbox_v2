@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Galbox.Acceptance</RootNamespace>
+    <AssemblyName>Galbox.Acceptance</AssemblyName>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Keep the headless acceptance host from pulling Windows App SDK auto-init / MSIX tooling.
+         EnableCoreMrtTooling=false mirrors src/Galbox.App/Galbox.App.csproj: without it the
+         transitive MrtCore.PriGen.targets tries to load Microsoft.Build.Packaging.Pri.Tasks.dll
+         from the SDK folder, which does not exist in a plain dotnet CLI install. -->
+    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Galbox.App\Galbox.App.csproj" />
+  </ItemGroup>
+</Project>

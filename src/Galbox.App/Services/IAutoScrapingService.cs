@@ -70,7 +70,13 @@ public interface IAutoScrapingService
     /// <param name="metadata">The metadata to apply</param>
     /// <param name="preserveUserFields">Fields to preserve from user customization</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task ApplyMetadataAsync(int gameId, GameMetadata metadata, List<string>? preserveUserFields = null, CancellationToken cancellationToken = default);
+    /// <param name="vndbId">VNDB vn id to persist alongside the metadata (cross-system key).</param>
+    Task ApplyMetadataAsync(
+        int gameId,
+        GameMetadata metadata,
+        List<string>? preserveUserFields = null,
+        CancellationToken cancellationToken = default,
+        string? vndbId = null);
 
     /// <summary>
     /// Merges metadata preview showing what would change.
@@ -196,6 +202,17 @@ public class GameScrapingResult
     /// Error message if scraping failed.
     /// </summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// All error messages reported by the sources for this game.
+    /// </summary>
+    public List<string> Errors { get; set; } = new();
+
+    /// <summary>
+    /// Per-source diagnostics (query, success, item count, elapsed, error text)
+    /// so the UI can explain exactly why a game was not matched (D12).
+    /// </summary>
+    public Dictionary<ScraperSource, SourceScrapingResult> SourceResults { get; set; } = new();
 
     /// <summary>
     /// Retry count for failed operations.

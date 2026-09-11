@@ -200,6 +200,19 @@
                             IsOpen="{x:Bind ViewModel.IsRunning, Mode=OneWay}"
                             Margin="0,8,0,0"/>
 
+                        <!-- Scrape Button (D1: the metadata scraping entry point) -->
+                        <Button
+                            Margin="0,8,0,0"
+                            Click="OnScrapeClick"
+                            HorizontalAlignment="Stretch">
+                            <Button.Content>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="16" Glyph="&#xE72C;"/>
+                                    <TextBlock Text="刮削"/>
+                                </StackPanel>
+                            </Button.Content>
+                        </Button>
+
                         <!-- Favorite Toggle -->
                         <ToggleButton
                             IsChecked="{x:Bind ViewModel.IsFavorite, Mode=OneWay}"

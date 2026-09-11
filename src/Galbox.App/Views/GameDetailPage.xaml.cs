@@ -77,6 +77,22 @@ public sealed partial class GameDetailPage : Page
     }
 
     /// <summary>
+    /// Navigates to the scraping view for the currently displayed game.
+    /// D1: this button is the user-facing entry point of metadata scraping.
+    /// </summary>
+    private void OnScrapeClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.GameId <= 0)
+        {
+            ViewModel.ErrorMessage = "游戏尚未加载完成，无法刮削";
+            return;
+        }
+
+        var navigationService = App.Services.GetRequiredService<Galbox.App.Services.INavigationService>();
+        navigationService.NavigateTo("ScrapingProgress", ViewModel.GameId);
+    }
+
+    /// <summary>
     /// Handles navigation to this page and loads the game data.
     /// </summary>
     protected override async void OnNavigatedTo(NavigationEventArgs e)

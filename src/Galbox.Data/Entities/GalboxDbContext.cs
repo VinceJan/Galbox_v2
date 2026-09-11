@@ -86,6 +86,7 @@ public class GalboxDbContext : DbContext
             entity.Property(e => e.Developer).HasMaxLength(200);
             entity.Property(e => e.SourceId).HasMaxLength(100);
             entity.Property(e => e.SourceType).HasMaxLength(50);
+            entity.Property(e => e.VndbId).HasMaxLength(20);
 
             // EngineType 枚举配置
             entity.Property(e => e.EngineType)

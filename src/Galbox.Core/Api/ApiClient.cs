@@ -16,6 +16,23 @@ public abstract class ApiClient
     protected HttpClient HttpClient { get; }
 
     /// <summary>
+    /// Human-readable description of the most recent failure of this client instance,
+    /// or <c>null</c> when the last request succeeded.
+    /// </summary>
+    /// <remarks>
+    /// D12/D17 fix: a deserialization failure used to be swallowed by
+    /// <c>Debug.WriteLine</c> and reported as <c>default</c>, which is indistinguishable from
+    /// "the search returned zero results". Callers can now surface <see cref="LastError"/>
+    /// so a broken response is explainable to the user.
+    /// </remarks>
+    public string? LastError { get; protected set; }
+
+    /// <summary>
+    /// Raw body of the most recent non-success response, when one was received.
+    /// </summary>
+    public string? LastErrorBody { get; protected set; }
+
+    /// <summary>
     /// Maximum number of retry attempts for transient failures.
     /// </summary>
     protected int MaxRetryCount { get; set; } = 3;
@@ -54,6 +71,8 @@ public abstract class ApiClient
     /// </summary>
     protected async Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken = default)
     {
+        ResetErrorState();
+
         var content = await ExecuteWithRetryAsync(async () =>
         {
             var response = await HttpClient.GetAsync(url, cancellationToken);
@@ -62,7 +81,10 @@ public abstract class ApiClient
         }, cancellationToken);
 
         if (string.IsNullOrEmpty(content))
+        {
+            LastError = $"Empty response body from {url}";
             return default;
+        }
 
         try
         {
@@ -70,8 +92,11 @@ public abstract class ApiClient
         }
         catch (JsonException ex)
         {
-            // Log JSON parsing error but don't throw - return null
-            System.Diagnostics.Debug.WriteLine($"JSON parsing error: {ex.Message}");
+            // Keep the raw body around so the failure can be shown instead of silently
+            // degrading into "no results".
+            LastError = $"JSON parse error: {ex.Message}";
+            LastErrorBody = Truncate(content);
+            System.Diagnostics.Debug.WriteLine($"JSON parsing error for {url}: {ex.Message}");
             return default;
         }
     }
@@ -84,6 +109,8 @@ public abstract class ApiClient
         TRequest request,
         CancellationToken cancellationToken = default)
     {
+        ResetErrorState();
+
         var json = JsonSerializer.Serialize(request, JsonOptions);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -95,7 +122,10 @@ public abstract class ApiClient
         }, cancellationToken);
 
         if (string.IsNullOrEmpty(responseContent))
+        {
+            LastError = $"Empty response body from {url}";
             return default;
+        }
 
         try
         {
@@ -103,9 +133,28 @@ public abstract class ApiClient
         }
         catch (JsonException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"JSON parsing error: {ex.Message}");
+            LastError = $"JSON parse error: {ex.Message}";
+            LastErrorBody = Truncate(responseContent);
+            System.Diagnostics.Debug.WriteLine($"JSON parsing error for {url}: {ex.Message}");
             return default;
         }
+    }
+
+    /// <summary>
+    /// Clears the failure state before a new request starts.
+    /// </summary>
+    private void ResetErrorState()
+    {
+        LastError = null;
+        LastErrorBody = null;
+    }
+
+    /// <summary>
+    /// Truncates a response body so error reporting stays readable.
+    /// </summary>
+    private static string Truncate(string value, int maxLength = 500)
+    {
+        return value.Length <= maxLength ? value : value.Substring(0, maxLength) + "...";
     }
 
     /// <summary>
@@ -184,6 +233,11 @@ public abstract class ApiClient
         {
             // Ignore content reading errors
         }
+
+        // Record the failure so callers can distinguish "server rejected the request"
+        // from "the search legitimately returned nothing".
+        LastError = $"API error: {statusCode} ({reasonPhrase})";
+        LastErrorBody = Truncate(errorBody);
 
         throw new HttpRequestException(
             $"API error: {statusCode} ({reasonPhrase}). Response: {errorBody}",

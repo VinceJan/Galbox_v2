@@ -10,3 +10,7 @@ OPEN-QUESTIONS.md
 
 # 内部交接与工作说明
 HANDOFF.md
+
+# 用户真实数据的备份（含个人游戏库内容，绝不公开）
+backup/
+*.db

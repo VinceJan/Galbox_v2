@@ -21,6 +21,7 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
     private readonly IGameUtilityService _gameUtilityService;
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IScrapingSettingsProvider _scrapingSettings;
     private Process? _runningProcess;
 
     /// <summary>
@@ -114,13 +115,15 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
         INavigationService navigationService,
         IGameUtilityService gameUtilityService,
         ILogger<LibraryViewModel> logger,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        IScrapingSettingsProvider scrapingSettings)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _scrapingSettings = scrapingSettings ?? throw new ArgumentNullException(nameof(scrapingSettings));
     }
 
     /// <summary>
@@ -322,12 +325,13 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <param name="folderPath">The path to the game folder.</param>
     /// <param name="executablePath">Optional path to the main executable.</param>
-    public async Task AddGameAsync(string folderPath, string? executablePath = null)
+    /// <returns>The id of the newly added game, or 0 when nothing was added.</returns>
+    public async Task<int> AddGameAsync(string folderPath, string? executablePath = null)
     {
         if (string.IsNullOrWhiteSpace(folderPath) || !System.IO.Directory.Exists(folderPath))
         {
             ErrorMessage = "无效的文件夹路径";
-            return;
+            return 0;
         }
 
         IsLoading = true;
@@ -345,7 +349,7 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
             if (string.IsNullOrWhiteSpace(executablePath))
             {
                 ErrorMessage = "文件夹中没有找到可执行文件";
-                return;
+                return 0;
             }
 
             // Calculate folder size
@@ -377,7 +381,7 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
             if (existingGame != null)
             {
                 ErrorMessage = "该游戏文件夹已在游戏库中";
-                return;
+                return 0;
             }
 
             // Add to database
@@ -394,18 +398,50 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
             SuccessMessage = $"已将 '{game.DisplayName}' 添加到游戏库 (引擎: {game.EngineType})";
             _logger.LogInformation("Added new game: {GameName} from {FolderPath}", game.DisplayName, folderPath);
 
+            // D1: honor the "scrape automatically when a game is added" setting, which
+            // previously had no consumer at all. Navigating to the scraping view makes
+            // the automatic run visible instead of silently happening off-screen.
+            await TryStartAutoScrapeAsync(game.Id);
+
             // Clear success message after delay
             await Task.Delay(3000);
             SuccessMessage = null;
+
+            return game.Id;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error adding game from {FolderPath}", folderPath);
             ErrorMessage = $"添加游戏失败：{ex.Message}";
+            return 0;
         }
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Navigates to the scraping view when "add game then auto scrape" is enabled.
+    /// </summary>
+    private async Task TryStartAutoScrapeAsync(int gameId)
+    {
+        try
+        {
+            await _scrapingSettings.RefreshAsync();
+
+            if (!_scrapingSettings.AutoScrapeOnAdd)
+            {
+                return;
+            }
+
+            _logger.LogInformation("AutoScrapeOnAdd is enabled, starting scraping for game {GameId}", gameId);
+            _navigationService.NavigateTo("ScrapingProgress", gameId);
+        }
+        catch (Exception ex)
+        {
+            // Auto scraping must never break adding a game.
+            _logger.LogWarning(ex, "Failed to start automatic scraping for game {GameId}", gameId);
         }
     }
 

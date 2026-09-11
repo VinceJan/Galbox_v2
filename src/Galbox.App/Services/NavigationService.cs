@@ -24,7 +24,9 @@ public class NavigationService : INavigationService
         { "SaveManager", typeof(SaveManagerPage) },
         { "PatchCenter", typeof(PatchCenterPage) },
         { "Settings", typeof(SettingsPage) },
-        { "GameDetail", typeof(GameDetailPage) }
+        { "GameDetail", typeof(GameDetailPage) },
+        // D1 fix: the scraping view now has a route, so the scraping feature is reachable from the UI.
+        { "ScrapingProgress", typeof(ScrapingProgressPage) }
     };
 
     /// <summary>
@@ -209,6 +211,12 @@ public class NavigationService : INavigationService
             {
                 SelectNavigationItem("Library");
             }
+        }
+
+        // The scraping page is reached from a game, so keep 游戏库 highlighted.
+        if (pageType == typeof(ScrapingProgressPage))
+        {
+            SelectNavigationItem("Library");
         }
     }
 

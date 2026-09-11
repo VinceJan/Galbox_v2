@@ -17,13 +17,18 @@ public sealed partial class MainWindow : Window
     private const int WM_HOTKEY = 0x0312;
     private const uint SUBCLASS_ID = 12345;
 
-    [DllImport("user32.dll", EntryPoint = "SetWindowSubclass", SetLastError = true)]
+    // NOTE: SetWindowSubclass / RemoveWindowSubclass / DefSubclassProc are exported by
+    // comctl32.dll, NOT user32.dll. Declaring them against user32.dll compiles fine but
+    // throws EntryPointNotFoundException at first call (i.e. in the MainWindow constructor),
+    // which used to be swallowed by the startup exception handler and left the app running
+    // with no visible window. Verified by binary export scan of both DLLs.
+    [DllImport("comctl32.dll", EntryPoint = "SetWindowSubclass", SetLastError = true)]
     private static extern bool SetWindowSubclass(IntPtr hWnd, SubclassProcDelegate pSubclassProc, uint uIdSubclass, IntPtr dwRefData);
 
-    [DllImport("user32.dll", EntryPoint = "RemoveWindowSubclass", SetLastError = true)]
+    [DllImport("comctl32.dll", EntryPoint = "RemoveWindowSubclass", SetLastError = true)]
     private static extern bool RemoveWindowSubclass(IntPtr hWnd, SubclassProcDelegate pSubclassProc, uint uIdSubclass);
 
-    [DllImport("user32.dll", EntryPoint = "DefSubclassProc", SetLastError = true)]
+    [DllImport("comctl32.dll", EntryPoint = "DefSubclassProc", SetLastError = true)]
     private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
 
     private delegate IntPtr SubclassProcDelegate(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, uint uIdSubclass, IntPtr dwRefData);

@@ -123,6 +123,18 @@ public class GameInfo
     public string? SourceType { get; set; }
 
     /// <summary>
+    /// VNDB visual novel id (e.g. "v28915"), independent of which source provided the
+    /// accepted metadata.
+    /// </summary>
+    /// <remarks>
+    /// Added for cross-system linking: downstream features (patch centre) key on the VNDB id
+    /// instead of the Bangumi subject id. Recorded whenever any source's candidate carries a
+    /// VNDB id, even when Bangumi supplied the accepted result.
+    /// </remarks>
+    [MaxLength(20)]
+    public string? VndbId { get; set; }
+
+    /// <summary>
     /// Tags/genres associated with the game.
     /// JSON serialized list.
     /// </summary>

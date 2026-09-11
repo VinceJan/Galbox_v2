@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Galbox.App.Views.ScrapingProgressPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:converters="using:Galbox.App.Converters"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <!-- Register Converters -->
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
+        <converters:EmptyStringToBooleanConverter x:Key="EmptyStringToBooleanConverter"/>
+        <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+        <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
+
+        <Style x:Key="ScrapeCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <Style x:Key="CounterLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}"/>
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <Style x:Key="CounterValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeLarge}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <ScrollViewer Padding="24">
+            <StackPanel Spacing="4" MaxWidth="1100" HorizontalAlignment="Stretch">
+
+                <!-- Title -->
+                <TextBlock
+                    Text="元数据刮削"
+                    FontSize="{StaticResource FontSizeHeader}"
+                    FontWeight="SemiBold"/>
+                <TextBlock
+                    Text="从 Bangumi / VNDB 获取中文名、简介、封面、开发商等信息。达到阈值自动写入，低于阈值的结果可在下方手动应用。"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="Wrap"
+                    Margin="0,4,0,12"/>
+
+                <!-- Progress -->
+                <Border Style="{StaticResource ScrapeCardStyle}">
+                    <StackPanel Spacing="8">
+                        <Grid>
+                            <TextBlock
+                                Text="{x:Bind ViewModel.CurrentGameName, Mode=OneWay, TargetNullValue='等待开始'}"
+                                FontWeight="SemiBold"
+                                TextTrimming="CharacterEllipsis"/>
+                            <ProgressRing
+                                IsActive="{x:Bind ViewModel.IsRunning, Mode=OneWay}"
+                                Width="18" Height="18"
+                                HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <ProgressBar
+                            Value="{x:Bind ViewModel.ProgressPercentage, Mode=OneWay}"
+                            Maximum="100"
+                            Height="6"/>
+
+                        <Grid ColumnSpacing="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="总数" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.TotalGames, Mode=OneWay}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="已完成" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.CompletedGames, Mode=OneWay}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="成功" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.SuccessCount, Mode=OneWay}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="待复核" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.NeedsReviewCount, Mode=OneWay}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="失败" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.FailedCount, Mode=OneWay}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="5">
+                                <TextBlock Text="用时" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.ElapsedTime, Mode=OneWay}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="6">
+                                <TextBlock Text="预计剩余" Style="{StaticResource CounterLabelStyle}"/>
+                                <TextBlock Text="{x:Bind ViewModel.EstimatedRemainingTime, Mode=OneWay, TargetNullValue='--'}" Style="{StaticResource CounterValueStyle}"/>
+                            </StackPanel>
+
+                            <Button
+                                Grid.Column="7"
+                                VerticalAlignment="Bottom"
+                                Content="取消刮削"
+                                Command="{x:Bind ViewModel.CancelScrapingCommand}"
+                                Visibility="{x:Bind ViewModel.IsRunning, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Errors and summary -->
+                <InfoBar
+                    Title="刮削出错"
+                    Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                    Severity="Error"
+                    IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
+                    IsClosable="False"
+                    Margin="0,0,0,12"/>
+
+                <InfoBar
+                    Title="本次结果"
+                    Message="{x:Bind ViewModel.SummaryMessage, Mode=OneWay}"
+                    Severity="Success"
+                    IsOpen="{x:Bind ViewModel.SummaryMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
+                    IsClosable="False"
+                    Margin="0,0,0,12"/>
+
+                <InfoBar
+                    Title="已应用"
+                    Message="{x:Bind ViewModel.ApplyStatusMessage, Mode=OneWay}"
+                    Severity="Informational"
+                    IsOpen="{x:Bind ViewModel.ApplyStatusMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
+                    IsClosable="False"
+                    Margin="0,0,0,12"/>
+
+                <!-- Source diagnostics (D12) -->
+                <Border Style="{StaticResource ScrapeCardStyle}"
+                        Visibility="{x:Bind ViewModel.SourceDiagnostics.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="数据源诊断" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock
+                            Text="每个数据源实际使用的关键词、返回条目数与错误信息。HTTP 报错与「确实没有结果」在这里可以区分开。"
+                            FontSize="{StaticResource FontSizeSmall}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            TextWrapping="Wrap"/>
+
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.SourceDiagnostics, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="0,6" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding SourceName}" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding SearchQuery}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding StatusText}" VerticalAlignment="Center"/>
+                                        <Button
+                                            Grid.Column="3"
+                                            Content="详情"
+                                            Padding="8,2"
+                                            Click="OnDiagnosticDetailClick"
+                                            Tag="{Binding}"
+                                            Visibility="{Binding HasDetail, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock
+                            Text="{x:Bind ViewModel.SelectedDiagnosticDetail, Mode=OneWay}"
+                            FontFamily="Consolas"
+                            FontSize="{StaticResource FontSizeSmall}"
+                            TextWrapping="Wrap"
+                            IsTextSelectionEnabled="True"
+                            Visibility="{x:Bind ViewModel.SelectedDiagnosticDetail, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Candidates (D11: low-score results stay applicable) -->
+                <Border Style="{StaticResource ScrapeCardStyle}"
+                        Visibility="{x:Bind ViewModel.HasCandidates, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="候选结果" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock
+                            Text="按匹配度排序。低于自动接受阈值的结果不会自动写入，但可以在这里手动应用。"
+                            FontSize="{StaticResource FontSizeSmall}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            TextWrapping="Wrap"/>
+
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Candidates, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="0,6" ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding OriginalTitle}" FontSize="{StaticResource FontSizeSmall}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Summary}" FontSize="{StaticResource FontSizeSmall}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding MatchScoreText}" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding SourceName}" FontSize="{StaticResource FontSizeSmall}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Right"/>
+                                        </StackPanel>
+                                        <Button
+                                            Grid.Column="2"
+                                            Content="应用"
+                                            VerticalAlignment="Center"
+                                            Click="OnApplyCandidateClick"
+                                            Tag="{Binding}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Processed games -->
+                <Border Style="{StaticResource ScrapeCardStyle}"
+                        Visibility="{x:Bind ViewModel.GameResults.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="本次处理的游戏" Style="{StaticResource SectionHeaderStyle}"/>
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.GameResults, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Padding="0,6">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding GameName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding MatchScoreText}"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}"/>
+                                        </Grid>
+                                        <TextBlock
+                                            Text="{Binding ErrorMessage}"
+                                            FontSize="{StaticResource FontSizeSmall}"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            TextWrapping="Wrap"
+                                            Visibility="{Binding ErrorMessage, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

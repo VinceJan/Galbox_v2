@@ -1,0 +1,315 @@
+====================================================================================================
+ GALBOX HEADLESS ACCEPTANCE RUN
+====================================================================================================
+ UTC started        : 2026-09-11 15:00:55Z
+ OS                 : Microsoft Windows 10.0.26200
+ Process arch       : X64
+ Runtime            : .NET 8.0.31
+ Executable         : E:\tmp\Galbox_v2\tests\Galbox.Acceptance\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.Acceptance.exe
+ Working directory  : C:\Users\Jiang\Desktop\Tmp\dsh启动地址
+ Game folder        : D:\GAME\Dreamin'_Her (exists: True)
+ Scraping query     : "Dreamin' Her"
+ Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\acceptance.db
+ Real app DB        : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (untouched)
+ Verbose logs       : False
+
+ Dependency-injection preflight (UI-free replica of App.xaml.cs ConfigureServices):
+   [OK]      IGameUtilityService      GameUtilityService
+   [OK]      ISaveManagementService   SaveManagementService
+   [OK]      IGameScrapingService     GameScrapingService
+   [OK]      IErrorCheckingService    ErrorCheckingService
+   [OK]      IScrapingCacheService    ScrapingCacheService
+   [OK]      IBangumiAuthService      BangumiAuthService
+   [OK]      IAutoScrapingService     AutoScrapingService
+   [OK]      IProcessMonitorService   ProcessMonitorService
+   [INFO]    INavigationService type present in Galbox.App assembly: True (intentionally not registered: it requires Microsoft.UI.Xaml.Controls)
+ Preflight failures : 0
+====================================================================================================
+
+####################################################################################################
+# [A0] Database isolation, schema creation and GameInfo round-trip
+####################################################################################################
+EXPECTED : fresh acceptance.db is (re)created, GameInfo persists and reads back identically, and a second reset proves the run is repeatable
+ACTUAL   : created=True, roundTrip=True, repeatable=True
+DETAILS  :
+  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\acceptance.db
+  Real app DB path   : C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+  In isolation       : True
+  EnsureDeleted()    : True
+  EnsureCreated()    : True
+  DB file exists     : True (4096 bytes)
+  Tables created     : 10 [Characters, Documents, ErrorRecords, Games, MediaFiles, Patches, SaveBackups, Screenshots, UserSettings, sqlite_sequence]
+  --- game library state on the fresh database ---
+    total games        : 0
+    IsScraped == true  : 0
+    IsScraped == false : 0   (library is empty on a fresh DB)
+  --- inserted test game, read back with AsNoTracking ---
+    Id                 : 1
+    NameOriginal       : Dreamin' Her
+    InstallPath        : D:\GAME\Dreamin'_Her
+    MainExecutable     : D:\GAME\Dreamin'_Her\dreaminher.exe
+    IsScraped          : False
+    EngineType         : Unknown
+    DisplayName        : Dreamin' Her
+    AddedTime (UTC)    : 2026-09-11 15:00:56Z
+  --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
+    games after reset  : 0 (expected 0)
+    DB size after reset: 4096 bytes
+  --- re-seeded test game for later checks: Id=1 ---
+RESULT   : PASS  (1331 ms)
+
+####################################################################################################
+# [A1] FindExecutableInFolder picks the intended launcher
+####################################################################################################
+EXPECTED : Path.GetFileName(result) == dreaminher.exe
+ACTUAL   : dreaminher-32.exe
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Folder exists      : True
+  *.exe found        : 2
+    raw[0] (OS order, first is what the service returns): dreaminher-32.exe
+    raw[1] (OS order, first is what the service returns): dreaminher.exe
+  exe files (sorted) : dreaminher-32.exe, dreaminher.exe
+  Service result     : D:\GAME\Dreamin'_Her\dreaminher-32.exe
+  Service result name: dreaminher-32.exe
+    exists           : True
+    size             : 117760 bytes
+RESULT   : FAIL  (10 ms)
+
+####################################################################################################
+# [A2] CalculateFolderSize reports the real folder size
+####################################################################################################
+EXPECTED : > 900.00 MB (943718400 bytes)
+ACTUAL   : 1079379981 bytes (1.005 GB)
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Service result     : 1079379981 bytes (1.005 GB)
+  Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
+  Deviation          : 0 bytes (0%)
+RESULT   : PASS  (132 ms)
+
+####################################################################################################
+# [A3] DetectSaveLocationAsync finds the Ren'Py save folder
+####################################################################################################
+EXPECTED : Success == true, EngineType == Renpy, a detected path ending in 'saves', and a non-empty save-file list
+ACTUAL   : Success=true, EngineType=Renpy, PrimarySavePath=(null), AlternativePaths=1, SaveFiles=12
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.NameCn    : (null)
+  GameInfo.NameOriginal : Dreamin' Her
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.EngineType (stored, pre-detection) : Unknown
+  Expected engine    : Renpy
+  Detector folder key: Dreamin'_Her
+  AppData Roaming    : C:\Users\Jiang\AppData\Roaming
+  AppData folders matching 'Dreamin'_Her' / 'Dreamin'_Her-*' : 0
+  game\saves folder exists            : True
+  game\saves *.save file count        : 12
+  --- DetectSaveLocationAsync result (raw) ---
+  Success            : True
+  EngineType         : Renpy
+  PrimarySavePath    : (null)
+  AlternativePaths   : 1
+    alt[0]          : D:\GAME\Dreamin'_Her\game\saves (exists: True)
+  SaveFiles          : 12
+    D:\GAME\Dreamin'_Her\game\saves\1-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\1-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-10-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-2-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-3-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-4-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-6-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-7-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-8-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-9-LT1.save
+  ErrorMessage       : (null)
+  ExtendedInfo       : 1 entries
+    GameName = Dreamin'_Her
+RESULT   : PASS  (10 ms)
+
+####################################################################################################
+# [A4] CheckGameAsync runs without internal failure
+####################################################################################################
+EXPECTED : call returns a list, no internal ERROR is logged, and every item has a title, category and severity (0 items is a valid result)
+ACTUAL   : 0 finding(s), 0 row(s) persisted
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.NameOriginal : Dreamin' Her
+  Findings           : 0
+  (no issues reported - this is a valid outcome for an English-path Ren'Py game)
+  ErrorRecords rows persisted for this game: 0
+RESULT   : PASS  (33 ms)
+
+####################################################################################################
+# [A5] SearchGameAsync returns live results from the four sources
+####################################################################################################
+EXPECTED : at least one source returns >= 1 item AND ScrapingResult.BestMatch != null
+ACTUAL   : HasResults=false, BestMatch=null, total items=0
+DETAILS  :
+  Query string       : "Dreamin' Her"
+  Persistent cache   : DISABLED for this run (guarantees a live network query)
+  HttpClient timeout : 30s per request, as configured by the container
+  Total elapsed      : 1332 ms
+  SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
+  HasResults         : False
+  BestMatch          : (null)
+  Result.Errors      : 1
+    error: VNDB: Network error: API error: BadRequest (Bad Request). Response: Invalid 'fields' member: The 'titles' object requires specifying sub-field(s).
+
+  
+  ================ SOURCE: Bangumi ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 883
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+  
+  ================ SOURCE: Vndb ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : Network error: API error: BadRequest (Bad Request). Response: Invalid 'fields' member: The 'titles' object requires specifying sub-field(s).
+
+    ElapsedMilliseconds : 1287
+    Items               : 0
+    ExtendedErrorInfo   : printed below, raw
+      System.Net.Http.HttpRequestException: API error: BadRequest (Bad Request). Response: Invalid 'fields' member: The 'titles' object requires specifying sub-field(s).
+      
+         at Galbox.Core.Api.ApiClient.HandleResponseAsync(HttpResponseMessage response) in E:\tmp\Galbox_v2\src\Galbox.Core\Api\ApiClient.cs:line 188
+         at Galbox.Core.Api.ApiClient.<>c__DisplayClass14_0`2.<<PostJsonAsync>b__0>d.MoveNext() in E:\tmp\Galbox_v2\src\Galbox.Core\Api\ApiClient.cs:line 93
+      --- End of stack trace from previous location ---
+         at Galbox.Core.Api.ApiClient.ExecuteWithRetryAsync[T](Func`1 operation, CancellationToken cancellationToken) in E:\tmp\Galbox_v2\src\Galbox.Core\Api\ApiClient.cs:line 129
+         at Galbox.Core.Api.ApiClient.PostJsonAsync[TRequest,TResponse](String url, TRequest request, CancellationToken cancellationToken) in E:\tmp\Galbox_v2\src\Galbox.Core\Api\ApiClient.cs:line 90
+         at Galbox.Core.Api.VndbApi.SearchByTitleAsync(String title, CancellationToken cancellationToken) in E:\tmp\Galbox_v2\src\Galbox.Core\Api\VndbApi.cs:line 41
+         at Galbox.App.Services.GameScrapingService.SearchVndbAsync(String gameName, CancellationToken cancellationToken) in E:\tmp\Galbox_v2\src\Galbox.App\Services\GameScrapingService.cs:line 375
+         at Galbox.App.Services.GameScrapingService.SearchFromSourceAsync(String gameName, ScraperSource source, CancellationToken cancellationToken) in E:\tmp\Galbox_v2\src\Galbox.App\Services\GameScrapingService.cs:line 164
+    (no items)
+  
+  ================ SOURCE: Ymgal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+  
+  ================ SOURCE: Cngal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+  FAIL REASON: no source returned a single item.
+RESULT   : FAIL  (1341 ms)
+
+####################################################################################################
+# [A6] Scraped metadata is complete enough to use
+####################################################################################################
+EXPECTED : the best-matching item has a non-empty title AND a non-empty cover image URL
+ACTUAL   : BestMatch=null
+DETAILS  :
+  Query              : "Dreamin' Her"
+  Total items across all sources: 0
+  
+  Per-source totals:
+    source   | items | TitleCn | TitleOriginal | Rating | CoverImageUrl
+    ---------+-------+---------+---------------+--------+--------------
+    Bangumi  |     0 |       0 |             0 |      0 |             0
+    Cngal    |     0 |       0 |             0 |      0 |             0
+    Vndb     |     0 |       0 |             0 |      0 |             0
+    Ymgal    |     0 |       0 |             0 |      0 |             0
+  
+  Per-item field presence:
+  
+  BestMatch is null, so there is no winning row to evaluate.
+RESULT   : FAIL  (7 ms)
+
+####################################################################################################
+# [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+####################################################################################################
+EXPECTED : Bangumi and VNDB are both reachable AND both return >= 1 hit for this game when asked with a request shape they accept
+ACTUAL   : bangumiReachable=True, bangumiHasGame=True, vndbReachable=True, vndbHasGame=True
+DETAILS  :
+  --- HttpClient configuration built by the container ---
+    BangumiHttpClient  BaseAddress=https://api.bgm.tv/  Timeout=30s  UserAgent=Galbox/1.0
+    VndbHttpClient     BaseAddress=https://api.vndb.org/kana/  Timeout=30s  UserAgent=Galbox/1.0
+    YmgalHttpClient    BaseAddress=(null)  Timeout=30s  UserAgent=Galbox/1.0
+    CngalHttpClient    BaseAddress=(null)  Timeout=30s  UserAgent=Galbox/1.0
+  
+  === [2a] Bangumi, request shape copied from BangumiApi.SearchAsync ===
+    GET https://api.bgm.tv/search/subject/Dreamin%27%20Her?type=4&responseGroup=large
+    HTTP status : 200 
+    body        : {"results":1,"list":[{"id":309736,"url":"http:\/\/bgm.tv\/subject\/309736","type":4,"name":"Dreamin'Her\u00a0 -\u50d5\u306f\u3001\u5f7c\u5973\u306e\u5922\u3092\u898b\u308b\u3002-","name_cn":"Dreamin' Her -\u6211\u68a6\u89c1\u4e86\u5979\u3002-","summary":"\u4e94\u5341\u5d50\u84bc\u306f\u75b2\u308c\u3066\u3044\u305f\u3002\r\n\u6bcd\u89aa\u306e\u5e0c\u671b\u306b\u5408\u308f\u305b\u305f\u53d7\u9a13\u52c9\u5f37\u6f2c\u3051\u306e\u65e5\u3005\u3002\r\n\u8da3\u5473\u306e\u5c0f\u8aac\u3082\u3046\u307e\u304f\u66f8\u3051\u306a\u3044\u3002\r\n\u81ea\u5206\u306e\u5b58\u5728\u610f\u7fa9\u307e\u3067\u7591\u3046\u9ad8\u6821\uff13\u5e74\u751f\u306e\u590f\u3002\r\n\r\n\u5f7c\u306e\u7652\u3084\u3057\u306f\u5e7c\u99b4\u67d3\u306e\u4e03\u702c\u672a\u6765\u3060\u3051\u3002\r\n\u5f7c\u5973\u3068\u4e00\u7dd2\u306b\u3044\u3089\u308c\u308b\u6642\u9593\u304c\u3001\r\n\u552f\u4e00\u3001\u84bc\u306b\u5b89\u3089\u304 ... [TRUNCATED, total 2291 chars]
+    Top-level JSON keys the server returned : [results, list]
+    Top-level JSON keys the app model binds  : [total, limit, offset, data] (BangumiSearchResponse in src/Galbox.Core/Api/BangumiApi.cs)
+    App model can read this response         : False
+  
+  === [2b] VNDB, request body copied from VndbApi.SearchByTitleAsync ===
+    POST https://api.vndb.org/kana/vn
+    body: {"filters":"search ~ \u0022Dreamin\u0027 Her\u0022","fields":"id, title, titles, titles.lang, titles.title, titles.official, titles.main, image.url, rating, length_minutes","results":10}
+    HTTP status : 400 
+    body        : Invalid 'fields' member: The 'titles' object requires specifying sub-field(s).
+
+  
+  === [3a] Bangumi, corrected request (v0 search API, matches the app's own model) ===
+    POST https://api.bgm.tv/v0/search/subjects
+    body: {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+    HTTP status : 200 
+    body        : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美しい海だった。\r\n薄桃色の砂浜に、一人の少女が佇んでいる。\r\n\r\n七瀬未来にそっくりな、夢の中の彼女――\r\n\r\n夢が、現実を侵していく……","name":"Dreamin'Her  -僕は、彼女の夢を見る。-","name_cn":"Dreamin' Her -我梦见了她。-","tags":[{"name":"Galgame","count":210,"total_coun ... [TRUNCATED, total 8701 chars]
+    total reported by Bangumi : 4
+    first 'data[0]' : id=309736, name=Dreamin'Her  -僕は、彼女の夢を見る。-, name_cn=Dreamin' Her -我梦见了她。-
+  
+  === [3b] VNDB, corrected request (array filter + titles{...} sub-fields) ===
+    POST https://api.vndb.org/kana/vn
+    body: {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, titles{lang,title,official,main}, image.url, rating, length_minutes","results":10}
+    HTTP status : 200 
+    body        : {"more":false,"results":[{"id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title":"How to turn a Cherry tree spirit into an idol"},{"lang":"ja","main":false,"official":true,"title":"桜の木の精霊をアイドルにする方法"},{"lang":"ko","main":true,"official":true,"title":"벚나무의 정령을 아이돌로 만드는 법"}]}]}
+    count reported by VNDB    : (absent - kana API returns 'more'/'results' only)
+    results[] length          : 2
+    first 'results[0]' : id=v28915, title=Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-, rating=77.3
+  
+  --- verdict inputs ---
+    Bangumi reachable        : True (app-shaped HTTP 200, corrected HTTP 200)
+    Bangumi holds this game  : True (total=4)
+    VNDB reachable           : True (corrected HTTP 200)
+    VNDB holds this game     : True (results[]=2)
+    App-shaped Bangumi shape readable by app model : False
+    App-shaped VNDB status   : 400 (a non-200 here is an app-side request bug)
+RESULT   : PASS  (3103 ms)
+
+====================================================================================================
+ ACCEPTANCE SUMMARY
+====================================================================================================
+ ID   STATUS        TIME  CHECK
+----------------------------------------------------------------------------------------------------
+ A0   PASS       1331 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   FAIL         10 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS        132 ms  CalculateFolderSize reports the real folder size
+ A3   PASS         10 ms  DetectSaveLocationAsync finds the Ren'Py save folder
+ A4   PASS         33 ms  CheckGameAsync runs without internal failure
+ A5   FAIL       1341 ms  SearchGameAsync returns live results from the four sources
+ A6   FAIL          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       3103 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+----------------------------------------------------------------------------------------------------
+ PASSED : 5
+ FAILED : 3
+ ERRORS : 0
+ TOTAL  : 8
+ FAILING CHECKS:
+   A1: expected [Path.GetFileName(result) == dreaminher.exe] but measured [dreaminher-32.exe]
+   A5: expected [at least one source returns >= 1 item AND ScrapingResult.BestMatch != null] but measured [HasResults=false, BestMatch=null, total items=0]
+   A6: expected [the best-matching item has a non-empty title AND a non-empty cover image URL] but measured [BestMatch=null]
+
+ EXIT CODE: 1  (at least one check did not PASS)
+ DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\acceptance.db
+ GAME     : D:\GAME\Dreamin'_Her
+====================================================================================================

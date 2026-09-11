@@ -27,8 +27,11 @@ public class AutoScrapingService : IAutoScrapingService
     // Configuration constants
     private const int BatchSize = 5; // Process 5 games at a time
     private const int MaxRetryCount = 3;
-    private const double AutoAcceptThreshold = 90.0;
     private const int RetryDelayMs = 2000;
+
+    // Note: the auto-accept threshold is not repeated here. It is owned by
+    // GameScrapingService, which reads UserSettings.MatchThresholdPercent (D9).
+    // The constant that used to live here was never referenced by any code path.
 
     /// <summary>
     /// Creates an AutoScrapingService with injected dependencies.
@@ -267,7 +270,8 @@ public class AutoScrapingService : IAutoScrapingService
         int gameId,
         GameMetadata metadata,
         List<string>? preserveUserFields = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? vndbId = null)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
@@ -285,6 +289,17 @@ public class AutoScrapingService : IAutoScrapingService
 
         // Apply metadata, preserving user-customized fields
         ApplyMetadataToGame(game, metadata, preserveUserFields);
+
+        // Prefer the VNDB id of the applied result; otherwise use the sibling candidate
+        // supplied by the caller (the candidate the user actually picked may come from Bangumi).
+        if (!string.IsNullOrWhiteSpace(vndbId))
+        {
+            game.VndbId = vndbId;
+        }
+        else
+        {
+            ApplyVndbId(game, metadata, null);
+        }
 
         // Update scraping status
         game.IsScraped = true;
@@ -394,26 +409,36 @@ public class AutoScrapingService : IAutoScrapingService
                 return result;
             }
 
-            // Perform scraping with retry mechanism
+            // Perform scraping with retry mechanism.
+            // D19 fix: sources catch their own exceptions (SearchFromSourceAsync), so
+            // AutoScrapeAsync never throws HttpRequestException - the old catch block was
+            // dead code and a clean "no match" was retried three times pointlessly.
+            // Retry only when a source reported a real failure, and back off in between.
             AutoScrapeResult? scrapeResult = null;
             for (int retry = 0; retry < MaxRetryCount; retry++)
             {
-                try
+                scrapeResult = await scrapingService.AutoScrapeAsync(game, cancellationToken).ConfigureAwait(false);
+                if (scrapeResult != null && scrapeResult.BestMatch != null)
                 {
-                    scrapeResult = await scrapingService.AutoScrapeAsync(game, cancellationToken).ConfigureAwait(false);
-                    if (scrapeResult != null && scrapeResult.BestMatch != null)
-                    {
-                        break; // Success
-                    }
+                    break; // Success
                 }
-                catch (HttpRequestException ex)
+
+                result.RetryCount = retry;
+
+                var hasSourceErrors = scrapeResult?.Errors?.Count > 0;
+                if (!hasSourceErrors)
                 {
-                    _logger.LogWarning(ex, "Scraping failed for game {GameId}, retry {Retry}", gameId, retry + 1);
-                    result.RetryCount = retry + 1;
-                    if (retry < MaxRetryCount - 1)
-                    {
-                        await Task.Delay(RetryDelayMs, cancellationToken).ConfigureAwait(false);
-                    }
+                    // Legitimate empty result - retrying cannot help.
+                    break;
+                }
+
+                _logger.LogWarning(
+                    "Scraping game {GameId} reported source errors on attempt {Attempt}: {Errors}",
+                    gameId, retry + 1, string.Join(" | ", scrapeResult!.Errors));
+
+                if (retry < MaxRetryCount - 1)
+                {
+                    await Task.Delay(RetryDelayMs, cancellationToken).ConfigureAwait(false);
                 }
             }
 
@@ -422,6 +447,8 @@ public class AutoScrapingService : IAutoScrapingService
             {
                 result.Status = GameScrapingStatus.NoMatch;
                 result.ErrorMessage = scrapeResult?.Errors?.FirstOrDefault() ?? "No matching results found";
+                result.Errors = scrapeResult?.Errors ?? new List<string>();
+                result.SourceResults = scrapeResult?.SourceResults ?? new Dictionary<ScraperSource, SourceScrapingResult>();
                 _logger.LogWarning("No match found for game {GameId}: {GameName}", gameId, game.DisplayName);
             }
             else
@@ -430,6 +457,8 @@ public class AutoScrapingService : IAutoScrapingService
                 result.MatchScore = scrapeResult.BestMatch.MatchScore;
                 result.BestMatchSource = scrapeResult.BestMatchSource;
                 result.AllMatches = scrapeResult.AllMatches;
+                result.Errors = scrapeResult.Errors;
+                result.SourceResults = scrapeResult.SourceResults;
 
                 if (scrapeResult.AutoAccepted)
                 {
@@ -443,6 +472,10 @@ public class AutoScrapingService : IAutoScrapingService
                     game.SourceId = scrapeResult.BestMatch.SourceId;
                     game.SourceType = scrapeResult.BestMatch.Source.ToString();
                     game.UpdatedTime = DateTime.UtcNow;
+
+                    // Record the VNDB id even when Bangumi supplied the accepted result:
+                    // downstream features (patch centre) key on it.
+                    ApplyVndbId(game, scrapeResult.BestMatch, scrapeResult.AllMatches);
 
                     await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -562,6 +595,44 @@ public class AutoScrapingService : IAutoScrapingService
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Persists the VNDB vn id for a game.
+    /// </summary>
+    /// <remarks>
+    /// The VNDB id is the cross-system key used by the patch centre, and it must survive even
+    /// when another source (Bangumi, higher priority) supplied the accepted metadata.
+    /// The id is taken from the applied result first, then from the highest scoring VNDB
+    /// candidate in the same scrape run.
+    /// </remarks>
+    private static void ApplyVndbId(GameInfo game, GameMetadata? applied, IEnumerable<GameMetadata>? allMatches)
+    {
+        var vndbId = ResolveVndbId(applied, allMatches);
+
+        if (!string.IsNullOrWhiteSpace(vndbId))
+        {
+            game.VndbId = vndbId;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the VNDB id from the applied result or from the best VNDB candidate.
+    /// </summary>
+    private static string? ResolveVndbId(GameMetadata? applied, IEnumerable<GameMetadata>? allMatches)
+    {
+        if (applied != null &&
+            applied.Source == ScraperSource.Vndb &&
+            !string.IsNullOrWhiteSpace(applied.SourceId))
+        {
+            return applied.SourceId;
+        }
+
+        return allMatches?
+            .Where(m => m.Source == ScraperSource.Vndb && !string.IsNullOrWhiteSpace(m.SourceId))
+            .OrderByDescending(m => m.MatchScore)
+            .Select(m => m.SourceId)
+            .FirstOrDefault();
     }
 
     private static void CompareField(

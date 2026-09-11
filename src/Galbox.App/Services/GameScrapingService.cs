@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace Galbox.App.Services;
 
@@ -17,6 +18,8 @@ public class GameScrapingService : IGameScrapingService
     private readonly YmgalApi _ymgalApi;
     private readonly CngalApi _cngalApi;
     private readonly IScrapingCacheService? _cacheService;
+    private readonly IScrapingSettingsProvider? _settingsProvider;
+    private readonly ILogger<GameScrapingService>? _logger;
 
     // Pre-compiled regex patterns for name cleaning
     private static readonly Regex VersionPattern = new(
@@ -43,8 +46,10 @@ public class GameScrapingService : IGameScrapingService
     private DateTime _lastBangumiRequest = DateTime.MinValue;
     private DateTime _lastVndbRequest = DateTime.MinValue;
 
-    // Match threshold for auto-accept (90%)
-    private const double AutoAcceptThreshold = 90.0;
+    // Match threshold for auto-accept. The effective value comes from
+    // UserSettings.MatchThresholdPercent via IScrapingSettingsProvider (D9);
+    // this constant is only the fallback when no provider is injected.
+    private const double DefaultAutoAcceptThreshold = ScrapingSettingsProvider.DefaultThresholdPercent;
 
     /// <summary>
     /// Creates a GameScrapingService with injected API clients and optional cache service.
@@ -54,19 +59,30 @@ public class GameScrapingService : IGameScrapingService
     /// <param name="ymgalApi">ymgal API client</param>
     /// <param name="cngalApi">cngal API client</param>
     /// <param name="cacheService">Optional cache service for persistent caching</param>
+    /// <param name="settingsProvider">Optional provider for user scraping settings (threshold, enabled sources, priority)</param>
+    /// <param name="logger">Optional logger</param>
     public GameScrapingService(
         BangumiApi bangumiApi,
         VndbApi vndbApi,
         YmgalApi ymgalApi,
         CngalApi cngalApi,
-        IScrapingCacheService? cacheService = null)
+        IScrapingCacheService? cacheService = null,
+        IScrapingSettingsProvider? settingsProvider = null,
+        ILogger<GameScrapingService>? logger = null)
     {
         _bangumiApi = bangumiApi ?? throw new ArgumentNullException(nameof(bangumiApi));
         _vndbApi = vndbApi ?? throw new ArgumentNullException(nameof(vndbApi));
         _ymgalApi = ymgalApi ?? throw new ArgumentNullException(nameof(ymgalApi));
         _cngalApi = cngalApi ?? throw new ArgumentNullException(nameof(cngalApi));
         _cacheService = cacheService;
+        _settingsProvider = settingsProvider;
+        _logger = logger;
     }
+
+    /// <summary>
+    /// Effective auto-accept threshold, read from user settings when available.
+    /// </summary>
+    private double AutoAcceptThreshold => _settingsProvider?.MatchThresholdPercent ?? DefaultAutoAcceptThreshold;
 
     /// <summary>
     /// Search for games across all available sources.
@@ -94,42 +110,85 @@ public class GameScrapingService : IGameScrapingService
             return result;
         }
 
-        // Search from all sources in parallel (but respect rate limits)
-        var bangumiTask = SearchFromSourceAsync(cleanName, ScraperSource.Bangumi, cancellationToken);
-        var vndbTask = SearchFromSourceAsync(cleanName, ScraperSource.Vndb, cancellationToken);
-        var ymgalTask = SearchFromSourceAsync(cleanName, ScraperSource.Ymgal, cancellationToken);
-        var cngalTask = SearchFromSourceAsync(cleanName, ScraperSource.Cngal, cancellationToken);
+        // Resolve the user's source toggles / priority for this run (D9, D10).
+        if (_settingsProvider != null)
+        {
+            await _settingsProvider.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        }
 
-        await Task.WhenAll(bangumiTask, vndbTask, ymgalTask, cngalTask).ConfigureAwait(false);
+        var enabledSources = ResolveEnabledSources();
 
-        // Collect results
-        var bangumiResult = await bangumiTask.ConfigureAwait(false);
-        var vndbResult = await vndbTask.ConfigureAwait(false);
-        var ymgalResult = await ymgalTask.ConfigureAwait(false);
-        var cngalResult = await cngalTask.ConfigureAwait(false);
+        // Search every enabled source in parallel (but respect rate limits)
+        var searchTasks = enabledSources
+            .Select(source => new KeyValuePair<ScraperSource, Task<SourceScrapingResult>>(
+                source, SearchFromSourceAsync(cleanName, source, cancellationToken)))
+            .ToList();
 
-        result.SourceResults[ScraperSource.Bangumi] = bangumiResult;
-        result.SourceResults[ScraperSource.Vndb] = vndbResult;
-        result.SourceResults[ScraperSource.Ymgal] = ymgalResult;
-        result.SourceResults[ScraperSource.Cngal] = cngalResult;
+        await Task.WhenAll(searchTasks.Select(t => t.Value)).ConfigureAwait(false);
 
-        // Collect errors
-        if (!bangumiResult.Success && !string.IsNullOrEmpty(bangumiResult.ErrorMessage))
-            result.Errors.Add($"Bangumi: {bangumiResult.ErrorMessage}");
-        if (!vndbResult.Success && !string.IsNullOrEmpty(vndbResult.ErrorMessage))
-            result.Errors.Add($"VNDB: {vndbResult.ErrorMessage}");
+        foreach (var (source, task) in searchTasks)
+        {
+            result.SourceResults[source] = await task.ConfigureAwait(false);
+        }
+
+        // Collect errors from every source that reported one, so a failure is
+        // distinguishable from a legitimate empty result (D12).
+        foreach (var sourceResult in result.SourceResults)
+        {
+            if (!sourceResult.Value.Success && !string.IsNullOrEmpty(sourceResult.Value.ErrorMessage))
+            {
+                result.Errors.Add($"{sourceResult.Key}: {sourceResult.Value.ErrorMessage}");
+            }
+        }
 
         // Find best match across all sources (priority: Bangumi > VNDB > ymgal > cngal)
-        result.BestMatch = FindBestMatch(gameName, result.SourceResults);
+        result.BestMatch = FindBestMatch(gameName, result.SourceResults, enabledSources);
 
-        // Cache the result in both caches
-        AddToMemoryCache(cleanName, result);
-        if (_cacheService != null)
+        // Cache the result in both caches.
+        // D7 fix: only successful, complete results are cached. Caching an empty or
+        // half-failed result is what turned a single network hiccup into a 7-day
+        // lockout for that game name.
+        if (result.HasResults && result.Errors.Count == 0)
         {
-            _cacheService.CacheResult(cleanName, result);
+            AddToMemoryCache(cleanName, result);
+            if (_cacheService != null)
+            {
+                _cacheService.CacheResult(cleanName, result);
+            }
+        }
+        else
+        {
+            _logger?.LogInformation(
+                "Not caching scraping result for '{GameName}': hasResults={HasResults}, errors={ErrorCount}",
+                cleanName, result.HasResults, result.Errors.Count);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Returns the sources to query for this run: the user's enabled sources in the
+    /// configured priority order. Falls back to all sources in default order.
+    /// </summary>
+    private List<ScraperSource> ResolveEnabledSources()
+    {
+        if (_settingsProvider == null)
+        {
+            return new List<ScraperSource>
+            {
+                ScraperSource.Bangumi,
+                ScraperSource.Vndb,
+                ScraperSource.Ymgal,
+                ScraperSource.Cngal
+            };
+        }
+
+        var enabled = _settingsProvider.SourcePriority
+            .Where(_settingsProvider.IsSourceEnabled)
+            .ToList();
+
+        // Never end up with an empty source list: fall back to the configured priority.
+        return enabled.Count > 0 ? enabled : _settingsProvider.SourcePriority.ToList();
     }
 
     /// <summary>
@@ -294,6 +353,10 @@ public class GameScrapingService : IGameScrapingService
 
         result.Errors = scrapingResult.Errors;
 
+        // Expose the per-source outcome (query, success flag, error text, timings)
+        // so the UI can explain why a scrape failed (D12).
+        result.SourceResults = scrapingResult.SourceResults;
+
         // Find best match
         var bestMatch = result.AllMatches.OrderByDescending(m => m.MatchScore).FirstOrDefault();
 
@@ -302,14 +365,71 @@ public class GameScrapingService : IGameScrapingService
             result.BestMatch = bestMatch;
             result.BestMatchSource = bestMatch.Source;
 
-            // Auto-accept if 90%+ match
+            // Product spec 3.2: after the match is chosen, fetch the full detail record
+            // (description / tags / characters / developer) before writing.
+            // GetGameDetailsAsync existed but no code path ever called it, which is why
+            // search-only fields such as Developer and Tags stayed empty.
+            var details = await GetGameDetailsAsync(bestMatch.SourceId, bestMatch.Source, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (details != null)
+            {
+                MergeDetails(bestMatch, details);
+            }
+
+            // Auto-accept when the match reaches the user-configured threshold (D9).
             if (bestMatch.MatchScore >= AutoAcceptThreshold)
             {
                 result.AutoAccepted = true;
             }
+            else
+            {
+                _logger?.LogInformation(
+                    "Best match for '{SearchName}' scored {Score:F2} which is below the configured threshold {Threshold:F0}",
+                    searchName, bestMatch.MatchScore, AutoAcceptThreshold);
+            }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Merges detail-record fields into a search result, never overwriting a value the
+    /// search already provided.
+    /// </summary>
+    private static void MergeDetails(GameMetadata target, GameMetadata details)
+    {
+        target.TitleCn = string.IsNullOrWhiteSpace(target.TitleCn) ? details.TitleCn : target.TitleCn;
+        target.TitleOriginal = string.IsNullOrWhiteSpace(target.TitleOriginal) ? details.TitleOriginal : target.TitleOriginal;
+        target.Description = string.IsNullOrWhiteSpace(target.Description) ? details.Description : target.Description;
+        target.CoverImageUrl = string.IsNullOrWhiteSpace(target.CoverImageUrl) ? details.CoverImageUrl : target.CoverImageUrl;
+        target.BannerImageUrl = string.IsNullOrWhiteSpace(target.BannerImageUrl) ? details.BannerImageUrl : target.BannerImageUrl;
+        target.Developer = string.IsNullOrWhiteSpace(target.Developer) ? details.Developer : target.Developer;
+        target.ReleaseDate ??= details.ReleaseDate;
+        target.Rating ??= details.Rating;
+
+        foreach (var title in details.Titles)
+        {
+            if (!string.IsNullOrWhiteSpace(title) && !target.Titles.Contains(title))
+            {
+                target.Titles.Add(title);
+            }
+        }
+
+        if (details.Tags.Count > 0)
+        {
+            target.Tags = details.Tags;
+        }
+
+        if (details.Characters.Count > 0)
+        {
+            target.Characters = details.Characters;
+        }
+
+        foreach (var pair in details.ExtendedData)
+        {
+            target.ExtendedData[pair.Key] = pair.Value;
+        }
     }
 
     /// <summary>
@@ -351,12 +471,21 @@ public class GameScrapingService : IGameScrapingService
                     TitleOriginal = item.Name,
                     Titles = new List<string>(allTitles), // Create new list from titles
                     Description = item.Summary,
-                    CoverImageUrl = item.Images?.Large ?? item.Images?.Common,
+                    CoverImageUrl = UpgradeToHttps(item.Images?.Large ?? item.Images?.Common),
+                    // v0 search results carry an infobox, so the developer and release date
+                    // are available without a second detail request.
+                    Developer = item.GetDeveloper(),
+                    ReleaseDate = item.GetReleaseDate(),
+                    Rating = item.Rating?.Score is > 0 ? item.Rating!.Score : null,
                     MatchScore = CalculateMatchScore(gameName, allTitles)
                 };
 
                 result.Items.Add(metadata);
             }
+        }
+        else
+        {
+            ApplyApiFailure(_bangumiApi, result, "Bangumi");
         }
 
         return result;
@@ -387,7 +516,7 @@ public class GameScrapingService : IGameScrapingService
                     TitleOriginal = vn.Title,
                     Titles = new List<string>(allTitles), // Create new list from titles
                     Description = vn.Description,
-                    CoverImageUrl = vn.Image?.Url,
+                    CoverImageUrl = UpgradeToHttps(vn.Image?.Url),
                     ReleaseDate = vn.GetReleaseDate(),
                     Rating = vn.Rating,
                     MatchScore = CalculateMatchScore(gameName, allTitles)
@@ -400,6 +529,10 @@ public class GameScrapingService : IGameScrapingService
 
                 result.Items.Add(metadata);
             }
+        }
+        else
+        {
+            ApplyApiFailure(_vndbApi, result, "VNDB");
         }
 
         return result;
@@ -422,14 +555,19 @@ public class GameScrapingService : IGameScrapingService
         {
             foreach (var item in searchResponse.Items)
             {
+                var titles = new List<string>();
+                if (!string.IsNullOrWhiteSpace(item.Title)) titles.Add(item.Title);
+                if (!string.IsNullOrWhiteSpace(item.TitleCn)) titles.Add(item.TitleCn);
+
                 var metadata = new GameMetadata
                 {
                     SourceId = item.Id,
                     Source = ScraperSource.Ymgal,
                     TitleCn = item.TitleCn,
                     TitleOriginal = item.Title,
+                    Titles = titles,
                     Description = item.Description,
-                    CoverImageUrl = item.CoverUrl
+                    CoverImageUrl = UpgradeToHttps(item.CoverUrl)
                 };
 
                 result.Items.Add(metadata);
@@ -456,14 +594,19 @@ public class GameScrapingService : IGameScrapingService
         {
             foreach (var item in searchResponse.Items)
             {
+                var titles = new List<string>();
+                if (!string.IsNullOrWhiteSpace(item.Title)) titles.Add(item.Title);
+                if (!string.IsNullOrWhiteSpace(item.TitleCn)) titles.Add(item.TitleCn);
+
                 var metadata = new GameMetadata
                 {
                     SourceId = item.Id,
                     Source = ScraperSource.Cngal,
                     TitleCn = item.TitleCn,
                     TitleOriginal = item.Title,
+                    Titles = titles,
                     Description = item.Description,
-                    CoverImageUrl = item.CoverUrl
+                    CoverImageUrl = UpgradeToHttps(item.CoverUrl)
                 };
 
                 result.Items.Add(metadata);
@@ -480,9 +623,30 @@ public class GameScrapingService : IGameScrapingService
         var subject = await _bangumiApi.GetSubjectAsync(subjectId, cancellationToken).ConfigureAwait(false);
         if (subject == null) return null;
 
-        // Get additional data (characters, tags)
-        var characters = await _bangumiApi.GetCharactersAsync(subjectId, cancellationToken).ConfigureAwait(false);
-        var tags = await _bangumiApi.GetTagsAsync(subjectId, cancellationToken).ConfigureAwait(false);
+        // Get additional data (characters, tags). These endpoints are optional: a failure
+        // here must not discard the subject data that was already retrieved successfully.
+        List<BangumiCharacter> characters;
+        List<BangumiTag> tags;
+
+        try
+        {
+            characters = await _bangumiApi.GetCharactersAsync(subjectId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Bangumi characters unavailable for subject {SubjectId}", subjectId);
+            characters = new List<BangumiCharacter>();
+        }
+
+        try
+        {
+            tags = await _bangumiApi.GetTagsAsync(subjectId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Bangumi tags unavailable for subject {SubjectId}", subjectId);
+            tags = new List<BangumiTag>();
+        }
 
         var metadata = new GameMetadata
         {
@@ -491,7 +655,7 @@ public class GameScrapingService : IGameScrapingService
             TitleCn = subject.NameCn,
             TitleOriginal = subject.Name,
             Description = subject.Summary,
-            CoverImageUrl = subject.Images?.Large ?? subject.Images?.Common,
+            CoverImageUrl = UpgradeToHttps(subject.Images?.Large ?? subject.Images?.Common),
             ReleaseDate = subject.GetReleaseDate(),
             Developer = subject.GetDeveloper()
         };
@@ -541,7 +705,7 @@ public class GameScrapingService : IGameScrapingService
             TitleOriginal = vn.Title,
             Titles = new List<string>(allTitles), // Create new list from titles
             Description = vn.Description,
-            CoverImageUrl = vn.Image?.Url,
+            CoverImageUrl = UpgradeToHttps(vn.Image?.Url),
             ReleaseDate = vn.GetReleaseDate(),
             Rating = vn.Rating
         };
@@ -609,133 +773,72 @@ public class GameScrapingService : IGameScrapingService
 
     /// <summary>
     /// Calculate match score (0-100) between game name and potential titles.
-    /// Uses Levenshtein distance-based similarity.
     /// </summary>
+    /// <remarks>
+    /// D8 fix: matching is delegated to <see cref="GameNameMatcher"/>, which normalizes
+    /// case, width, spaces and punctuation before comparing. The previous implementation
+    /// compared raw strings, so names differing only by spacing/punctuation scored below the
+    /// auto-accept threshold and were discarded.
+    /// </remarks>
     private static double CalculateMatchScore(string searchName, List<string> potentialTitles)
     {
-        if (string.IsNullOrWhiteSpace(searchName) || potentialTitles.Count == 0)
-            return 0;
-
-        var searchLower = searchName.ToLowerInvariant();
-        var searchClean = CleanGameName(searchName).ToLowerInvariant();
-
-        double bestScore = 0;
-
-        foreach (var title in potentialTitles)
-        {
-            if (string.IsNullOrWhiteSpace(title))
-                continue;
-
-            var titleLower = title.ToLowerInvariant();
-
-            // Exact match
-            if (searchLower == titleLower || searchClean == titleLower)
-            {
-                return 100;
-            }
-
-            // Contains match (one contains the other)
-            if (searchClean.Contains(titleLower) || titleLower.Contains(searchClean))
-            {
-                bestScore = Math.Max(bestScore, 90);
-                continue;
-            }
-
-            // Calculate Levenshtein similarity
-            var similarity = CalculateLevenshteinSimilarity(searchClean, titleLower);
-            bestScore = Math.Max(bestScore, similarity);
-        }
-
-        return bestScore;
+        return GameNameMatcher.CalculateMatchScore(searchName, potentialTitles);
     }
 
     /// <summary>
-    /// Calculate similarity using Levenshtein distance.
-    /// Returns a score from 0-100.
+    /// Records why a source returned nothing, distinguishing a broken/failed response from
+    /// a legitimate empty result (D12).
     /// </summary>
-    private static double CalculateLevenshteinSimilarity(string source, string target)
+    private static void ApplyApiFailure(ApiClient client, SourceScrapingResult result, string sourceName)
     {
-        if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(target))
-            return 0;
-
-        if (source == target)
-            return 100;
-
-        var distance = LevenshteinDistance(source, target);
-        var maxLength = Math.Max(source.Length, target.Length);
-
-        if (maxLength == 0)
-            return 100;
-
-        var similarity = (1.0 - distance / maxLength) * 100;
-        return Math.Round(similarity, 2);
+        if (!string.IsNullOrEmpty(client.LastError))
+        {
+            result.ErrorMessage = $"{sourceName} request failed: {client.LastError}";
+            result.ExtendedErrorInfo = string.IsNullOrEmpty(client.LastErrorBody)
+                ? client.LastError
+                : $"{client.LastError}{Environment.NewLine}Response body: {client.LastErrorBody}";
+        }
     }
 
     /// <summary>
-    /// Calculate Levenshtein distance between two strings.
+    /// Bangumi image URLs are served over http; upgrade them so WinUI can load them
+    /// (the same hosts answer on https).
     /// </summary>
-    private static int LevenshteinDistance(string source, string target)
+    private static string? UpgradeToHttps(string? url)
     {
-        var sourceLength = source.Length;
-        var targetLength = target.Length;
-
-        if (sourceLength == 0) return targetLength;
-        if (targetLength == 0) return sourceLength;
-
-        // Use optimized algorithm with single row
-        var previousRow = new int[targetLength + 1];
-        var currentRow = new int[targetLength + 1];
-
-        // Initialize first row
-        for (var i = 0; i <= targetLength; i++)
+        if (string.IsNullOrWhiteSpace(url))
         {
-            previousRow[i] = i;
+            return url;
         }
 
-        for (var i = 0; i < sourceLength; i++)
-        {
-            currentRow[0] = i + 1;
-
-            for (var j = 0; j < targetLength; j++)
-            {
-                var cost = source[i] == target[j] ? 0 : 1;
-                currentRow[j + 1] = Math.Min(
-                    Math.Min(currentRow[j] + 1, previousRow[j + 1] + 1),
-                    previousRow[j] + cost);
-            }
-
-            // Swap rows
-            (previousRow, currentRow) = (currentRow, previousRow);
-        }
-
-        return previousRow[targetLength];
+        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            ? "https://" + url.Substring("http://".Length)
+            : url;
     }
 
     /// <summary>
     /// Find the best match across all sources.
-    /// Priority: Bangumi > VNDB > ymgal > cngal for same score.
+    /// Priority: Bangumi > VNDB > ymgal > cngal for equal scores (D10: order is configurable).
     /// </summary>
     private static SourceScrapingResult? FindBestMatch(
         string gameName,
-        Dictionary<ScraperSource, SourceScrapingResult> sourceResults)
+        Dictionary<ScraperSource, SourceScrapingResult> sourceResults,
+        IReadOnlyList<ScraperSource> priorityOrder)
     {
-        // Source priority order
-        var priorityOrder = new[] { ScraperSource.Bangumi, ScraperSource.Vndb, ScraperSource.Ymgal, ScraperSource.Cngal };
-
         GameMetadata? bestMatch = null;
         ScraperSource bestSource = ScraperSource.Bangumi;
         double bestScore = 0;
 
         foreach (var source in priorityOrder)
         {
-            if (!sourceResults.TryGetValue(source, out var result) || !result.Success)
+            if (!sourceResults.TryGetValue(source, out var result) || result.Items.Count == 0)
                 continue;
 
             var sourceBest = result.Items.OrderByDescending(i => i.MatchScore).FirstOrDefault();
             if (sourceBest == null)
                 continue;
 
-            // Higher score wins, or same score with higher priority source
+            // Higher score wins; equal scores keep the earlier (higher priority) source.
             if (sourceBest.MatchScore > bestScore)
             {
                 bestMatch = sourceBest;
