@@ -3,6 +3,7 @@ using Galbox.App.Services;
 using Galbox.App.ViewModels;
 using Galbox.Core;
 using Galbox.Core.Api;
+using Galbox.Core.Community;
 using Galbox.Data.Entities;
 using Galbox.Data.Migrations;
 using Galbox.Services.Saves;
@@ -191,6 +192,26 @@ public partial class App : Application
 
         // Game Utility Service
         services.AddSingleton<IGameUtilityService, GameUtilityService>();
+
+        // ------------------------------------------------ Reserved features (interfaces only)
+        // 流程图追踪 and 社区成就系统 are P2: 第一版只预留接口，前端隐藏 (_product/Galbox-产品知识总纲.md
+        // lines 173-174). Both are specified as remote-service-first - the flowchart as a community
+        // maintained API standard, the achievements as an objective server judgement - so the first
+        // version ships the data model, the interfaces and this switch, and nothing else.
+        //
+        // This is the ONLY registration the reserved layer adds, and that is deliberate.
+        // IFlowchartProvider, IAchievementProvider and IAchievementEvidenceSource are NOT registered:
+        // there is no service to answer them, and an instance in the container would be a stub that
+        // returns nothing - indistinguishable, to every caller, from a service that found nothing.
+        // Resolving them returns null, so there is no code path that could serve a flowchart or an
+        // achievement that was never really fetched. The acceptance run asserts exactly that (A92),
+        // that no navigation key, page, menu item or button exposes the two features (A91), and that
+        // the reserved model still has the documented shape (A90).
+        //
+        // The registration is by strong type, so the interfaces, the model and this switch cannot
+        // drift apart unnoticed: the application does not build unless they are all present under
+        // these names.
+        services.AddSingleton<IReservedFeatureCatalog, ReservedFeatureCatalog>();
 
         // Image download: turns the CoverImageUrl/BackgroundImageUrl/character ImageUrl written by
         // scraping into the local files the UI binds (CoverImagePath, BackgroundImagePath,
