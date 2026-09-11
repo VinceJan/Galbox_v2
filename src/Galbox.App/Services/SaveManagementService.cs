@@ -33,19 +33,25 @@ public class SaveManagementService : ISaveManagementService
     /// </summary>
     /// <param name="dbContextFactory">Factory used to create a database context per operation</param>
     /// <param name="logger">Logger for diagnostics</param>
+    /// <param name="backupStorageRoot">
+    /// Folder that holds the backup zips. Null (the shipping case) means
+    /// <c>{data folder}\SaveBackups</c> - i.e. <c>%LocalAppData%\Galbox\SaveBackups</c>, or the same
+    /// subfolder of <c>GALBOX_DATA_DIR</c> when that variable is set. A caller that drives the
+    /// service against a throwaway library passes its own root so no archive can land in the user's
+    /// real backup store.
+    /// </param>
     public SaveManagementService(
         IDbContextFactory<GalboxDbContext> dbContextFactory,
-        ILogger<SaveManagementService> logger)
+        ILogger<SaveManagementService> logger,
+        string? backupStorageRoot = null)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Initialize backup storage path
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Galbox",
-            "SaveBackups");
-        _backupStoragePath = appDataPath;
+        _backupStoragePath = string.IsNullOrWhiteSpace(backupStorageRoot)
+            ? GalboxDataDirectory.ResolveSaveBackupDirectory()
+            : Path.GetFullPath(backupStorageRoot);
 
         EnsureBackupDirectoryExists();
     }
