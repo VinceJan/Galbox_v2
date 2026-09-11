@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Galbox.PatchVerifier</AssemblyName>
+    <RootNamespace>Galbox.PatchVerifier</RootNamespace>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- This harness is intentionally NOT part of Galbox.sln: it is an evidence generator, not product code. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Galbox.Core\Galbox.Core.csproj" />
+  </ItemGroup>
+
+</Project>
