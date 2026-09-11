@@ -125,6 +125,56 @@ internal static class HealthCheckSupport
         return service;
     }
 
+    /// <summary>
+    /// Constructs the real report-page ViewModel from the container.
+    /// </summary>
+    /// <remarks>
+    /// Driving the ViewModel - not just the service - is what proves the button on the screen is wired
+    /// to a repair that exists. It is resolved by reflection because the ViewModel is a UI type, and
+    /// the harness has to keep compiling against revisions in which it does not take a fix service yet.
+    /// </remarks>
+    internal static object? TryCreateReportViewModel(AcceptanceContext context, List<string> details)
+    {
+        var viewModelType = ReflectionBridge.FindType("Galbox.App.ViewModels.ErrorReportViewModel");
+        if (viewModelType is null)
+        {
+            details.Add("  ErrorReportViewModel 类型不存在。");
+            return null;
+        }
+
+        var constructor = viewModelType
+            .GetConstructors()
+            .OrderByDescending(candidate => candidate.GetParameters().Length)
+            .First();
+
+        try
+        {
+            var arguments = constructor
+                .GetParameters()
+                .Select(parameter => context.Services.GetRequiredService(parameter.ParameterType))
+                .ToArray();
+
+            return constructor.Invoke(arguments);
+        }
+        catch (Exception ex)
+        {
+            details.Add($"  构造 ErrorReportViewModel 失败：{ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Reads one compatibility-layer value straight from HKCU.</summary>
+    internal static string? ReadCompatibilityLayer(string? executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            return null;
+        }
+
+        using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(AppCompatLayersKey);
+        return key?.GetValue(executablePath) as string;
+    }
+
     /// <summary>Inserts a game row and returns its database id.</summary>
     internal static async Task<int> InsertGameAsync(
         AcceptanceContext context,

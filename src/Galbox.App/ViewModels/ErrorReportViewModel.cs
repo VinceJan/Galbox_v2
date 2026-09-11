@@ -108,27 +108,33 @@ public partial class ErrorReportViewModel : ObservableObject
     private int _totalUnresolvedCount;
 
     /// <summary>
-    /// The repair that was applied last and can still be undone.
+    /// The repairs that were applied in this session and can still be undone.
     /// </summary>
     /// <remarks>
-    /// Kept on the ViewModel so the "撤销" button can be shown directly next to the message that
-    /// reports the repair. <see cref="IGameHealthFixService"/> keeps the durable record, so the undo
-    /// still works after a restart.
+    /// A list rather than a single slot, because "一键修复所有可自动修复的问题" can apply two repairs at
+    /// once (rename + compatibility mode) and the user has to be able to take back either of them.
+    /// <see cref="IGameHealthFixService"/> keeps the durable record, so the undo still works after a
+    /// restart.
     /// </remarks>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanUndo))]
-    private GameHealthFixResult? _lastFix;
-
-    /// <summary>
-    /// Step-by-step log of the last repair, shown under the status message.
-    /// </summary>
-    [ObservableProperty]
-    private string? _fixDetailText;
+    public ObservableCollection<GameHealthFixResult> AppliedFixes { get; } = new();
 
     /// <summary>
     /// Whether "撤销" is currently offered.
     /// </summary>
-    public bool CanUndo => LastFix is { Success: true, CanUndo: true };
+    public bool CanUndo => AppliedFixes.Count > 0;
+
+    /// <summary>
+    /// Number of findings in the current game that the service can repair automatically.
+    /// </summary>
+    public int AutoFixableCount => GameErrors.Count(error => error.AutoFixAvailable);
+
+    /// <summary>
+    /// Label of the batch repair button. States the number of items it will really touch instead of
+    /// promising to fix everything on the page.
+    /// </summary>
+    public string FixAllButtonText => AutoFixableCount > 0
+        ? $"一键修复所有可自动修复的问题（{AutoFixableCount} 项）"
+        : "当前没有可自动修复的问题";
 
     /// <summary>
     /// List of all unresolved errors.
@@ -277,7 +283,13 @@ public partial class ErrorReportViewModel : ObservableObject
 
         try
         {
-            var errors = await _errorCheckingService.CheckGameAsync(game).ConfigureAwait(false);
+            // Re-read the row before checking. After a repair the object a list handed us still
+            // carries the old install path, and detecting against a stale path reports the very
+            // problem that was just fixed - which is how "修复后仍然报出问题" appears.
+            var current = await ReloadGameAsync(game.Id).ConfigureAwait(true) ?? game;
+            SelectedGame = current;
+
+            var errors = await _errorCheckingService.CheckGameAsync(current).ConfigureAwait(false);
 
             GameErrors.Clear();
             foreach (var error in errors)
@@ -287,8 +299,8 @@ public partial class ErrorReportViewModel : ObservableObject
 
             UpdateFilteredErrors();
 
-            StatusMessage = $"「{game.DisplayName}」检测到 {errors.Count} 个问题";
-            _logger.LogInformation("Checked {GameName}: {Count} errors found", game.DisplayName, errors.Count);
+            StatusMessage = $"「{current.DisplayName}」检测到 {errors.Count} 个问题";
+            _logger.LogInformation("Checked {GameName}: {Count} errors found", current.DisplayName, errors.Count);
         }
         catch (Exception ex)
         {
@@ -299,6 +311,18 @@ public partial class ErrorReportViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    /// <summary>
+    /// Re-reads a game row from the database, or null when it no longer exists.
+    /// </summary>
+    private async Task<GameInfo?> ReloadGameAsync(int gameId)
+    {
+        await using var db = _dbContextFactory.CreateDbContext();
+        return await db.Games
+            .AsNoTracking()
+            .FirstOrDefaultAsync(g => g.Id == gameId)
+            .ConfigureAwait(true);
     }
 
     /// <summary>
@@ -372,8 +396,7 @@ public partial class ErrorReportViewModel : ObservableObject
 
             if (result.Success)
             {
-                LastFix = result.Fix;
-                FixDetailText = result.Details;
+                AddAppliedFix(result.Fix);
                 StatusMessage = result.Message;
 
                 if (result.UpdatedError != null)
@@ -397,8 +420,6 @@ public partial class ErrorReportViewModel : ObservableObject
             }
             else
             {
-                LastFix = null;
-                FixDetailText = null;
                 ErrorMessage = result.Message;
                 _logger.LogWarning("Auto fix refused for game {GameId}: {Message}", error.GameId, result.Message);
             }
@@ -415,7 +436,96 @@ public partial class ErrorReportViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Undoes the repair that was applied last.
+    /// Repairs every finding of the selected game that the service can repair automatically (the
+    /// product spec's "一键修复所有问题" button of §3.5).
+    /// </summary>
+    [RelayCommand]
+    private async Task FixAllAutoFixableAsync()
+    {
+        var summary = await FixAllAutoFixableInternalAsync().ConfigureAwait(true);
+        StatusMessage = summary.Message;
+    }
+
+    /// <summary>
+    /// Batch repair, callable without the command layer.
+    /// </summary>
+    /// <remarks>
+    /// The acceptance harness drives this method directly: a <c>RelayCommand</c> cannot be awaited
+    /// from outside the UI thread, and the point of the check is to prove that the button on the
+    /// screen is wired to repairs that really happen.
+    /// </remarks>
+    public async Task<AutoFixBatchResult> FixAllAutoFixableInternalAsync()
+    {
+        var summary = new AutoFixBatchResult();
+
+        if (SelectedGame is null)
+        {
+            summary.Message = "请先在左侧选择一个游戏。";
+            return summary;
+        }
+
+        var fixable = GameErrors.Where(error => error.AutoFixAvailable).ToList();
+        var manual = GameErrors.Where(error => !error.AutoFixAvailable).ToList();
+
+        summary.FixableCount = fixable.Count;
+        summary.ManualItems.AddRange(manual.Select(error => error.Title));
+
+        if (fixable.Count == 0)
+        {
+            summary.Message = manual.Count == 0
+                ? "该游戏当前没有检测到问题。"
+                : $"没有可自动修复的问题；另有 {manual.Count} 项需要手动处理或外部工具。";
+            return summary;
+        }
+
+        IsFixing = true;
+        ErrorMessage = null;
+
+        try
+        {
+            foreach (var error in fixable)
+            {
+                var result = await _errorCheckingService.AttemptAutoFixAsync(error).ConfigureAwait(true);
+
+                if (result.Success && result.Fix is not null)
+                {
+                    summary.FixedCount++;
+                    summary.FixedItems.Add(error.Title);
+                    summary.AppliedFixes.Add(result.Fix);
+                    AddAppliedFix(result.Fix);
+                }
+                else
+                {
+                    summary.FailedItems.Add($"{error.Title}：{result.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Batch auto fix failed for game {GameId}", SelectedGame.Id);
+            ErrorMessage = $"批量修复失败：{ex.Message}";
+        }
+        finally
+        {
+            IsFixing = false;
+        }
+
+        // Re-run detection once, at the end: repairing one item changes the state the next one is
+        // detected from (the folder rename changes the path the compatibility layer has to target).
+        await CheckGameErrorsAsync(SelectedGame).ConfigureAwait(true);
+
+        var remaining = GameErrors.Count(error => error.AutoFixAvailable);
+        summary.Message = summary.FixedCount == 0
+            ? $"没有修复成功任何一项，{summary.FailedItems.Count} 项失败。"
+            : $"已修复 {summary.FixedCount} 项"
+              + (remaining > 0 ? $"，仍有 {remaining} 项可自动修复。" : "。")
+              + (summary.ManualItems.Count > 0 ? $"另有 {summary.ManualItems.Count} 项需要手动处理或用外部工具解决。" : string.Empty);
+
+        return summary;
+    }
+
+    /// <summary>
+    /// Undoes one applied repair.
     /// </summary>
     /// <remarks>
     /// A repair the user cannot take back is a trap: renaming a game folder and writing a
@@ -424,9 +534,10 @@ public partial class ErrorReportViewModel : ObservableObject
     /// acceptance harness drives.
     /// </remarks>
     [RelayCommand]
-    private async Task UndoFixAsync()
+    private async Task UndoFixAsync(GameHealthFixResult? fix)
     {
-        var fix = LastFix;
+        fix ??= AppliedFixes.LastOrDefault();
+
         if (fix is null || !fix.Success)
         {
             StatusMessage = "没有可以撤销的修复。";
@@ -452,8 +563,8 @@ public partial class ErrorReportViewModel : ObservableObject
             if (result.Success)
             {
                 StatusMessage = result.Message;
-                FixDetailText = result.Notes.Count == 0 ? null : string.Join(Environment.NewLine, result.Notes);
-                LastFix = null;
+                AppliedFixes.Remove(fix);
+                OnPropertyChanged(nameof(CanUndo));
 
                 if (SelectedGame != null)
                 {
@@ -474,6 +585,18 @@ public partial class ErrorReportViewModel : ObservableObject
         {
             IsFixing = false;
         }
+    }
+
+    /// <summary>Records a successful repair so the page can offer "撤销" for it.</summary>
+    private void AddAppliedFix(GameHealthFixResult? fix)
+    {
+        if (fix is null || !fix.Success || !fix.CanUndo)
+        {
+            return;
+        }
+
+        AppliedFixes.Add(fix);
+        OnPropertyChanged(nameof(CanUndo));
     }
 
     /// <summary>
@@ -660,6 +783,10 @@ public partial class ErrorReportViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(FilteredErrors));
+
+        // Both are derived from GameErrors, which every load/check/fix path mutates.
+        OnPropertyChanged(nameof(AutoFixableCount));
+        OnPropertyChanged(nameof(FixAllButtonText));
     }
 
     /// <summary>

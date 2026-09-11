@@ -231,16 +231,31 @@
                                 <Border
                                     Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                                     CornerRadius="8" Padding="12"
-                                    Visibility="{x:Bind ViewModel.FixDetailText, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}">
+                                    Visibility="{x:Bind ViewModel.AppliedFixes.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="修复详情" FontWeight="SemiBold"/>
-                                        <TextBlock Text="{x:Bind ViewModel.FixDetailText, Mode=OneWay}" TextWrapping="Wrap"
-                                                   FontSize="{StaticResource FontSizeSmall}"/>
-                                        <Button
-                                            Content="撤销这次修复"
-                                            Click="OnUndoFixClick"
-                                            IsEnabled="{x:Bind ViewModel.IsFixing, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
-                                            Visibility="{x:Bind ViewModel.CanUndo, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                        <TextBlock Text="本次修复" FontWeight="SemiBold"/>
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.AppliedFixes, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Spacing="2" Margin="0,0,0,8">
+                                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+                                                        <ItemsControl ItemsSource="{Binding Notes}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                                               FontSize="{StaticResource FontSizeSmall}"
+                                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <Button
+                                                            Content="撤销这次修复"
+                                                            Click="OnUndoFixClick"
+                                                            Tag="{Binding}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
                                 </Border>
 
@@ -259,6 +274,12 @@
                                         DisplayMemberPath="DisplayName"
                                         SelectionChanged="OnCategoryFilterChanged"/>
                                 </StackPanel>
+
+                                <!-- 规格 §3.5 的「一键修复所有问题」：只修可自动修复的项，并如实说明剩下的 -->
+                                <Button
+                                    Content="{x:Bind ViewModel.FixAllButtonText, Mode=OneWay}"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Click="OnFixAllClick"/>
 
                                 <ItemsControl ItemsSource="{x:Bind ViewModel.FilteredErrors, Mode=OneWay}">
                                     <ItemsControl.ItemTemplate>

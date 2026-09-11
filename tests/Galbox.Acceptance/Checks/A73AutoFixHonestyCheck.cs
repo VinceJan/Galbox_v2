@@ -215,6 +215,106 @@ public sealed class A73AutoFixHonestyCheck : IAcceptanceCheck
         }
 
         details.Add(string.Empty);
+        details.Add("=== 用例 4：报告页的「一键修复所有可自动修复的问题」（真实 ViewModel + 真实服务） ===");
+
+        var batchFolder = Path.Combine(work, "batch", "中文游戏目录");
+        var batchExe = AcceptanceWork.WritePattern(Path.Combine(batchFolder, "probe.exe"), 512, 0x4D);
+        AcceptanceWork.WriteText(
+            Path.Combine(batchFolder, "readme.txt"),
+            "SYSTEM REQUIREMENTS: Windows XP SP3 required.");
+
+        var batchGameId = await HealthCheckSupport
+            .InsertGameAsync(context, "A73 批量修复探针", batchFolder, batchExe, null, cancellationToken)
+            .ConfigureAwait(false);
+        createdGameIds.Add(batchGameId);
+
+        var batchViewModel = HealthCheckSupport.TryCreateReportViewModel(context, details);
+        if (batchViewModel is null)
+        {
+            failures.Add("用例4：无法构造 ErrorReportViewModel，未能验证界面上的批量修复入口");
+        }
+        else
+        {
+            try
+            {
+                var batchGame = await LoadGameAsync(context, batchGameId, cancellationToken).ConfigureAwait(false);
+
+                // Exactly what the page does when the user picks the game on the left.
+                var (checkOk, _, checkError) = await ReflectionBridge
+                    .CallAsync(batchViewModel, "CheckGameErrorsAsync", batchGame)
+                    .ConfigureAwait(false);
+
+                details.Add($"  CheckGameErrorsAsync ok={checkOk}{(checkError is null ? string.Empty : $" ({checkError})")}");
+                details.Add($"  按钮文案         : \"{ReflectionBridge.String(batchViewModel, "FixAllButtonText")}\"");
+
+                var fixableBefore = ReflectionBridge.Int(batchViewModel, "AutoFixableCount");
+
+                // Exactly what the "一键修复所有符合自动修复条件的问题" button calls.
+                var (batchOk, batchResult, batchError) = await ReflectionBridge
+                    .CallAsync(batchViewModel, "FixAllAutoFixableInternalAsync")
+                    .ConfigureAwait(false);
+
+                details.Add($"  批量调用 ok={batchOk}{(batchError is null ? string.Empty : $" ({batchError})")}");
+                details.Add($"  FixableCount     : {ReflectionBridge.Int(batchResult, "FixableCount")}");
+                details.Add($"  FixedCount       : {ReflectionBridge.Int(batchResult, "FixedCount")}");
+                details.Add($"  FixedItems       : {string.Join(" / ", ReflectionBridge.Strings(batchResult, "FixedItems"))}");
+                details.Add($"  ManualItems      : {string.Join(" / ", ReflectionBridge.Strings(batchResult, "ManualItems"))}");
+                details.Add($"  FailedItems      : {string.Join(" / ", ReflectionBridge.Strings(batchResult, "FailedItems"))}");
+                details.Add($"  Message          : {ReflectionBridge.String(batchResult, "Message")}");
+
+                var paths = await HealthCheckSupport.ReadGamePathsAsync(context, batchGameId, cancellationToken).ConfigureAwait(false);
+                var layersValue = HealthCheckSupport.ReadCompatibilityLayer(paths.MainExecutable);
+
+                details.Add($"  原名目录仍在     : {Directory.Exists(batchFolder)}（期望 False）");
+                details.Add($"  改名后主程序     : {paths.MainExecutable}  存在={File.Exists(paths.MainExecutable)}");
+                details.Add($"  注册表兼容性层   : {layersValue ?? "(不存在)"}（期望 ~ WIN7RTM）");
+                details.Add($"  批量后仍可自动修复 : {ReflectionBridge.Int(batchViewModel, "AutoFixableCount")}（期望 0）");
+
+                if (!batchOk || ReflectionBridge.Int(batchResult, "FixedCount") < 1)
+                {
+                    failures.Add($"用例4：批量修复没有修好任何一项 - {batchError ?? ReflectionBridge.String(batchResult, "Message")}");
+                }
+
+                if (fixableBefore < 2)
+                {
+                    failures.Add($"用例4：fixture 只产生了 {fixableBefore} 个可自动修复项，无法证明批量入口同时处理多项");
+                }
+
+                if (Directory.Exists(batchFolder))
+                {
+                    failures.Add("用例4：批量修复后原中文目录还在");
+                }
+
+                if (!File.Exists(paths.MainExecutable))
+                {
+                    failures.Add($"用例4：批量修复后主程序路径不存在 - {paths.MainExecutable}");
+                }
+
+                if (!string.Equals(layersValue, "~ WIN7RTM", StringComparison.Ordinal))
+                {
+                    failures.Add($"用例4：批量修复没有写入兼容模式 - 实测 \"{layersValue ?? "(不存在)"}\"");
+                }
+
+                if (ReflectionBridge.Int(batchViewModel, "AutoFixableCount") != 0)
+                {
+                    failures.Add("用例4：批量修复后仍报出可自动修复项");
+                }
+
+                if (ReflectionBridge.Strings(batchResult, "ManualItems").Count == 0)
+                {
+                    failures.Add("用例4：批量结果没有区分出「需要手动处理」的项，界面上会看不出还剩什么没解决");
+                }
+
+                diagnosedPaths.Add(paths.MainExecutable);
+                diagnosedPaths.Add(batchExe);
+            }
+            finally
+            {
+                CleanUpCompatibilityLayers(diagnosedPaths, details);
+            }
+        }
+
+        details.Add(string.Empty);
         details.Add("--- 判读 ---");
         details.Add($"  未通过项 : {failures.Count}");
         foreach (var failure in failures)
@@ -246,8 +346,7 @@ public sealed class A73AutoFixHonestyCheck : IAcceptanceCheck
     }
 
     /// <summary>Removes the compatibility-layer values this check may have written for its own fixtures.</summary>
-    private static void CleanUpCompatibilityLayers(IEnumerable<string> executablePaths, List<string> details)
-    {
+    private static void CleanUpCompatibilityLayers(IEnumerable<string> executablePaths, List<string> details)    {
         var removed = 0;
         foreach (var path in executablePaths.Distinct(StringComparer.OrdinalIgnoreCase))
         {

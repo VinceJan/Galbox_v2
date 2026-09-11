@@ -118,7 +118,7 @@ public sealed class A74DiagnosisLocalizationCheck : IAcceptanceCheck
 
         details.Add(string.Empty);
         details.Add("=== 用例 4：错误报告页自身的文案（真实 ViewModel 实例） ===");
-        var viewModel = TryCreateReportViewModel(context, details);
+        var viewModel = HealthCheckSupport.TryCreateReportViewModel(context, details);
         if (viewModel is null)
         {
             failures.Add("用例4：无法构造 ErrorReportViewModel");
@@ -252,7 +252,6 @@ public sealed class A74DiagnosisLocalizationCheck : IAcceptanceCheck
             failures.Add(problem);
         }
     }
-
     private static string InvokeStaticString(Type type, string methodName, string argument)
     {
         var method = type.GetMethod(methodName, new[] { typeof(string) });
@@ -299,35 +298,5 @@ public sealed class A74DiagnosisLocalizationCheck : IAcceptanceCheck
         return (ok,
             $"  [{(ok ? "OK  " : "FAIL")}] 转换器 ErrorSeverityDisplayConverter / "
             + $"ErrorCategoryDisplayConverter 复用 DiagnosisText（严重度={hasSeverity}, 分类={hasCategory}）");
-    }
-
-    private static object? TryCreateReportViewModel(AcceptanceContext context, List<string> details)
-    {
-        var viewModelType = ReflectionBridge.FindType("Galbox.App.ViewModels.ErrorReportViewModel");
-        if (viewModelType is null)
-        {
-            details.Add("  ErrorReportViewModel 类型不存在。");
-            return null;
-        }
-
-        var constructor = viewModelType
-            .GetConstructors()
-            .OrderByDescending(candidate => candidate.GetParameters().Length)
-            .First();
-
-        try
-        {
-            var arguments = constructor
-                .GetParameters()
-                .Select(parameter => context.Services.GetRequiredService(parameter.ParameterType))
-                .ToArray();
-
-            return constructor.Invoke(arguments);
-        }
-        catch (Exception ex)
-        {
-            details.Add($"  构造 ErrorReportViewModel 失败：{ex.Message}");
-            return null;
-        }
     }
 }

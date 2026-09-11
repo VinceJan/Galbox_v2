@@ -72,3 +72,36 @@ public class GameHealthFixResult
         return this;
     }
 }
+
+/// <summary>
+/// Outcome of "一键修复所有可自动修复的问题" (the batch action of the report page).
+/// </summary>
+/// <remarks>
+/// The batch reports three separate lists on purpose. A single "fixed!" banner over a list that still
+/// contains problems needing external tools is exactly the kind of over-promise this feature is
+/// supposed to stop making, so what was fixed, what still needs manual work and what failed are
+/// always reported separately.
+/// </remarks>
+public class AutoFixBatchResult
+{
+    /// <summary>How many of the findings were marked as auto-fixable.</summary>
+    public int FixableCount { get; set; }
+
+    /// <summary>How many of them were actually repaired.</summary>
+    public int FixedCount { get; set; }
+
+    /// <summary>Human readable names of the repaired items, in the order they were repaired.</summary>
+    public List<string> FixedItems { get; } = new();
+
+    /// <summary>Items that need manual work or an external tool.</summary>
+    public List<string> ManualItems { get; } = new();
+
+    /// <summary>Repairs that were attempted and refused, with the reason.</summary>
+    public List<string> FailedItems { get; } = new();
+
+    /// <summary>One-line Chinese summary for the status bar.</summary>
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>The individual repairs, newest last, for the "撤销" buttons.</summary>
+    public List<GameHealthFixResult> AppliedFixes { get; } = new();
+}

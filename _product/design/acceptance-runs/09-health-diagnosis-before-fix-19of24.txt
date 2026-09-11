@@ -1,7 +1,7 @@
 ====================================================================================================
  GALBOX HEADLESS ACCEPTANCE RUN
 ====================================================================================================
- UTC started        : 2026-09-11 16:28:41Z
+ UTC started        : 2026-09-11 16:46:17Z
  OS                 : Microsoft Windows 10.0.26200
  Process arch       : X64
  Runtime            : .NET 8.0.31
@@ -9,7 +9,7 @@
  Working directory  : E:\tmp\Galbox_health
  Game folder        : D:\GAME\Dreamin'_Her (exists: True)
  Scraping query     : "Dreamin' Her"
- Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\acceptance.db
+ Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\acceptance.db
  Real app DB        : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (untouched)
  Verbose logs       : False
 
@@ -32,7 +32,7 @@
 EXPECTED : fresh acceptance.db is (re)created, GameInfo persists and reads back identically, and a second reset proves the run is repeatable
 ACTUAL   : created=True, roundTrip=True, repeatable=True
 DETAILS  :
-  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\acceptance.db
+  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\acceptance.db
   Real app DB path   : C:\Users\Jiang\AppData\Local\Galbox\galbox.db
   In isolation       : True
   EnsureDeleted()    : False
@@ -51,12 +51,12 @@ DETAILS  :
     IsScraped          : False
     EngineType         : Unknown
     DisplayName        : Dreamin' Her
-    AddedTime (UTC)    : 2026-09-11 16:28:42Z
+    AddedTime (UTC)    : 2026-09-11 16:46:18Z
   --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
     games after reset  : 0 (expected 0)
     DB size after reset: 4096 bytes
   --- re-seeded test game for later checks: Id=1 ---
-RESULT   : PASS  (1454 ms)
+RESULT   : PASS  (1540 ms)
 
 ####################################################################################################
 # [A1] FindExecutableInFolder picks the intended launcher
@@ -86,7 +86,7 @@ DETAILS  :
   Service result     : 1079379981 bytes (1.005 GB)
   Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
   Deviation          : 0 bytes (0%)
-RESULT   : PASS  (130 ms)
+RESULT   : PASS  (128 ms)
 
 ####################################################################################################
 # [A3] DetectSaveLocationAsync finds the Ren'Py save folder
@@ -154,7 +154,7 @@ DETAILS  :
   Query string       : "Dreamin' Her"
   Persistent cache   : DISABLED for this run (guarantees a live network query)
   HttpClient timeout : 30s per request, as configured by the container
-  Total elapsed      : 1343 ms
+  Total elapsed      : 1375 ms
   SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
   HasResults         : True
   BestMatch          : Bangumi (4 items)
@@ -164,7 +164,7 @@ DETAILS  :
     SearchQuery         : "Dreamin' Her"
     Success             : True
     ErrorMessage        : (null)
-    ElapsedMilliseconds : 1198
+    ElapsedMilliseconds : 1203
     Items               : 4
     ExtendedErrorInfo   : (null)
     Items (raw, in returned order):
@@ -234,7 +234,7 @@ Touhou Artificial Dream in Arcadia Steam charts, data, update history.
     SearchQuery         : "Dreamin' Her"
     Success             : True
     ErrorMessage        : (null)
-    ElapsedMilliseconds : 1278
+    ElapsedMilliseconds : 1307
     Items               : 2
     ExtendedErrorInfo   : (null)
     Items (raw, in returned order):
@@ -276,7 +276,7 @@ Touhou Artificial Dream in Arcadia Steam charts, data, update history.
     Items               : 0
     ExtendedErrorInfo   : (null)
     (no items)
-RESULT   : PASS  (1354 ms)
+RESULT   : PASS  (1389 ms)
 
 ####################################################################################################
 # [A6] Scraped metadata is complete enough to use
@@ -353,7 +353,7 @@ DETAILS  :
   
   Best-match row title present      : True
   Best-match row cover URL present  : True
-RESULT   : PASS  (7 ms)
+RESULT   : PASS  (9 ms)
 
 ####################################################################################################
 # [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
@@ -420,7 +420,7 @@ DETAILS  :
     Bangumi holds this game  : True (total=4)
     VNDB reachable           : True (corrected HTTP 200)
     VNDB holds this game     : True (results[]=2)
-RESULT   : PASS  (3019 ms)
+RESULT   : PASS  (2055 ms)
 
 ####################################################################################################
 # [A8] Navigation, page and XAML resource completeness (no feature without a door)
@@ -485,50 +485,36 @@ DETAILS  :
     [OK]   menu Tag 'ScrapingProgress' -> ScrapingProgressPage
   
   Sub-check failures : 0
-RESULT   : PASS  (56 ms)
+RESULT   : PASS  (64 ms)
 
 ####################################################################################################
 # [A9] The GUI application opens a window while scrape-cache data is present
 ####################################################################################################
 EXPECTED : with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s
-ACTUAL   : window present: MainWindowHandle=0x5B0964 ("Galbox 1.0.0"), startup log reports completion, pid alive after 2354 ms
+ACTUAL   : MainWindowHandle=0x6D0AD8 ("Galbox 1.0.0"), visibleTopLevelWindows=1, alive=True, exitedEarly=False, completed=False, failed=False
 DETAILS  :
   Repository root      : E:\tmp\Galbox_health
   Application          : E:\tmp\Galbox_health\src\Galbox.App\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
-  Application built    : 2026-09-11 16:28:34Z (newest file in the output folder)
-  Newest source file   : 2026-09-11 16:26:45Z (src/Galbox.App, obj/bin excluded)
+  Application built    : 2026-09-11 16:46:09Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 16:45:29Z (src/Galbox.App, obj/bin excluded)
   Cache precondition  : 2 existing search_*.json file(s), left untouched:
       search_dreamin'_her.json (11859 bytes)
       search_sabbatofthewitch.json (1640 bytes)
   Cache directory      : C:\Users\Jiang\AppData\Local\Galbox\ScrapingCache
-  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (exists: True, bytes before launch: 133045)
-  Launched             : pid 35736
+  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (exists: True, bytes before launch: 738706)
+  Launched             : pid 32676
   Alive when measured  : True (measured before the cleanup kill)
-  MainWindowHandle     : 0x5B0964 (non-zero)
+  MainWindowHandle     : 0x6D0AD8 (non-zero)
   Visible top-level windows owned by the process: 1
-  Elapsed              : 2354 ms (timeout 30s)
+  Elapsed              : 2347 ms (timeout 30s)
   Exited before window : False
   Cache files now      : 2 search_*.json
-  --- startup log lines written by this launch (15) ---
-      r built (ValidateScopes=true, ValidateOnBuild=true)
-      2026-09-12 00:28:48.006 [tid:1] OnLaunched: startup sequence begins
-      2026-09-12 00:28:48.166 [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
-      2026-09-12 00:28:48.236 [tid:1] OnLaunched: startup sequence begins
-      2026-09-12 00:28:48.722 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
-      2026-09-12 00:28:48.799 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
-      2026-09-12 00:28:48.957 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
-      2026-09-12 00:28:49.043 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
-      2026-09-12 00:28:49.064 [tid:1] BangumiAuthService initialized
-      2026-09-12 00:28:49.147 [tid:1] ScrapingCacheService initialized (entries: 2)
-      2026-09-12 00:28:49.343 [tid:1] BangumiAuthService initialized
-      2026-09-12 00:28:49.429 [tid:1] ScrapingCacheService initialized (entries: 2)
-      2026-09-12 00:28:49.626 [tid:1] Main window created and activated: handle=0x5B0964
-      2026-09-12 00:28:49.645 [tid:1] Process monitor: started=True, registered=1/1
-      2026-09-12 00:28:49.646 [tid:1] OnLaunched: startup sequence completed
+  --- startup log lines written by this launch: NONE ---
   Window title         : "Galbox 1.0.0"
   Window is the startup-failure dialog: False
-  Startup log says     : completed=True, failed=False
-RESULT   : PASS  (2639 ms)
+  Startup log says     : completed=False, failed=False
+  FAIL REASON: the startup log never reported completion (the application could not finish starting, and in the pre-fix build it did so silently)
+RESULT   : FAIL  (2485 ms)
 
 ####################################################################################################
 # [A11] Quick switch aborts (and reports failure) when the current save cannot be backed up
@@ -536,13 +522,13 @@ RESULT   : PASS  (2639 ms)
 EXPECTED : when the pre-switch backup of the current save cannot be created, QuickSwitchSaveAsync returns Success=false with a readable reason AND the live save file on disk is byte-identical to what it was before the call
 ACTUAL   : Success=False, liveSaveUnchanged=True, error="已中止快速切换：未能为当前存档创建安全备份（未检测到存档位置或存档文件），为避免覆盖后无法回退，目标备份未被应用，当前存档保持原样。"
 DETAILS  :
-  Scratch folder       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608
-  Live save folder     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\live-save
-  Live save file       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\live-save\slot1.save (ORIGINAL-SAVE-CONTENT-A11)
-  Target backup zip    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\backups\target.zip (1 entry)
-  Game install path    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\game-folder-that-does-not-exist (exists: False)
+  Scratch folder       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728
+  Live save folder     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\live-save
+  Live save file       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\live-save\slot1.save (ORIGINAL-SAVE-CONTENT-A11)
+  Target backup zip    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\backups\target.zip (1 entry)
+  Game install path    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\game-folder-that-does-not-exist (exists: False)
   Inserted game Id     : 2
-  Inserted backup Id   : 1 (OriginalSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\live-save)
+  Inserted backup Id   : 1 (OriginalSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\live-save)
   --- precondition: CreateBackupAsync for this game ---
     result             : null (backup could NOT be created)
     save file before   : "ORIGINAL-SAVE-CONTENT-A11"
@@ -564,7 +550,7 @@ DETAILS  :
     live save byte-identical        : True
 SERVICE LOG (5 record(s), WARNING and above):
   [Error] Galbox.App.Services.SaveManagementService: Error detecting save location for game: A11 quick-switch probe
-      System.IO.DirectoryNotFoundException: Could not find a part of the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\game-folder-that-does-not-exist'.
+      System.IO.DirectoryNotFoundException: Could not find a part of the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\game-folder-that-does-not-exist'.
          at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
          at System.IO.Enumeration.FileSystemEnumerator`1.Init()
          at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
@@ -576,7 +562,7 @@ SERVICE LOG (5 record(s), WARNING and above):
          at Galbox.App.Services.SaveManagementService.DetectSaveLocationAsync(GameInfo game, CancellationToken cancellationToken) in E:\tmp\Galbox_health\src\Galbox.App\Services\SaveManagementService.cs:line 94
   [Warning] Galbox.App.Services.SaveManagementService: No save location found for game: A11 quick-switch probe
   [Error] Galbox.App.Services.SaveManagementService: Error detecting save location for game: A11 quick-switch probe
-      System.IO.DirectoryNotFoundException: Could not find a part of the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-36608\game-folder-that-does-not-exist'.
+      System.IO.DirectoryNotFoundException: Could not find a part of the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-31728\game-folder-that-does-not-exist'.
          at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
          at System.IO.Enumeration.FileSystemEnumerator`1.Init()
          at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
@@ -588,7 +574,7 @@ SERVICE LOG (5 record(s), WARNING and above):
          at Galbox.App.Services.SaveManagementService.DetectSaveLocationAsync(GameInfo game, CancellationToken cancellationToken) in E:\tmp\Galbox_health\src\Galbox.App\Services\SaveManagementService.cs:line 94
   [Warning] Galbox.App.Services.SaveManagementService: No save location found for game: A11 quick-switch probe
   [Error] Galbox.App.Services.SaveManagementService: Quick switch aborted for game 2: the safety backup of the current save could not be created (no save location detected or no save file found). The target backup 1 was NOT applied.
-RESULT   : PASS  (141 ms)
+RESULT   : PASS  (129 ms)
 
 ####################################################################################################
 # [A12] A failed restore rolls the save folder back to its pre-restore state and records it
@@ -596,12 +582,12 @@ RESULT   : PASS  (141 ms)
 EXPECTED : RestoreBackupAsync returns false, every live save file is byte-identical to its pre-restore content, and a durable pre-restore backup (file + database row) exists
 ACTUAL   : restoreReturned=False, slot1Restored=True, slot2Restored=True, durableSafetyCopy=True
 DETAILS  :
-  Scratch folder       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-36608
-  Live save folder     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-36608\live-save
+  Scratch folder       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-31728
+  Live save folder     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-31728\live-save
     slot1.save         : "ORIGINAL-SLOT1-A12" sha256 3A299A86470DE1F546435AA7142D23195EA8DE3776AB32557159F2C9A8BF49D7
     slot2.save         : "ORIGINAL-SLOT2-A12" sha256 44FECE49C42D7D1A8C6AF40626F7BB092FA4F7B933E4583BE6445F481A29041C
     blocker\           : directory (makes the second archive entry fail to extract)
-  Broken target backup : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-36608\backups\broken-target.zip entries=[slot1.save, blocker]
+  Broken target backup : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-31728\backups\broken-target.zip entries=[slot1.save, blocker]
   Partial content it would write into slot1.save: "NEW-FROM-BACKUP-A12"
   Inserted game Id     : 3
   Inserted backup Id   : 2
@@ -616,9 +602,9 @@ DETAILS  :
       sha256 after     : 44FECE49C42D7D1A8C6AF40626F7BB092FA4F7B933E4583BE6445F481A29041C
       sha256 before    : 44FECE49C42D7D1A8C6AF40626F7BB092FA4F7B933E4583BE6445F481A29041C
   --- pre-restore safety backup row(s) in the database ---
-    恢复前自动备份 - 2026-09-11 16:28:50
+    恢复前自动备份 - 2026-09-11 16:46:25
       description      : Safety copy of the current save, taken automatically before restoring backup #2
-      zip path         : C:\Users\Jiang\AppData\Local\Galbox\SaveBackups\Game_3_A12 rollback probe\prerestore_20260911_162850.zip
+      zip path         : C:\Users\Jiang\AppData\Local\Galbox\SaveBackups\Game_3_A12 rollback probe\prerestore_20260911_164625.zip
       zip exists       : True (254 bytes)
   --- interpretation ---
     slot1.save byte-identical to pre-restore state : True
@@ -626,7 +612,7 @@ DETAILS  :
     durable pre-restore backup recorded            : True
 SERVICE LOG (1 record(s), WARNING and above):
   [Error] Galbox.App.Services.SaveManagementService: Error restoring backup with ID: 2
-      System.UnauthorizedAccessException: Access to the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-36608\live-save\blocker' is denied.
+      System.UnauthorizedAccessException: Access to the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-31728\live-save\blocker' is denied.
          at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
          at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
          at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
@@ -634,7 +620,7 @@ SERVICE LOG (1 record(s), WARNING and above):
          at System.IO.File.Create(String path)
          at Galbox.App.Services.SaveManagementService.ExtractZipBackupAsync(String zipPath, String extractPath, IProgress`1 progress, CancellationToken cancellationToken) in E:\tmp\Galbox_health\src\Galbox.App\Services\SaveManagementService.cs:line 1932
          at Galbox.App.Services.SaveManagementService.RestoreBackupAsync(Int32 saveId, IProgress`1 progress, CancellationToken cancellationToken) in E:\tmp\Galbox_health\src\Galbox.App\Services\SaveManagementService.cs:line 550
-RESULT   : PASS  (160 ms)
+RESULT   : PASS  (138 ms)
 
 ####################################################################################################
 # [A13] Save detection refuses the game installation folder as a save folder
@@ -643,28 +629,28 @@ EXPECTED : for save files living directly in the installation root, PrimarySaveP
 ACTUAL   : rpgRefused=True, krkrRefused=True, controlAccepted=True, backupRefused=True, serviceRefused=True
 DETAILS  :
   === case 1: RPG Maker VX Ace, saves (*.rvdata2) directly in the installation root ===
-    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\RpgMakerGame
+    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\RpgMakerGame
     root-level files     : Save01.rvdata2, game-data.bin (250 KB decoy), Game.exe
     DetectEngineType     : RpgMaker (expected RpgMaker)
     PrimarySavePath      : (null - refused)
     Success              : False
     SaveFiles            : 1
-    ErrorMessage         : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
-    ExtendedInfo         : RootLevelSaveFileCount=1, RejectedSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\RpgMakerGame, RejectedSavePathReason=save-files-only-in-install-root
+    ErrorMessage         : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+    ExtendedInfo         : RootLevelSaveFileCount=1, RejectedSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\RpgMakerGame, RejectedSavePathReason=save-files-only-in-install-root
   
   === case 2: KiriKiri, saves (*.ksd) directly in the installation root ===
-    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\KrkrGame
+    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\KrkrGame
     DetectEngineType     : Krkr (expected Krkr)
     PrimarySavePath      : (null - refused)
     Success              : False
     SaveFiles            : 1
-    ErrorMessage         : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\KrkrGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
-    ExtendedInfo         : RootLevelSaveFileCount=1, RejectedSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\KrkrGame, RejectedSavePathReason=save-files-only-in-install-root
+    ErrorMessage         : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\KrkrGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+    ExtendedInfo         : RootLevelSaveFileCount=1, RejectedSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\KrkrGame, RejectedSavePathReason=save-files-only-in-install-root
   
   === case 3: control - the save file lives in a real subfolder and must still be detected ===
-    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\KrkrGameWithSavedataFolder
-    PrimarySavePath      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\KrkrGameWithSavedataFolder\savedata
-    expected             : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\KrkrGameWithSavedataFolder\savedata
+    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\KrkrGameWithSavedataFolder
+    PrimarySavePath      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\KrkrGameWithSavedataFolder\savedata
+    expected             : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\KrkrGameWithSavedataFolder\savedata
     Success              : True
     SaveFiles            : 1
     ErrorMessage         : (null)
@@ -675,7 +661,7 @@ DETAILS  :
     game files would be in the archive: False
     service DetectSaveLocationAsync: Success=False, PrimarySavePath=(null)
       engine type        : RpgMaker
-      error message      : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+      error message      : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
   
   --- interpretation ---
     RPG Maker root saves refused : True
@@ -684,10 +670,10 @@ DETAILS  :
     CreateBackupAsync refuses    : True
     service-level refusal        : True
 SERVICE LOG (3 record(s), WARNING and above):
-  [Warning] Galbox.App.Services.SaveManagementService: Save location detection failed for game: A13 RPG Maker probe. Reason: 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+  [Warning] Galbox.App.Services.SaveManagementService: Save location detection failed for game: A13 RPG Maker probe. Reason: 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
   [Warning] Galbox.App.Services.SaveManagementService: No save location found for game: A13 RPG Maker probe
-  [Warning] Galbox.App.Services.SaveManagementService: Save location detection failed for game: A13 RPG Maker probe. Reason: 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-36608\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
-RESULT   : PASS  (43 ms)
+  [Warning] Galbox.App.Services.SaveManagementService: Save location detection failed for game: A13 RPG Maker probe. Reason: 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-31728\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+RESULT   : PASS  (36 ms)
 
 ####################################################################################################
 # [A14] Restore verification rejects same-size/different-content and missing-file restores
@@ -696,24 +682,24 @@ EXPECTED : a restored file with the right size but the wrong content is rejected
 ACTUAL   : contentMismatchRejected=True, missingFileRejected=True, controlAccepted=True, happyPathRestore=True
 DETAILS  :
   === scenario 1: same file count, same size, different content ===
-    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-36608\scenario1\archive.zip (1 entry, 4096 bytes)
-    restored file      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-36608\scenario1\slot1.save (4096 bytes, all 0x42 instead of 0x41)
-    archive sha256     : 7F333F01BD9AC942F015FF2253EA6DC2F2A9B403AB869FD46F4DA8EF39D28BC4
+    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-31728\scenario1\archive.zip (1 entry, 4096 bytes)
+    restored file      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-31728\scenario1\slot1.save (4096 bytes, all 0x42 instead of 0x41)
+    archive sha256     : 8927C07B6FD0CAFD14EAB60FB7E98307C5B744D4F2D48A011E5F198C5A9B0EB7
     restored sha256    : 725BCD6C66D02ACF6EBEAB9C92410E010EA22E336876256AAF05A211F4CE1902
     verifier invoked   : True
     Success            : False
     ErrorMessage       : Content hash mismatch for 'slot1.save': archive 6896D9EA3F73A4434F5832BC65714E7D066F177373F36F34DC8A6F735DAA41B1, restored file 725BCD6C66D02ACF6EBEAB9C92410E010EA22E336876256AAF05A211F4CE1902.
   
   === scenario 2: 9 of 10 files restored (inside the old 20% count / 10% size tolerance) ===
-    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-36608\scenario2\archive.zip (10 entries x 1000 bytes = 10000 bytes)
-    restored folder    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-36608\scenario2\restored (9 files, 9000 bytes)
+    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-31728\scenario2\archive.zip (10 entries x 1000 bytes = 10000 bytes)
+    restored folder    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-31728\scenario2\restored (9 files, 9000 bytes)
     missing file       : slot10.save
     verifier invoked   : True
     Success            : False
     ErrorMessage       : Restored file is missing: 'slot10.save'.
   
   === scenario 3: control - identical content must still verify ===
-    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-36608\scenario3\archive.zip (2 entries: slot1.save, nested/persistent)
+    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-31728\scenario3\archive.zip (2 entries: slot1.save, nested/persistent)
     restored folder    : [nested\persistent, slot1.save]
     verifier invoked   : True
     Success            : True
@@ -730,13 +716,13 @@ DETAILS  :
     missing file rejected              : True
     correct content accepted           : True
     full restore happy path            : True
-RESULT   : PASS  (92 ms)
+RESULT   : PASS  (98 ms)
 
 ####################################################################################################
 # [A15] Scraped cover and character images are downloaded as real image files
 ####################################################################################################
 EXPECTED : after metadata is applied the game has a CoverImagePath pointing at an existing file whose leading bytes are a valid image signature, the database agrees, and a character portrait is written to ImagePath as well
-ACTUAL   : coverPath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\images-36608\Covers\1.jpg, size=219348, signature=JPEG (FF D8 FF), portrait=True, serviceValidation=True
+ACTUAL   : coverPath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\images-31728\Covers\1.jpg, size=219348, signature=JPEG (FF D8 FF), portrait=True, serviceValidation=True
 DETAILS  :
   Query                : "Dreamin' Her"
   Sources with results : Bangumi, Vndb
@@ -747,7 +733,7 @@ DETAILS  :
   
   --- database after ApplyMetadataAsync ---
     CoverImageUrl        : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
-    CoverImagePath       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\images-36608\Covers\1.jpg
+    CoverImagePath       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\images-31728\Covers\1.jpg
   --- measured file on disk ---
     exists               : True
     size                 : 219348 bytes
@@ -758,13 +744,13 @@ DETAILS  :
     resolved             : Galbox.App.Services.GameImageService
     shipping app folder  : C:\Users\Jiang\AppData\Local\Galbox\Covers (this run uses an isolated folder so a test
                            game id can never overwrite the user's real cover images)
-    run folder           : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\images-36608\Covers
+    run folder           : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\images-31728\Covers
     TryValidateImageFile : True
   
   --- character portrait ---
     DownloadForGameAsync : ok=True, error=(none)
     ImageUrl             : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
-    ImagePath            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\images-36608\Characters\1_1.jpg
+    ImagePath            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\images-31728\Characters\1_1.jpg
     size                 : 219348 bytes
     leading bytes        : FFD8FFE000104A4649460001
     signature            : JPEG (FF D8 FF)
@@ -779,7 +765,7 @@ DETAILS  :
     database CoverImagePath matches the file            : True
     character portrait written                          : True
     service validator accepts the cover                 : True
-RESULT   : PASS  (2349 ms)
+RESULT   : PASS  (2066 ms)
 
 ####################################################################################################
 # [A16] Deleting a game removes its records and keeps the game files on disk
@@ -792,10 +778,10 @@ DETAILS  :
   
   === fixture 1: game with a row in every child table ===
     game Id            : 6
-    install path       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-36608\ProbeGame (exists: True)
-    main executable    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-36608\ProbeGame\probe.exe (exists: True)
-    save in game folder: C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-36608\ProbeGame\save\slot1.save (exists: True)
-    backup zip         : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-36608\backups\game-backup.zip (exists: True)
+    install path       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-31728\ProbeGame (exists: True)
+    main executable    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-31728\ProbeGame\probe.exe (exists: True)
+    save in game folder: C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-31728\ProbeGame\save\slot1.save (exists: True)
+    backup zip         : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-31728\backups\game-backup.zip (exists: True)
     rows BEFORE        : Characters=1, Documents=1, MediaFiles=1, Screenshots=1, SaveBackups=1, ErrorRecords=1, Patches=1
   
   --- DeleteGameAsync(gameId, options: null) ---
@@ -847,7 +833,7 @@ DETAILS  :
     backup kept by default   : True
     explicit backup deletion : True
     UI offers the command    : True
-RESULT   : PASS  (194 ms)
+RESULT   : PASS  (220 ms)
 
 ####################################################################################################
 # [A17] A missing game folder is detected, surfaced in the UI and blocks the launch with a reason
@@ -861,15 +847,15 @@ DETAILS  :
   --- per-state evaluation ---
     [folder deleted] IsMissing=True, StatusText="文件夹丢失"
         FolderExists=False, ExecutableExists=False
-        DetailText  : 游戏文件夹不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-36608\game-folder-that-was-deleted
+        DetailText  : 游戏文件夹不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-31728\game-folder-that-was-deleted
         RepairHint  : 游戏文件没有被 Galbox 删掉——可能是被移动、重命名，或所在磁盘（移动硬盘/U 盘）未接入。把文件夹放回原位置即可恢复；若路径已改变，请重新添加游戏，再删除这条记录。
     [healthy] IsMissing=False, StatusText="正常"
         FolderExists=True, ExecutableExists=True
-        DetailText  : 游戏文件齐全：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-36608\PresentGame
+        DetailText  : 游戏文件齐全：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-31728\PresentGame
         RepairHint  : 
     [executable deleted] IsMissing=True, StatusText="可执行文件丢失"
         FolderExists=True, ExecutableExists=False
-        DetailText  : 启动程序不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-36608\PresentGame\deleted.exe
+        DetailText  : 启动程序不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-31728\PresentGame\deleted.exe
         RepairHint  : 游戏文件夹仍在，但主程序文件不见了（可能被杀软隔离或被手动删除）。请确认文件存在，或重新添加游戏文件夹以重新识别主程序。
     [no install path] IsMissing=True, StatusText="文件夹丢失"
         FolderExists=False, ExecutableExists=False
@@ -877,7 +863,7 @@ DETAILS  :
         RepairHint  : 请用「添加游戏」重新指向游戏文件夹，然后删除这条旧记录。
   
   --- launch guard (BuildLaunchBlockMessage) ---
-    folder deleted -> 无法启动「A17 gone folder」：文件夹丢失。 / 游戏文件夹不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-36608\game-folder-that-was-deleted / 游戏文件没有被 Galbox 删掉——可能是被移动、重命名，或所在磁盘（移动硬盘/U 盘）未接入。把文件夹放回原位置即可恢复；若路径已改变，请重新添加游戏，再删除这条记录。
+    folder deleted -> 无法启动「A17 gone folder」：文件夹丢失。 / 游戏文件夹不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-31728\game-folder-that-was-deleted / 游戏文件没有被 Galbox 删掉——可能是被移动、重命名，或所在磁盘（移动硬盘/U 盘）未接入。把文件夹放回原位置即可恢复；若路径已改变，请重新添加游戏，再删除这条记录。
     healthy        -> (null - launch proceeds, correct)
   
   === UI wiring (source level) ===
@@ -907,18 +893,18 @@ ACTUAL   : title="Galbox 1.0.0", startsWithGalbox=True, hostDefault=False
 DETAILS  :
   Repository root      : E:\tmp\Galbox_health
   Application          : E:\tmp\Galbox_health\src\Galbox.App\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
-  Application built    : 2026-09-11 16:28:34Z (newest file in the output folder)
-  Newest source file   : 2026-09-11 16:26:45Z
-  Launched             : pid 7668 (attempt 1/3)
-  MainWindowHandle     : 0xA70D8A
+  Application built    : 2026-09-11 16:46:09Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 16:45:29Z
+  Launched             : pid 32652 (attempt 1/3)
+  MainWindowHandle     : 0x41084E
   Window title (Win32) : "Galbox 1.0.0"
-  Elapsed              : 2344 ms (launch attempts: 1)
+  Elapsed              : 2330 ms (launch attempts: 1)
   
   --- interpretation ---
     window was created          : True
     title starts with "Galbox"  : True
     title is the host default   : False
-RESULT   : PASS  (2456 ms)
+RESULT   : PASS  (2449 ms)
 
 ####################################################################################################
 # [A19] Every navigation destination loads inside the running application
@@ -928,13 +914,13 @@ ACTUAL   : pagesLoaded=8/8, window=True, alive=True, attempts=1
 DETAILS  :
   Repository root      : E:\tmp\Galbox_health
   Application          : E:\tmp\Galbox_health\src\Galbox.App\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
-  Application built    : 2026-09-11 16:28:34Z
+  Application built    : 2026-09-11 16:46:09Z
   Navigation keys      : Home, Library, SaveManager, PatchCenter, Settings, GameDetail:1, ScrapingProgress, ErrorReport
-  Result file          : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a19-36608\navigation-smoke.txt
+  Result file          : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a19-31728\navigation-smoke.txt
   
-  --- attempt 1/3: pid 36320 ---
+  --- attempt 1/3: pid 38696 ---
   The application exited before a window appeared: False
-  MainWindowHandle     : 0x7F0846 after 2628 ms
+  MainWindowHandle     : 0x42084E after 2334 ms
   Alive when measured  : True
   --- result lines (8/8) ---
       Navigation smoke: Home=OK (page=MainPage)
@@ -959,7 +945,7 @@ DETAILS  :
     window created      : True
     process still alive : True
     launch attempts     : 1
-RESULT   : PASS  (2719 ms)
+RESULT   : PASS  (2431 ms)
 
 ####################################################################################################
 # [A70] 健康诊断：按触发条件准确报出 8 项、严重度符合规格、且不误报
@@ -967,7 +953,7 @@ RESULT   : PASS  (2719 ms)
 EXPECTED : 8 个诊断项各自在触发条件成立时报出、条件不成立时保持沉默，严重度与规格一致（中文路径 Major / 区域设置 Critical / DirectX Major / 解码器 Minor / Windows 兼容性 Critical / 运行库 Critical / 权限 Major / 杀软 Info）
 ACTUAL   : 1 项与规格不符
 DETAILS  :
-  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a70-36608
+  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a70-31728
   工作目录纯 ASCII : True（中文路径用例需要 ASCII 的上层目录）
   
   === 本机前置条件（实测，用于推导期望值） ===
@@ -1017,7 +1003,7 @@ DETAILS  :
   --- 判读 ---
     未通过项 : 1
       - 误报 fixture（游戏名 Expansion，readme 无 OS 要求）: 类别 WindowsCompatibility 期望 无，实测 Critical
-RESULT   : FAIL  (42 ms)
+RESULT   : FAIL  (43 ms)
 
 ####################################################################################################
 # [A71] 中文路径一键重命名：目录真的改名、数据库三个路径字段同步、失败可回滚
@@ -1026,7 +1012,7 @@ EXPECTED : FixChineseInstallPathAsync 把游戏目录改成纯 ASCII 名，同�
 ACTUAL   : IGameHealthFixService 未注册
 DETAILS  :
   IGameHealthFixService : NOT REGISTERED
-  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-36608
+  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-31728
   
   FAIL REASON: 没有 IGameHealthFixService 这个服务，所以「中文路径」只能显示为不可自动修复的提示，
                规格 §3.5 承诺的「一键重命名目录」在代码里根本不存在。
@@ -1039,17 +1025,17 @@ EXPECTED : ApplyWindowsCompatibilityModeAsync 在 HKCU\...\AppCompatFlags\Layers
 ACTUAL   : IGameHealthFixService 未注册
 DETAILS  :
   IGameHealthFixService : NOT REGISTERED
-  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-36608
+  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-31728
   Layers 键原本存在 : True（本用例结束时值一定会被删掉）
   
   FAIL REASON: 没有 IGameHealthFixService，兼容模式只能靠用户自己右键 → 属性 → 兼容性手工设置。
-RESULT   : FAIL  (3 ms)
+RESULT   : FAIL  (4 ms)
 
 ####################################################################################################
 # [A73] 自动修复不虚标：标为可自动修复的项真的能修，其余项不得谎报成功
 ####################################################################################################
 EXPECTED : 8 个诊断项的 SolutionType 与规格表一致；AutoFixAvailable 当且仅当 SolutionType=AutoFix；每个标为可自动修复的项调用 AttemptAutoFixAsync 必须真的成功；其余项必须返回失败而不是假装成功；非自动修复项各自带官方下载地址或可执行的手动步骤
-ACTUAL   : 7 项未通过
+ACTUAL   : 12 项未通过
 DETAILS  :
   === 用例 1：解决方式分级与实际修复能力一致 ===
     [FAIL] 路径含中文字符        规格=AutoFix      实测=ManualFix    AutoFixAvailable=False
@@ -1086,8 +1072,24 @@ DETAILS  :
     修复后仍报出的可自动修复项 : 无（OK）
   收尾：清理了 0 条本用例写入的兼容性层设置。
   
+  === 用例 4：报告页的「一键修复所有可自动修复的问题」（真实 ViewModel + 真实服务） ===
+    CheckGameErrorsAsync ok=True
+    按钮文案         : ""
+    批量调用 ok=False (method 'FixAllAutoFixableInternalAsync' with 0 argument(s) not found on Galbox.App.ViewModels.ErrorReportViewModel)
+    FixableCount     : 0
+    FixedCount       : 0
+    FixedItems       : 
+    ManualItems      : 
+    FailedItems      : 
+    Message          : 
+    原名目录仍在     : True（期望 False）
+    改名后主程序     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a73-31728\batch\中文游戏目录\probe.exe  存在=True
+    注册表兼容性层   : (不存在)（期望 ~ WIN7RTM）
+    批量后仍可自动修复 : 0（期望 0）
+  收尾：清理了 0 条本用例写入的兼容性层设置。
+  
   --- 判读 ---
-    未通过项 : 7
+    未通过项 : 12
       - 路径含中文字符: 规格要求 AutoFix，实测 ManualFix
       - 路径含中文字符: AutoFixAvailable=False 与 SolutionType=ManualFix 不一致
       - 路径含中文字符: 标为自动修复却没有 FixAction
@@ -1095,7 +1097,12 @@ DETAILS  :
       - Windows 兼容性: AutoFixAvailable=False 与 SolutionType=ManualFix 不一致
       - Windows 兼容性: 标为自动修复却没有 FixAction
       - 用例3：fixture 没有产生任何可自动修复的问题，因此没有证明「按钮真的有门」
-RESULT   : FAIL  (72 ms)
+      - 用例4：批量修复没有修好任何一项 - method 'FixAllAutoFixableInternalAsync' with 0 argument(s) not found on Galbox.App.ViewModels.ErrorReportViewModel
+      - 用例4：fixture 只产生了 0 个可自动修复项，无法证明批量入口同时处理多项
+      - 用例4：批量修复后原中文目录还在
+      - 用例4：批量修复没有写入兼容模式 - 实测 "(不存在)"
+      - 用例4：批量结果没有区分出「需要手动处理」的项，界面上会看不出还剩什么没解决
+RESULT   : FAIL  (88 ms)
 
 ####################################################################################################
 # [A74] 诊断文案中文化：标题、说明、方案、分级与持久化记录均无英文残留
@@ -1173,16 +1180,16 @@ DETAILS  :
     类别筛选 [7] = "Runtime Missing"
     类别筛选 [8] = "Permission Issue"
     类别筛选 [9] = "Antivirus Warning"
-    CheckGameErrorsAsync(null) ok=False (method 'CheckGameErrorsAsync' with 2 argument(s) not found on Galbox.App.ViewModels.ErrorReportViewModel) StatusMessage=""
-    LoadGameErrorHistoryAsync(null) ok=False (method 'LoadGameErrorHistoryAsync' with 2 argument(s) not found on Galbox.App.ViewModels.ErrorReportViewModel) StatusMessage=""
+    CheckGameErrorsAsync(null) ok=True StatusMessage="No game selected"
+    LoadGameErrorHistoryAsync(null) ok=True StatusMessage="No game selected"
   
   === 用例 5：写进数据库的诊断记录同样是中文 ===
     持久化记录数 : 2
-    --- 记录 8 [ChineseDirectory/Major/ManualFix] ---
+    --- 记录 11 [ChineseDirectory/Major/ManualFix] ---
         Title       : Chinese Characters in Path
         Description : The game path contains Chinese characters: 中, 文, 游, 戏, 目, 录. Some Japanese games may fail to run with Chinese paths.
         Solution    : Rename the folder to use English characters or Pinyin. Example: '游戏' -> 'Game' or 'youxi'
-    --- 记录 9 [AntivirusBlocking/Info/ManualFix] ---
+    --- 记录 12 [AntivirusBlocking/Info/ManualFix] ---
         Title       : Antivirus May Block Game
         Description : Some antivirus software may incorrectly flag game executables as threats. This is common with Japanese games due to unusual packing methods.
         Solution    : Add the game folder to your antivirus exclusion list. Right-click antivirus icon > Settings > Exclusions > Add folder.
@@ -1244,59 +1251,60 @@ DETAILS  :
       - 类别筛选[7] 不含任何中文字符："Runtime Missing"
       - 类别筛选[8] 不含任何中文字符："Permission Issue"
       - 类别筛选[9] 不含任何中文字符："Antivirus Warning"
-      - CheckGameErrorsAsync/StatusMessage 为空
-      - LoadGameErrorHistoryAsync/StatusMessage 为空
-      - 记录8/Title 不含任何中文字符："Chinese Characters in Path"
-      - 记录8/Description 仍含未本地化的英文片段 "The game path contains"："The game path contains Chinese characters: 中, 文, 游, 戏, 目, 录. Some Japanese games may fail to run with Chinese paths."
-      - 记录8/SolutionInstructions 仍含未本地化的英文片段 "Rename the folder to use English"："Rename the folder to use English characters or Pinyin. Example: '游戏' -> 'Game' or 'youxi'"
-      - 记录9/Title 不含任何中文字符："Antivirus May Block Game"
-      - 记录9/Description 不含任何中文字符："Some antivirus software may incorrectly flag game executables as threats. This is common with Japanese games due to unusual packing methods."
-      - 记录9/SolutionInstructions 不含任何中文字符："Add the game folder to your antivirus exclusion list. Right-click antivirus icon > Settings > Exclusions > Add folder."
-RESULT   : FAIL  (34 ms)
+      - CheckGameErrorsAsync/StatusMessage 不含任何中文字符："No game selected"
+      - LoadGameErrorHistoryAsync/StatusMessage 不含任何中文字符："No game selected"
+      - 记录11/Title 不含任何中文字符："Chinese Characters in Path"
+      - 记录11/Description 仍含未本地化的英文片段 "The game path contains"："The game path contains Chinese characters: 中, 文, 游, 戏, 目, 录. Some Japanese games may fail to run with Chinese paths."
+      - 记录11/SolutionInstructions 仍含未本地化的英文片段 "Rename the folder to use English"："Rename the folder to use English characters or Pinyin. Example: '游戏' -> 'Game' or 'youxi'"
+      - 记录12/Title 不含任何中文字符："Antivirus May Block Game"
+      - 记录12/Description 不含任何中文字符："Some antivirus software may incorrectly flag game executables as threats. This is common with Japanese games due to unusual packing methods."
+      - 记录12/SolutionInstructions 不含任何中文字符："Add the game folder to your antivirus exclusion list. Right-click antivirus icon > Settings > Exclusions > Add folder."
+RESULT   : FAIL  (31 ms)
 
 ====================================================================================================
  ACCEPTANCE SUMMARY
 ====================================================================================================
  ID   STATUS        TIME  CHECK
 ----------------------------------------------------------------------------------------------------
- A0   PASS       1454 ms  Database isolation, schema creation and GameInfo round-trip
+ A0   PASS       1540 ms  Database isolation, schema creation and GameInfo round-trip
  A1   PASS         16 ms  FindExecutableInFolder picks the intended launcher
- A2   PASS        130 ms  CalculateFolderSize reports the real folder size
+ A2   PASS        128 ms  CalculateFolderSize reports the real folder size
  A3   PASS          9 ms  DetectSaveLocationAsync finds the Ren'Py save folder
  A4   PASS         27 ms  CheckGameAsync runs without internal failure
- A5   PASS       1354 ms  SearchGameAsync returns live results from the four sources
- A6   PASS          7 ms  Scraped metadata is complete enough to use
- A7   PASS       3019 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
- A8   PASS         56 ms  Navigation, page and XAML resource completeness (no feature without a door)
- A9   PASS       2639 ms  The GUI application opens a window while scrape-cache data is present
- A11  PASS        141 ms  Quick switch aborts (and reports failure) when the current save cannot be backed up
- A12  PASS        160 ms  A failed restore rolls the save folder back to its pre-restore state and records it
- A13  PASS         43 ms  Save detection refuses the game installation folder as a save folder
- A14  PASS         92 ms  Restore verification rejects same-size/different-content and missing-file restores
- A15  PASS       2349 ms  Scraped cover and character images are downloaded as real image files
- A16  PASS        194 ms  Deleting a game removes its records and keeps the game files on disk
+ A5   PASS       1389 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          9 ms  Scraped metadata is complete enough to use
+ A7   PASS       2055 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+ A8   PASS         64 ms  Navigation, page and XAML resource completeness (no feature without a door)
+ A9   FAIL       2485 ms  The GUI application opens a window while scrape-cache data is present
+ A11  PASS        129 ms  Quick switch aborts (and reports failure) when the current save cannot be backed up
+ A12  PASS        138 ms  A failed restore rolls the save folder back to its pre-restore state and records it
+ A13  PASS         36 ms  Save detection refuses the game installation folder as a save folder
+ A14  PASS         98 ms  Restore verification rejects same-size/different-content and missing-file restores
+ A15  PASS       2066 ms  Scraped cover and character images are downloaded as real image files
+ A16  PASS        220 ms  Deleting a game removes its records and keeps the game files on disk
  A17  PASS          9 ms  A missing game folder is detected, surfaced in the UI and blocks the launch with a reason
- A18  PASS       2456 ms  The application window title is the product name, not "WinUI Desktop"
- A19  PASS       2719 ms  Every navigation destination loads inside the running application
- A70  FAIL         42 ms  健康诊断：按触发条件准确报出 8 项、严重度符合规格、且不误报
+ A18  PASS       2449 ms  The application window title is the product name, not "WinUI Desktop"
+ A19  PASS       2431 ms  Every navigation destination loads inside the running application
+ A70  FAIL         43 ms  健康诊断：按触发条件准确报出 8 项、严重度符合规格、且不误报
  A71  FAIL          2 ms  中文路径一键重命名：目录真的改名、数据库三个路径字段同步、失败可回滚
- A72  FAIL          3 ms  Windows 兼容性一键写入：HKCU 兼容性层真的写入、且撤销后真的删除
- A73  FAIL         72 ms  自动修复不虚标：标为可自动修复的项真的能修，其余项不得谎报成功
- A74  FAIL         34 ms  诊断文案中文化：标题、说明、方案、分级与持久化记录均无英文残留
+ A72  FAIL          4 ms  Windows 兼容性一键写入：HKCU 兼容性层真的写入、且撤销后真的删除
+ A73  FAIL         88 ms  自动修复不虚标：标为可自动修复的项真的能修，其余项不得谎报成功
+ A74  FAIL         31 ms  诊断文案中文化：标题、说明、方案、分级与持久化记录均无英文残留
 ----------------------------------------------------------------------------------------------------
- PASSED : 19
- FAILED : 5
+ PASSED : 18
+ FAILED : 6
  ERRORS : 0
  TOTAL  : 24
  FAILING CHECKS:
+   A9: expected [with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s] but measured [MainWindowHandle=0x6D0AD8 ("Galbox 1.0.0"), visibleTopLevelWindows=1, alive=True, exitedEarly=False, completed=False, failed=False]
    A70: expected [8 个诊断项各自在触发条件成立时报出、条件不成立时保持沉默，严重度与规格一致（中文路径 Major / 区域设置 Critical / DirectX Major / 解码器 Minor / Windows 兼容性 Critical / 运行库 Critical / 权限 Major / 杀软 Info）] but measured [1 项与规格不符]
    A71: expected [FixChineseInstallPathAsync 把游戏目录改成纯 ASCII 名，同步更新 Games.InstallPath / MainExecutable / AlternativeExecutables（以及目录下的文档路径），目标冲突时不动任何东西，数据库提交失败时把目录改回原名，游戏进程在运行时拒绝执行] but measured [IGameHealthFixService 未注册]
    A72: expected [ApplyWindowsCompatibilityModeAsync 在 HKCU\...\AppCompatFlags\Layers 下以可执行文件全路径为名写入兼容性层（~ WIN7RTM），已有旧值时报告旧值，RevertWindowsCompatibilityModeAsync 还原旧值（无旧值时删除该值），重命名游戏目录时已有的层设置跟着可执行文件的新路径迁移，且全程只写 HKCU、不删除其他应用的兼容性设置] but measured [IGameHealthFixService 未注册]
-   A73: expected [8 个诊断项的 SolutionType 与规格表一致；AutoFixAvailable 当且仅当 SolutionType=AutoFix；每个标为可自动修复的项调用 AttemptAutoFixAsync 必须真的成功；其余项必须返回失败而不是假装成功；非自动修复项各自带官方下载地址或可执行的手动步骤] but measured [7 项未通过]
+   A73: expected [8 个诊断项的 SolutionType 与规格表一致；AutoFixAvailable 当且仅当 SolutionType=AutoFix；每个标为可自动修复的项调用 AttemptAutoFixAsync 必须真的成功；其余项必须返回失败而不是假装成功；非自动修复项各自带官方下载地址或可执行的手动步骤] but measured [12 项未通过]
    A74: expected [8 个诊断项的 Title/Description/SolutionInstructions、严重度与分类显示名、解决方式显示名、报告页筛选标签、以及写入 ErrorRecords 的记录都含中文且不含未本地化的英文片段] but measured [63 处文案未通过]
 
  EXIT CODE: 1  (at least one check did not PASS)
- DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36608\acceptance.db
+ DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-31728\acceptance.db
  GAME     : D:\GAME\Dreamin'_Her
 ====================================================================================================
 EXITCODE=1
