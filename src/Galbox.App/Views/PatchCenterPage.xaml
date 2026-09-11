@@ -15,6 +15,7 @@
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+        <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
         <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
         <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
         <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
@@ -52,27 +53,17 @@
         <SolidColorBrush x:Key="OtherPatchColor" Color="{StaticResource TextFillColorSecondary}"/>
 
         <!-- Patch Details Flyout -->
-        <Flyout x:Key="PatchDetailsFlyoutKey"
-            Placement="Bottom"
-            ShouldConstrainToRootBounds="False">
-            <Border
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                CornerRadius="8"
-                Padding="16"
-                MinWidth="400"
-                MaxWidth="500">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        Text="补丁详情"
-                        FontSize="18"
-                        FontWeight="Bold"/>
-                    <TextBlock
-                        Text="{x:Bind ViewModel.PatchDetailContent, Mode=OneWay}"
-                        TextWrapping="Wrap"
-                        FontSize="14"/>
-                </StackPanel>
-            </Border>
-        </Flyout>
+        <!-- REMOVED from Page.Resources on purpose.
+             It used to be a <Flyout x:Key="PatchDetailsFlyoutKey"> declared here with
+             Text="{x:Bind ViewModel.PatchDetailContent}". An x:Bind inside a ResourceDictionary is
+             resolved by the generated Initialize()/Update() pass, but the named elements of a lazily
+             created resource are not connected at that moment, so the generated setter received a
+             null TextBlock and threw NullReferenceException from FrameworkElement.Loading.
+             Measured: opening 补丁中心 killed the whole process (Application Error 0xc000027b in
+             Microsoft.UI.Xaml.dll) - on this branch AND on the unmodified 0e051ea baseline, i.e. the
+             page was already unreachable before any patch-centre work. The flyout is now built in
+             code-behind (PatchCenterPage.xaml.cs, BuildPatchDetailsFlyout) where the text is assigned
+             to a live TextBlock that is guaranteed to exist. -->
     </Page.Resources>
 
     <Grid x:Name="RootGrid" Padding="24">
@@ -373,10 +364,13 @@
                             </Grid>
                         </Border>
 
-                        <!-- No Game Selected Message -->
+                        <!-- No Game Selected Message.
+                             Was bound to NullToVisibilityConverter, i.e. it was shown precisely when a
+                             game WAS selected - and therefore appeared at the same time as the game
+                             card above it. Inverted. -->
                         <StackPanel
                             Grid.Row="1"
-                            Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}"
+                            Visibility="{Binding SelectedGame, Converter={StaticResource InverseNullToVisibilityConverter}}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Margin="0,0,0,12">
@@ -388,7 +382,18 @@
                         </StackPanel>
 
                         <!-- Patches List -->
-                        <ScrollViewer Grid.Row="2" Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}">
+                        <!-- HorizontalScrollMode/BarVisibility are DISABLED on purpose: a ScrollViewer
+                             otherwise measures its content with an infinite width, so every
+                             TextWrapping="Wrap" TextBlock inside reports its full single-line width,
+                             the content becomes far wider than the column and the whole right-hand
+                             panel is clipped at the window edge (measured: the "本地补丁包" card was
+                             cut off). Disabling horizontal scrolling makes the content wrap to the
+                             column instead. -->
+                        <ScrollViewer
+                            Grid.Row="2"
+                            HorizontalScrollMode="Disabled"
+                            HorizontalScrollBarVisibility="Disabled"
+                            Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}">
                           <StackPanel Spacing="12">
                             <ItemsRepeater
                                 ItemsSource="{x:Bind ViewModel.FilteredPatches, Mode=OneWay}"
@@ -497,6 +502,29 @@
                                     </DataTemplate>
                                 </ItemsRepeater.ItemTemplate>
                             </ItemsRepeater>
+
+                            <!-- 尚无数据库补丁记录时的说明（原来是一个覆盖在 ScrollViewer 之上的
+                                 同级元素，本地补丁卡片加入后会和它重叠，所以搬进滚动内容里）。 -->
+                            <StackPanel
+                                Spacing="8"
+                                Margin="0,4,0,4"
+                                HorizontalAlignment="Center"
+                                Visibility="{x:Bind ViewModel.AvailablePatchesCount, Mode=OneWay, Converter={StaticResource InverseCountToVisibilityConverter}}">
+                                <FontIcon FontSize="48" Glyph="&#xE771;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock
+                                    Text="暂无可用补丁"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    HorizontalAlignment="Center"/>
+                                <TextBlock
+                                    Text="尚未配置在线补丁源，本地也还没有这个游戏的补丁记录。你仍然可以用下面的「本地补丁包」安装一个已经下载好的补丁。"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    TextWrapping="Wrap"
+                                    MaxWidth="360"
+                                    TextAlignment="Center"
+                                    HorizontalAlignment="Center"/>
+                            </StackPanel>
 
                             <!-- ==================================================================
                                  本地补丁包（已下载）—— 补丁中心真正能做的事
@@ -902,28 +930,10 @@
                           </StackPanel>
                         </ScrollViewer>
 
-                        <!-- No Patches Available -->
-                        <StackPanel
-                            Grid.Row="2"
-                            Visibility="{x:Bind ViewModel.AvailablePatchesCount, Mode=OneWay, Converter={StaticResource InverseCountToVisibilityConverter}}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="8">
-                            <FontIcon FontSize="48" Glyph="&#xE771;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock
-                                Text="暂无可用补丁"
-                                FontSize="14"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                HorizontalAlignment="Center"/>
-                            <TextBlock
-                                Text="尚未配置补丁源，本地也还没有这个游戏的补丁记录。补丁源接入后，这里会显示可下载的补丁。"
-                                FontSize="12"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                TextWrapping="Wrap"
-                                MaxWidth="360"
-                                TextAlignment="Center"
-                                HorizontalAlignment="Center"/>
-                        </StackPanel>
+                        <!-- No Patches Available.
+                             Moved INSIDE the ScrollViewer above (it used to be a sibling of the
+                             ScrollViewer in the same Grid.Row, which made it draw on top of the
+                             scrolling content once that content grew taller than the empty area). -->
                     </Grid>
                 </Border>
             </Grid>
