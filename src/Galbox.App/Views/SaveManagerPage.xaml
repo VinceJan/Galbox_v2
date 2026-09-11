@@ -29,6 +29,31 @@
             <Setter Property="Padding" Value="12"/>
         </Style>
 
+        <!-- Timeline node: one save, drawn as a card on the horizontal story line. -->
+        <Style x:Key="TimelineNodeButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        </Style>
+
+        <Style x:Key="TimelineNodeBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Width" Value="176"/>
+            <Setter Property="MinHeight" Value="104"/>
+        </Style>
+
+        <!-- Small pill used for 自动档 / 手动档 / 快照 / 疑似路线 markers. -->
+        <Style x:Key="TimelineBadgeStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Padding" Value="7,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style x:Key="GameListItemStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
@@ -323,6 +348,379 @@
                     </Button>
                 </StackPanel>
             </Grid>
+
+            <!-- ============================================================
+                 存档节点（游玩时间线）— the product's headline feature.
+                 Rows: state header + timeline + CG gallery + snapshot tools.
+                 Every empty/error state is driven by the ViewModel and shows the
+                 concrete reason the scan service returned (never a generic "失败").
+                 ============================================================ -->
+            <Border
+                Grid.Row="1"
+                Style="{StaticResource SaveManagerCardStyle}"
+                Padding="16"
+                Margin="0,0,0,16">
+                <StackPanel Spacing="12">
+
+                    <!-- Header: title, live status, scan button -->
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="18" Glyph="&#xE81C;" Foreground="{ThemeResource SystemAccentColor}"/>
+                            <TextBlock
+                                Text="存档节点"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center"/>
+                            <TextBlock
+                                Text="剧情位置时间线"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock
+                                Text="{x:Bind ViewModel.SaveNodeStatusText, Mode=OneWay}"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextTrimming="CharacterEllipsis"/>
+                            <TextBlock
+                                Text="{x:Bind ViewModel.SaveNodeHintText, Mode=OneWay}"
+                                FontSize="11"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <ProgressRing
+                                IsActive="{x:Bind ViewModel.IsScanningSaveNodes, Mode=OneWay}"
+                                Width="20"
+                                Height="20"
+                                Visibility="{x:Bind ViewModel.IsScanningSaveNodes, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <Button
+                                Click="OnScanSaveNodesClick"
+                                Style="{StaticResource AccentButtonStyle}"
+                                CornerRadius="8"
+                                Padding="14,7"
+                                IsEnabled="{x:Bind ViewModel.IsScanningSaveNodes, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
+                                ToolTipService.ToolTip="扫描这个游戏的存档目录，把每个存档解析成剧情节点">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE721;"/>
+                                    <TextBlock Text="扫描存档" FontSize="13"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Failure / unsupported engine: the concrete reason, never a generic banner.
+                         The title changes for an unsupported engine so "no data" cannot be mistaken
+                         for "no saves". -->
+                    <InfoBar
+                        IsOpen="{x:Bind ViewModel.HasSaveNodeError, Mode=OneWay}"
+                        Severity="Error"
+                        IsClosable="False"
+                        Title="存档节点扫描未完成"
+                        Message="{x:Bind ViewModel.SaveNodeErrorText, Mode=OneWay}"/>
+
+                    <!-- Empty state: nothing scanned yet, or nothing to show. The state text itself
+                         lives in the header line above; this block explains what will appear. -->
+                    <StackPanel
+                        Spacing="4"
+                        Padding="0,8,0,8"
+                        Visibility="{x:Bind ViewModel.IsTimelineEmpty, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock
+                            Text="扫描后这里会按存档时间画出一条时间线：每个节点显示剧情位置、自动档/手动档和存档时间，鼠标悬停能看到最后一句对白。"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- Horizontal story timeline: nodes ordered by the save's own modified time -->
+                    <ScrollViewer
+                        HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Disabled"
+                        Visibility="{x:Bind ViewModel.HasTimeline, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.TimelineItems, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button
+                                        Style="{StaticResource TimelineNodeButtonStyle}"
+                                        Click="OnTimelineNodeClick"
+                                        Tag="{Binding}"
+                                        ToolTipService.ToolTip="{Binding TooltipText}">
+                                        <Border Style="{StaticResource TimelineNodeBorderStyle}">
+                                            <StackPanel Spacing="6">
+
+                                                <!-- Node title: DisplayName (snapshot description >
+                                                     scene label > chapter > slot). Never blank. -->
+                                                <TextBlock
+                                                    Text="{Binding DisplayName}"
+                                                    FontSize="14"
+                                                    FontWeight="SemiBold"
+                                                    TextWrapping="Wrap"
+                                                    MaxLines="2"
+                                                    TextTrimming="CharacterEllipsis"/>
+
+                                                <!-- Save time of the save itself (not of the row) -->
+                                                <TextBlock
+                                                    Text="{Binding TimeText}"
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                                                <!-- Slot kind: autosave is accented so auto and
+                                                     manual saves are distinguishable at a glance -->
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Border
+                                                        Style="{StaticResource TimelineBadgeStyle}"
+                                                        Background="{ThemeResource SystemAccentColor}"
+                                                        Visibility="{Binding IsAutoSave, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                        <TextBlock Text="{Binding SlotKindText}" FontSize="11" Foreground="White"/>
+                                                    </Border>
+                                                    <Border
+                                                        Style="{StaticResource TimelineBadgeStyle}"
+                                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                        Visibility="{Binding IsAutoSave, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                                                        <TextBlock Text="{Binding SlotKindText}" FontSize="11"/>
+                                                    </Border>
+
+                                                    <Border
+                                                        Style="{StaticResource TimelineBadgeStyle}"
+                                                        Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                        Visibility="{Binding IsSnapshot, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                        <TextBlock Text="快照" FontSize="11"/>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <!-- Speculative branch marker. The text already carries
+                                                     the mapper's 疑似前缀 and the 推测 suffix; the UI
+                                                     must never show it as a confirmed route. -->
+                                                <TextBlock
+                                                    Text="{Binding RouteText}"
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                    TextWrapping="Wrap"
+                                                    MaxLines="2"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    Visibility="{Binding HasRoute, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                                <!-- Red line 3: a failed/partial parse stays visible -->
+                                                <StackPanel
+                                                    Orientation="Horizontal"
+                                                    Spacing="4"
+                                                    Visibility="{Binding HasParseProblem, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                    <FontIcon FontSize="11" Glyph="&#xE7BA;" Foreground="{ThemeResource SystemErrorTextColor}"/>
+                                                    <TextBlock
+                                                        Text="{Binding ParseStatusText}"
+                                                        FontSize="11"
+                                                        Foreground="{ThemeResource SystemErrorTextColor}"
+                                                        TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+
+                                                <!-- Play time / dialogue presence -->
+                                                <TextBlock
+                                                    Text="{Binding PlayTimeText}"
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                    Visibility="{Binding PlayTimeText, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                                                <TextBlock
+                                                    Text="{Binding DialogueText}"
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                    MaxLines="2"
+                                                    TextWrapping="Wrap"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    Visibility="{Binding HasDialogue, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- CG gallery progress + story progress (game-level, as of the last scan) -->
+                    <Grid ColumnSpacing="16" Visibility="{x:Bind ViewModel.HasTimeline, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- CG 图鉴 -->
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="13" Glyph="&#xEB9F;" Foreground="{ThemeResource SystemAccentColor}"/>
+                                <TextBlock Text="CG 图鉴" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.CgHeadlineText, Mode=OneWay}"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource SystemAccentColor}"/>
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.CgRemainingText, Mode=OneWay}"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                            <ProgressBar
+                                Value="{x:Bind ViewModel.CgProgressValue, Mode=OneWay}"
+                                Maximum="100"
+                                ShowError="False"
+                                ShowPaused="False"/>
+                            <TextBlock
+                                Text="游戏级进度（共享的 persistent 文件）：是最近一次扫描时的进度，不是某个存档当时的进度"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                TextWrapping="Wrap"/>
+                            <Expander HorizontalAlignment="Stretch" Margin="0,4,0,0">
+                                <Expander.Header>
+                                    <TextBlock Text="查看已解锁 / 还差的 CG 编号" FontSize="12"/>
+                                </Expander.Header>
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="已解锁" FontSize="12" FontWeight="SemiBold"/>
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.CgUnlockedIds, Mode=OneWay}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="4"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border
+                                                        Style="{StaticResource TimelineBadgeStyle}"
+                                                        Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}">
+                                                        <TextBlock Text="{Binding}" FontSize="11"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+
+                                    <TextBlock Text="还差的" FontSize="12" FontWeight="SemiBold"/>
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.CgLockedIds, Mode=OneWay}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="4"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border
+                                                        Style="{StaticResource TimelineBadgeStyle}"
+                                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                                        <TextBlock Text="{Binding}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+
+                        <!-- Story progress + speculative branches -->
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="13" Glyph="&#xE81C;" Foreground="{ThemeResource SystemAccentColor}"/>
+                                <TextBlock Text="剧情进度" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.SceneProgressText, Mode=OneWay}"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource SystemAccentColor}"/>
+                            </StackPanel>
+                            <ProgressBar
+                                Value="{x:Bind ViewModel.SceneProgressValue, Mode=OneWay}"
+                                Maximum="100"
+                                ShowError="False"
+                                ShowPaused="False"/>
+                            <TextBlock
+                                Text="已解锁场景数 / 剧本总场景数（不是剧本行号百分比；该游戏没有章节概念，所以不显示章节数）"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                TextWrapping="Wrap"/>
+
+                            <TextBlock Text="分支分组" FontSize="12" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                            <TextBlock
+                                Text="{x:Bind ViewModel.RouteGroupsText, Mode=OneWay}"
+                                FontSize="11"
+                                TextWrapping="Wrap"/>
+                            <TextBlock
+                                Text="读不到任何路线变量，分支只能按已访问场景集合聚类推测，一律标为疑似，不是确定路线"
+                                FontSize="10"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Snapshot tools: mark the selected node as a key story point -->
+                    <Border
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                        CornerRadius="8"
+                        Padding="12"
+                        Visibility="{x:Bind ViewModel.HasTimeline, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <FontIcon FontSize="13" Glyph="&#xE734;"/>
+                                <TextBlock Text="快照" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{x:Bind ViewModel.SelectedNodeSummary, Mode=OneWay}"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                VerticalAlignment="Center"
+                                TextTrimming="CharacterEllipsis"/>
+
+                            <TextBox
+                                Grid.Column="2"
+                                Text="{x:Bind ViewModel.SnapshotDescriptionInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="快照描述，例如：第一次遇见宁宁，之后选 A 线"
+                                Width="300"
+                                VerticalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6">
+                                <Button
+                                    Click="OnMarkSnapshotClick"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    CornerRadius="8"
+                                    Padding="12,6"
+                                    IsEnabled="{x:Bind ViewModel.CanMarkSnapshot, Mode=OneWay}"
+                                    ToolTipService.ToolTip="把时间线上选中的存档标记为关键节点快照">
+                                    <TextBlock Text="标记为快照" FontSize="12"/>
+                                </Button>
+                                <Button
+                                    Click="OnClearSnapshotClick"
+                                    CornerRadius="8"
+                                    Padding="12,6"
+                                    ToolTipService.ToolTip="取消选中节点的快照标记">
+                                    <TextBlock Text="取消快照" FontSize="12"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
 
             <!-- Two-Column Layout -->
             <Grid Grid.Row="2" ColumnSpacing="16">

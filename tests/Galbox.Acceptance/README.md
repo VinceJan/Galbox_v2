@@ -19,6 +19,9 @@ It exists because "it compiles" was being treated as "it works".
 | A5 | **Live scraping.** `IGameScrapingService.SearchGameAsync` across the four sources; per source it prints success, error message, raw exception, hit count, elapsed time and the matched titles. |
 | A6 | Whether the A5 hits are *usable* metadata: title, rating, cover URL presence per item, plus the per-source totals. |
 | A7 | Upstream contract probe. Prints the traffic the application's **own** HttpClient pipelines produced during A5 (recorded by a transparent handler, so no request literals to go stale), then issues a *corrected* request to the same upstreams to prove whether a scraping failure lives in Galbox or upstream. Also dumps each typed `HttpClient`'s `BaseAddress`. |
+| A8 | Source-level completeness: every navigation key maps to a page that exists, every DI-registered ViewModel is referenced by a view, every page is reachable, every converter a view uses is registered, and every MainWindow menu item maps to a navigation key. Guards the defect class "implemented but no door". |
+| A9 | Starts the shipping `Galbox.App.exe` with a populated scrape cache and requires a live process that owns a visible top-level window **and** a startup log that reports completion (a window alone is not accepted — the startup-failure dialog is a window too). |
+| A10 | **The save-node feature, end to end.** Resolves `ISaveNodeScanService` from the app-shaped container (the wiring assertion), scans a real game and requires exactly 12 de-duplicated nodes with non-empty scene labels, `auto-3` → 孤独感, CG 6/27 with the id set `{0101,0301,0401,0501,0801,2401}`, a second scan that inserts nothing, a missing/empty directory that fails with a concrete reason and leaves no row behind, and — driven through the real `SaveManagerViewModel` — a timeline with no blank label, 自动档/手动档 separation, the 疑似 route marker, the honest progress figure, the visible parse-failure state, the "还差 21 张" list, the empty state and the unsupported-engine state. |
 
 Exit code: `0` when every check passes, `1` when anything fails or errors.
 
@@ -54,6 +57,10 @@ Options:
 * **No user data.** The database lives at
   `%LocalAppData%\Galbox\acceptance\acceptance.db` and is deleted and recreated on every run.
   The real `%LocalAppData%\Galbox\galbox.db` is never opened.
+  Set `GALBOX_ACCEPTANCE_DIR` to an absolute folder to move it: the default path is shared by every
+  worktree on the machine, and two harnesses running at once corrupt each other (observed: A0
+  failing with `IOException: the file is being used by another process`, and a run that seeded a
+  screenshot picking up another worktree's game row).
 * **No scraping cache.** The persistent cache is disabled
   (`AcceptanceContainer.DisableScrapingCache`), so A5 is always a genuine network query and
   `%LocalAppData%\Galbox\ScrapingCache` is neither read nor written.

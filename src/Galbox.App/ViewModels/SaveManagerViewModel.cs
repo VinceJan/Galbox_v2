@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Galbox.App.Saves;
 using Galbox.App.Services;
 using Galbox.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Galbox.App.ViewModels;
@@ -145,14 +147,26 @@ public partial class SaveManagerViewModel : ObservableObject
     /// <summary>
     /// Creates a SaveManagerViewModel with injected dependencies.
     /// </summary>
+    /// <param name="dbContextFactory">Factory for short-lived database contexts.</param>
+    /// <param name="saveManagementService">Backup/restore service.</param>
+    /// <param name="logger">Logger.</param>
+    /// <param name="scopeFactory">
+    /// Used to resolve the scoped <c>ISaveNodeScanService</c> once per save-node scan. Injected as the
+    /// factory rather than the service itself: this ViewModel is resolved from the root container, and
+    /// a scoped service captured by a root-resolved object is the captive-dependency defect the
+    /// application's ValidateScopes switch rejects.
+    /// </param>
     public SaveManagerViewModel(
         IDbContextFactory<GalboxDbContext> dbContextFactory,
         ISaveManagementService saveManagementService,
-        ILogger<SaveManagerViewModel> logger)
+        ILogger<SaveManagerViewModel> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _saveManagementService = saveManagementService ?? throw new ArgumentNullException(nameof(saveManagementService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        AttachSaveNodeServices(scopeFactory);
 
         // Initialize auto-backup setting from service
         _autoBackupEnabled = _saveManagementService.AutoBackupEnabled;
@@ -300,6 +314,7 @@ public partial class SaveManagerViewModel : ObservableObject
             {
                 // Fallback: just run directly if no dispatcher
                 _ = LoadBackupsForGameSafeAsync(value.Id);
+                _ = LoadSaveNodesSafeAsync(value.Id);
                 return;
             }
 
@@ -321,11 +336,39 @@ public partial class SaveManagerViewModel : ObservableObject
                     });
                 }
             });
+
+            // Show the stored save-node timeline of the newly selected game. On the UI thread,
+            // because the timeline is an ObservableCollection the page is bound to.
+            dispatcher.TryEnqueue(() => _ = LoadSaveNodesSafeAsync(value.Id));
         }
         else
         {
             SelectedGameBackups.Clear();
             SelectedBackup = null;
+
+            // No game selected: back to the honest empty state, never to a stale timeline of the
+            // previously selected game.
+            ApplyTimelineModel(SaveTimelineModel.NeverScanned);
+            SelectedTimelineNode = null;
+        }
+    }
+
+    /// <summary>
+    /// Loads the stored save-node timeline of a game and reports an unexpected failure as page state
+    /// instead of an unobserved task exception.
+    /// </summary>
+    private async Task LoadSaveNodesSafeAsync(int gameId)
+    {
+        try
+        {
+            await LoadSaveNodesAsync(gameId).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading save nodes for game: {GameId}", gameId);
+            SaveNodeErrorText = $"读取存档节点失败：{ex.GetType().Name}: {ex.Message}";
+            HasSaveNodeError = true;
+            SaveNodeErrorIsUnsupportedEngine = false;
         }
     }
 

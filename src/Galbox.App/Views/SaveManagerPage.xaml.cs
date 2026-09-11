@@ -146,4 +146,63 @@ public sealed partial class SaveManagerPage : Page
             ViewModel.ErrorMessage = $"Failed to quick switch: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// Handles the "扫描存档" button: scans the selected game's save directory into story nodes.
+    /// </summary>
+    private async void OnScanSaveNodesClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ViewModel.ScanSaveNodesForSelectedGameCommand.ExecuteAsync(null);
+        }
+        catch (System.Exception ex)
+        {
+            ViewModel.SaveNodeErrorText = $"扫描存档失败：{ex.GetType().Name}: {ex.Message}";
+            ViewModel.HasSaveNodeError = true;
+        }
+    }
+
+    /// <summary>
+    /// Selects a timeline node; the snapshot tools act on the selected node.
+    /// </summary>
+    private void OnTimelineNodeClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is Galbox.App.Saves.SaveNodeTimelineEntry entry)
+        {
+            ViewModel.SelectedTimelineNode = entry;
+        }
+    }
+
+    /// <summary>
+    /// Marks the selected timeline node as a snapshot and stores the typed description.
+    /// </summary>
+    private async void OnMarkSnapshotClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ViewModel.MarkAsSnapshotCommand.ExecuteAsync(null);
+        }
+        catch (System.Exception ex)
+        {
+            ViewModel.SaveNodeErrorText = $"保存快照失败：{ex.GetType().Name}: {ex.Message}";
+            ViewModel.HasSaveNodeError = true;
+        }
+    }
+
+    /// <summary>
+    /// Clears the snapshot mark of the selected timeline node.
+    /// </summary>
+    private async void OnClearSnapshotClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ViewModel.ClearSnapshotCommand.ExecuteAsync(null);
+        }
+        catch (System.Exception ex)
+        {
+            ViewModel.SaveNodeErrorText = $"取消快照失败：{ex.GetType().Name}: {ex.Message}";
+            ViewModel.HasSaveNodeError = true;
+        }
+    }
 }

@@ -20,5 +20,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Galbox.App\Galbox.App.csproj" />
+    <!-- A10 drives ISaveNodeScanService (Galbox.Services) exactly as the shipping container
+         registers it. Referencing the assembly here does NOT wire anything into the application:
+         the wiring under test is the registration in src/Galbox.App/App.xaml.cs, which this project
+         mirrors in AcceptanceContainer. Before that registration exists, A10 resolves null and
+         FAILS - which is exactly what it is supposed to do. -->
+    <ProjectReference Include="..\..\src\Galbox.Services\Galbox.Services.csproj" />
   </ItemGroup>
 </Project>

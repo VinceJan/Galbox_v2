@@ -37,6 +37,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Galbox.Core\Galbox.Core.csproj" />
     <ProjectReference Include="..\Galbox.Data\Galbox.Data.csproj" />
+    <!-- The save-node scan service (parser x data). This is the only reference the application layer
+         needs for the "存档节点" feature, and it is what makes that feature reachable from a page. -->
+    <ProjectReference Include="..\Galbox.Services\Galbox.Services.csproj" />
   </ItemGroup>
 
   <ItemGroup>
