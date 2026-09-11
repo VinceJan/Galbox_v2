@@ -151,16 +151,21 @@ public sealed class A74DiagnosisLocalizationCheck : IAcceptanceCheck
             }
 
             // Status messages the user sees when the page is used with nothing selected.
+            // Both methods take a single GameInfo? argument.
             foreach (var methodName in new[] { "CheckGameErrorsAsync", "LoadGameErrorHistoryAsync" })
             {
                 var (ok, _, error) = await ReflectionBridge
-                    .CallAsync(viewModel, methodName, null, cancellationToken)
+                    .CallAsync(viewModel, methodName, new object?[] { null })
                     .ConfigureAwait(false);
 
-                var status = ReflectionBridge.String(viewModel, "StatusMessage")
-                          ?? ReflectionBridge.String(viewModel, "statusMessage");
+                var status = ReflectionBridge.String(viewModel, "StatusMessage");
                 details.Add($"  {methodName}(null) ok={ok}{(error is null ? string.Empty : $" ({error})")} StatusMessage=\"{status}\"");
                 Report(failures, HealthCheckSupport.CheckLocalized($"{methodName}/StatusMessage", status));
+
+                if (!ok)
+                {
+                    failures.Add($"用例4：{methodName} 调用失败 - {error}");
+                }
             }
         }
 

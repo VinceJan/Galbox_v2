@@ -1,6 +1,5 @@
 using Galbox.App.Models;
 using Galbox.Data.Entities;
-
 namespace Galbox.App.Services;
 
 /// <summary>
@@ -194,4 +193,11 @@ public class AutoFixResult
     /// The updated error info after fix (if applicable).
     /// </summary>
     public GameErrorInfo? UpdatedError { get; set; }
+
+    /// <summary>
+    /// The detailed repair result when the attempted fix is one of the implemented repairs
+    /// (folder rename / compatibility mode). Carries what was changed, what value was replaced and
+    /// whether the change can be undone - the report page needs all three to offer "撤销".
+    /// </summary>
+    public GameHealthFixResult? Fix { get; set; }
 }

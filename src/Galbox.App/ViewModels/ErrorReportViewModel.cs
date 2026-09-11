@@ -18,6 +18,13 @@ public partial class ErrorReportViewModel : ObservableObject
     private readonly IErrorCheckingService _errorCheckingService;
 
     /// <summary>
+    /// The repair implementation, used for the "撤销" command. The repair itself is reached through
+    /// <see cref="IErrorCheckingService.AttemptAutoFixAsync"/> (the same call this page makes for
+    /// "一键修复"), so that a fix and its undo can never diverge.
+    /// </summary>
+    private readonly IGameHealthFixService _fixService;
+
+    /// <summary>
     /// Factory for short-lived contexts.
     ///
     /// The ViewModels are resolved from the root container, so they must not take a scoped
@@ -101,6 +108,29 @@ public partial class ErrorReportViewModel : ObservableObject
     private int _totalUnresolvedCount;
 
     /// <summary>
+    /// The repair that was applied last and can still be undone.
+    /// </summary>
+    /// <remarks>
+    /// Kept on the ViewModel so the "撤销" button can be shown directly next to the message that
+    /// reports the repair. <see cref="IGameHealthFixService"/> keeps the durable record, so the undo
+    /// still works after a restart.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanUndo))]
+    private GameHealthFixResult? _lastFix;
+
+    /// <summary>
+    /// Step-by-step log of the last repair, shown under the status message.
+    /// </summary>
+    [ObservableProperty]
+    private string? _fixDetailText;
+
+    /// <summary>
+    /// Whether "撤销" is currently offered.
+    /// </summary>
+    public bool CanUndo => LastFix is { Success: true, CanUndo: true };
+
+    /// <summary>
     /// List of all unresolved errors.
     /// </summary>
     public ObservableCollection<GameErrorRecord> AllUnresolvedErrors { get; } = new();
@@ -135,10 +165,12 @@ public partial class ErrorReportViewModel : ObservableObject
     /// </summary>
     public ErrorReportViewModel(
         IErrorCheckingService errorCheckingService,
+        IGameHealthFixService fixService,
         IDbContextFactory<GalboxDbContext> dbContextFactory,
         ILogger<ErrorReportViewModel> logger)
     {
         _errorCheckingService = errorCheckingService ?? throw new ArgumentNullException(nameof(errorCheckingService));
+        _fixService = fixService ?? throw new ArgumentNullException(nameof(fixService));
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -151,21 +183,21 @@ public partial class ErrorReportViewModel : ObservableObject
     private void InitializeFilterOptions()
     {
         SeverityFilterOptions.Clear();
-        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.All, DisplayName = "All Severities" });
-        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.Critical, DisplayName = "Critical Only" });
-        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.Major, DisplayName = "Major and Critical" });
-        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.Minor, DisplayName = "All Including Minor" });
+        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.All, DisplayName = "全部严重程度" });
+        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.Critical, DisplayName = "只看严重" });
+        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.Major, DisplayName = "严重 + 重要" });
+        SeverityFilterOptions.Add(new SeverityFilterOption { Value = ErrorSeverityFilter.Minor, DisplayName = "含轻微问题" });
 
         CategoryFilterOptions.Clear();
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.All, DisplayName = "All Categories" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.ChineseDirectory, DisplayName = "Chinese Directory" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.LocaleRequirement, DisplayName = "Locale Requirement" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.DirectXMissing, DisplayName = "DirectX Missing" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.KLiteCodecMissing, DisplayName = "Codec Missing" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.WindowsCompatibility, DisplayName = "Windows Compatibility" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.RuntimeMissing, DisplayName = "Runtime Missing" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.PermissionIssue, DisplayName = "Permission Issue" });
-        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.AntivirusBlocking, DisplayName = "Antivirus Warning" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.All, DisplayName = "全部类别" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.ChineseDirectory, DisplayName = "路径含中文" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.LocaleRequirement, DisplayName = "区域设置要求" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.DirectXMissing, DisplayName = "缺 DirectX" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.KLiteCodecMissing, DisplayName = "缺 K-Lite 解码器" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.WindowsCompatibility, DisplayName = "Windows 兼容性" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.RuntimeMissing, DisplayName = "缺运行时" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.PermissionIssue, DisplayName = "权限问题" });
+        CategoryFilterOptions.Add(new CategoryFilterOption { Value = ErrorCategoryFilter.AntivirusBlocking, DisplayName = "杀软拦截" });
     }
 
     /// <summary>
@@ -175,7 +207,7 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         IsLoading = true;
         ErrorMessage = null;
-        StatusMessage = "Loading errors...";
+        StatusMessage = "正在读取诊断记录…";
 
         try
         {
@@ -213,13 +245,13 @@ public partial class ErrorReportViewModel : ObservableObject
             // Convert to GameErrorInfo for display
             UpdateFilteredErrors();
 
-            StatusMessage = $"Loaded {TotalUnresolvedCount} unresolved errors";
+            StatusMessage = $"已读取 {TotalUnresolvedCount} 条未解决的问题";
             _logger.LogInformation("Loaded {Count} unresolved errors", TotalUnresolvedCount);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading unresolved errors");
-            ErrorMessage = $"Failed to load errors: {ex.Message}";
+            ErrorMessage = $"读取诊断记录失败：{ex.Message}";
         }
         finally
         {
@@ -234,14 +266,14 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         if (game == null)
         {
-            StatusMessage = "No game selected";
+            StatusMessage = "请先在左侧选择一个游戏。";
             return;
         }
 
         IsLoading = true;
         ErrorMessage = null;
         SelectedGame = game;
-        StatusMessage = $"Checking errors for {game.DisplayName}...";
+        StatusMessage = $"正在检测「{game.DisplayName}」…";
 
         try
         {
@@ -255,13 +287,13 @@ public partial class ErrorReportViewModel : ObservableObject
 
             UpdateFilteredErrors();
 
-            StatusMessage = $"Found {errors.Count} issues for {game.DisplayName}";
+            StatusMessage = $"「{game.DisplayName}」检测到 {errors.Count} 个问题";
             _logger.LogInformation("Checked {GameName}: {Count} errors found", game.DisplayName, errors.Count);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking game {GameId}", game.Id);
-            ErrorMessage = $"Failed to check errors: {ex.Message}";
+            ErrorMessage = $"检测失败：{ex.Message}";
         }
         finally
         {
@@ -276,14 +308,14 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         if (game == null)
         {
-            StatusMessage = "No game selected";
+            StatusMessage = "请先在左侧选择一个游戏。";
             return;
         }
 
         IsLoading = true;
         ErrorMessage = null;
         SelectedGame = game;
-        StatusMessage = $"Loading error history for {game.DisplayName}...";
+        StatusMessage = $"正在读取「{game.DisplayName}」的历史记录…";
 
         try
         {
@@ -298,13 +330,13 @@ public partial class ErrorReportViewModel : ObservableObject
 
             UpdateFilteredErrors();
 
-            StatusMessage = $"Loaded {history.Count} error records for {game.DisplayName}";
+            StatusMessage = $"已读取「{game.DisplayName}」的 {history.Count} 条历史记录";
             _logger.LogInformation("Loaded {Count} error records for game {GameId}", history.Count, game.Id);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading history for game {GameId}", game.Id);
-            ErrorMessage = $"Failed to load error history: {ex.Message}";
+            ErrorMessage = $"读取历史记录失败：{ex.Message}";
         }
         finally
         {
@@ -320,27 +352,30 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         if (error == null)
         {
-            StatusMessage = "No error selected";
+            StatusMessage = "请先选择一条要修复的问题";
             return;
         }
 
         if (!error.AutoFixAvailable)
         {
-            StatusMessage = "Auto fix not available for this error. Follow manual instructions.";
+            StatusMessage = $"「{error.CategoryDisplay}」没有自动修复方案，请按“解决步骤”手动处理。";
             return;
         }
 
         IsFixing = true;
         ErrorMessage = null;
-        StatusMessage = "Attempting automatic fix...";
+        StatusMessage = $"正在修复「{error.Title}」…";
 
         try
         {
-            var result = await _errorCheckingService.AttemptAutoFixAsync(error).ConfigureAwait(false);
+            var result = await _errorCheckingService.AttemptAutoFixAsync(error).ConfigureAwait(true);
 
             if (result.Success)
             {
-                StatusMessage = "Fix applied successfully!";
+                LastFix = result.Fix;
+                FixDetailText = result.Details;
+                StatusMessage = result.Message;
+
                 if (result.UpdatedError != null)
                 {
                     // Update the error in the list
@@ -350,18 +385,90 @@ public partial class ErrorReportViewModel : ObservableObject
                         GameErrors[index] = result.UpdatedError;
                     }
                 }
-                _logger.LogInformation("Auto fix successful for error {ErrorId}", error.Id);
+
+                // The detection result of the game changed (a renamed folder is a different path),
+                // so re-run it instead of showing a stale list.
+                if (SelectedGame != null)
+                {
+                    await CheckGameErrorsAsync(SelectedGame).ConfigureAwait(true);
+                }
+
+                _logger.LogInformation("Auto fix successful for game {GameId} ({Category})", error.GameId, error.Category);
             }
             else
             {
+                LastFix = null;
+                FixDetailText = null;
                 ErrorMessage = result.Message;
-                _logger.LogWarning("Auto fix failed for error {ErrorId}: {Message}", error.Id, result.Message);
+                _logger.LogWarning("Auto fix refused for game {GameId}: {Message}", error.GameId, result.Message);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error attempting fix for {ErrorId}", error.Id);
-            ErrorMessage = $"Fix attempt failed: {ex.Message}";
+            _logger.LogError(ex, "Error attempting fix for game {GameId}", error.GameId);
+            ErrorMessage = $"修复失败：{ex.Message}";
+        }
+        finally
+        {
+            IsFixing = false;
+        }
+    }
+
+    /// <summary>
+    /// Undoes the repair that was applied last.
+    /// </summary>
+    /// <remarks>
+    /// A repair the user cannot take back is a trap: renaming a game folder and writing a
+    /// compatibility mode both change the user's machine. The undo goes through
+    /// <see cref="IGameHealthFixService"/> so that the reverse operation is the same code that the
+    /// acceptance harness drives.
+    /// </remarks>
+    [RelayCommand]
+    private async Task UndoFixAsync()
+    {
+        var fix = LastFix;
+        if (fix is null || !fix.Success)
+        {
+            StatusMessage = "没有可以撤销的修复。";
+            return;
+        }
+
+        IsFixing = true;
+        ErrorMessage = null;
+
+        try
+        {
+            var result = fix.Kind switch
+            {
+                GameHealthFixKind.RenameInstallPath =>
+                    await _fixService.RevertChineseInstallPathAsync(fix.GameId).ConfigureAwait(true),
+
+                GameHealthFixKind.WindowsCompatibility =>
+                    await _fixService.RevertWindowsCompatibilityModeAsync(fix.GameId).ConfigureAwait(true),
+
+                _ => GameHealthFixResult.Failure("这条修复没有实现撤销。")
+            };
+
+            if (result.Success)
+            {
+                StatusMessage = result.Message;
+                FixDetailText = result.Notes.Count == 0 ? null : string.Join(Environment.NewLine, result.Notes);
+                LastFix = null;
+
+                if (SelectedGame != null)
+                {
+                    await CheckGameErrorsAsync(SelectedGame).ConfigureAwait(true);
+                }
+            }
+            else
+            {
+                ErrorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Undo of the last health repair failed");
+            ErrorMessage = $"撤销失败：{ex.Message}";
         }
         finally
         {
@@ -377,13 +484,13 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         if (error == null)
         {
-            StatusMessage = "No error selected";
+            StatusMessage = "请先选择一条问题记录。";
             return;
         }
 
         IsLoading = true;
         ErrorMessage = null;
-        StatusMessage = "Marking as resolved...";
+        StatusMessage = "正在标记为已解决…";
 
         try
         {
@@ -398,7 +505,7 @@ public partial class ErrorReportViewModel : ObservableObject
                 GameErrors.Remove(error);
                 UpdateFilteredErrors();
 
-                StatusMessage = "Error marked as resolved";
+                StatusMessage = "已标记为已解决";
                 _logger.LogInformation("Marked error {ErrorId} as resolved", error.Id);
 
                 // Refresh counts
@@ -406,13 +513,13 @@ public partial class ErrorReportViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = "Could not mark error as resolved";
+                ErrorMessage = "无法标记为已解决：记录可能已被删除";
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error marking error {ErrorId} as resolved", error.Id);
-            ErrorMessage = $"Failed to mark resolved: {ex.Message}";
+            ErrorMessage = $"标记失败：{ex.Message}";
         }
         finally
         {
@@ -434,7 +541,7 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         if (record == null)
         {
-            StatusMessage = "No error selected";
+            StatusMessage = "请先选择一条问题记录。";
             return;
         }
 
@@ -478,7 +585,7 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         if (error == null || string.IsNullOrWhiteSpace(error.DownloadUrl))
         {
-            StatusMessage = "No download URL available";
+            StatusMessage = "这条问题没有可用的下载地址。";
             return;
         }
 
@@ -489,13 +596,13 @@ public partial class ErrorReportViewModel : ObservableObject
                 FileName = error.DownloadUrl,
                 UseShellExecute = true
             });
-            StatusMessage = $"Opening download page for {error.ToolName}";
+            StatusMessage = $"正在打开 {error.ToolName} 的下载页面…";
             _logger.LogInformation("Opened download URL for error {ErrorId}", error.Id);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open download URL");
-            ErrorMessage = $"Failed to open URL: {ex.Message}";
+            ErrorMessage = $"打开链接失败：{ex.Message}";
         }
     }
 
@@ -507,7 +614,7 @@ public partial class ErrorReportViewModel : ObservableObject
     {
         IsLoading = true;
         ErrorMessage = null;
-        StatusMessage = "Starting batch error check...";
+        StatusMessage = "开始检测全部游戏…";
 
         try
         {
@@ -521,7 +628,7 @@ public partial class ErrorReportViewModel : ObservableObject
 
             var totalErrors = results.Sum(r => r.Value.Count);
 
-            StatusMessage = $"Batch check complete. Found {totalErrors} issues across {results.Count} games.";
+            StatusMessage = $"全库检测完成：{results.Count} 个游戏共发现 {totalErrors} 个问题。";
             _logger.LogInformation("Batch check complete: {TotalErrors} issues in {GameCount} games", totalErrors, results.Count);
 
             // Refresh the error list
@@ -530,7 +637,7 @@ public partial class ErrorReportViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during batch check");
-            ErrorMessage = $"Batch check failed: {ex.Message}";
+            ErrorMessage = $"全库检测失败：{ex.Message}";
         }
         finally
         {
@@ -653,6 +760,10 @@ public partial class ErrorReportViewModel : ObservableObject
     /// </summary>
     private static GameErrorInfo ConvertRecordToErrorInfo(GameErrorRecord record)
     {
+        var solutionType = Enum.TryParse<SolutionType>(record.SolutionType, ignoreCase: true, out var parsedSolution)
+            ? parsedSolution
+            : SolutionType.ManualFix;
+
         return new GameErrorInfo
         {
             Id = record.Id,
@@ -661,14 +772,17 @@ public partial class ErrorReportViewModel : ObservableObject
             Severity = Enum.Parse<ErrorSeverity>(record.Severity),
             Title = record.Title,
             Description = record.Description,
-            SolutionType = Enum.Parse<SolutionType>(record.SolutionType),
+            SolutionType = solutionType,
             SolutionInstructions = record.SolutionInstructions ?? string.Empty,
             DownloadUrl = record.DownloadUrl,
             ToolName = record.ToolName,
             DetectedTime = record.DetectedTime,
             IsResolved = record.IsResolved,
             ResolvedTime = record.ResolvedTime,
-            AutoFixAvailable = false // From database records, auto fix is typically not available
+            // Derived from the stored solution level instead of hard-coded to false: a stored record
+            // that says AutoFix describes a repair the service really offers, so hiding the button for
+            // it would make a working repair unreachable after a restart.
+            AutoFixAvailable = solutionType == SolutionType.AutoFix
         };
     }
 }

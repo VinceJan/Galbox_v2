@@ -120,4 +120,13 @@ public sealed partial class ErrorReportPage : Page
             ViewModel.AttemptFixCommand.Execute(error);
         }
     }
+
+    /// <summary>
+    /// Undoes the repair that was applied last. Offered right next to the report of that repair,
+    /// because both repairs change something outside the library (a folder name, a registry value).
+    /// </summary>
+    private void OnUndoFixClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.UndoFixCommand.Execute(null);
+    }
 }
