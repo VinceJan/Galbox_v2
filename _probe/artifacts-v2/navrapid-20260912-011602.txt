@@ -1,0 +1,102 @@
+================================================================
+ GAlBOX RAPID NAVIGATION PROBE
+================================================================
+ started            : 2026-09-12 01:16:02Z
+ exe                : E:\tmp\Galbox_crash_base\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+ target switches    : 200
+ pacing (StepMs)    : 40
+ first-chance trace : True
+ report file        : E:\tmp\Galbox_crash\_probe\artifacts-v2\navrapid-20260912-011602.txt
+ process            : pid=39672
+ window acquired after 2500 ms -> handle=12978524
+ nav item resolved : 主页
+ nav item resolved : 游戏库
+ nav item resolved : 存档管理
+ nav item resolved : 补丁中心
+ nav item NOT FOUND : Settings
+
+--- rapid navigation: 200 switches, 40 ms pacing ---
+  ... 25/200 switches at 1.8s
+  ... 50/200 switches at 4.0s
+  ... 75/200 switches at 6.0s
+
+--- RESULT ---
+ switches completed : 76 / 200
+ select calls failed: 3
+ elapsed            : 6.2924024 s
+ PROCESS DIED       : YES
+ exit code          : 0x00000000 (0)
+ died after switch  : 76
+ last item clicked  : 主页
+ next item would be : 补丁中心
+
+--- APPLICATION LOG (app-YYYYMMDD.log, tail) ---
+ file: C:\Users\Jiang\AppData\Local\Galbox\logs\app-20260912.log
+    "E:\\Develop_tools\\vscode\\Microsoft VS Code\\bin",
+    "E:\\Develop_tools\\Antigravity\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Pandoc\\",
+    "C:\\Users\\Jiang\\.bun\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\nvm",
+    "C:\\nvm4w\\nodejs",
+    "C:\\Users\\Jiang\\AppData\\Local\\Microsoft\\WinGet\\Links",
+    "C:\\Users\\Jiang\\AppData\\Local\\GitHubDesktop\\bin",
+    "C:\\Users\\Jiang\\.dotnet\\tools",
+    "C:\\Users\\Jiang\\.claude\\bin",
+    "C:\\Users\\Jiang\\bin",
+    "D:\\Software\\Obsidian",
+    "C:\\Users\\Jiang\\.qoder\\bin\\qodercli",
+    "C:\\Users\\Jiang\\AppData\\Local\\OfficeCli",
+    "D:\\Software\\Warp\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\Cua\\cua-driver\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Zellij\\",
+    "C:\\Users\\Jiang\\AppData\\Local\\PowerToys\\DSCModules\\",
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\Antigravity IDE\\bin"
+  ],
+  "unknownArgs": [],
+  "jsonWriteError": null
+}
+2026-09-12 00:44:24.885 [pid 37612] selftest 成功：handle=0x6A09B4 title='Galbox' elapsedMs=69.6 json='E:\tmp\galbox-v3-shell-evidence\runs\no-override\selftest.json'
+2026-09-12 00:44:27.966 [pid 37612] 退出 pid=37612 exitCode=0
+
+--- NAVIGATION SMOKE RESULT FILE ---
+Navigation smoke: Library=OK (page=LibraryPage)
+Navigation smoke: SaveManager=OK (page=SaveManagerPage)
+Navigation smoke: PatchCenter=OK (page=PatchCenterPage)
+Navigation smoke: Settings=OK (page=SettingsPage)
+Navigation smoke: Home=OK (page=MainPage)
+
+--- STARTUP LOG (tail) ---
+ file: C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log
+2026-09-12 01:15:58.478 [pid:33132] [tid:1] Navigation smoke: GameDetail=OK (page=GameDetailPage)
+2026-09-12 01:15:58.496 [pid:33132] [tid:1] Navigation smoke: ScrapingProgress=OK (page=ScrapingProgressPage)
+2026-09-12 01:15:58.511 [pid:33132] [tid:1] Navigation smoke: ErrorReport=OK (page=ErrorReportPage)
+2026-09-12 01:15:58.549 [pid:33132] [tid:1] Main window created and activated: handle=0x230B2A
+2026-09-12 01:15:58.562 [pid:33132] [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 01:15:58.562 [pid:33132] [tid:1] OnLaunched: startup sequence completed
+2026-09-12 01:16:03.285 [pid:39672] [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+2026-09-12 01:16:03.366 [pid:39672] [tid:1] OnLaunched: startup sequence begins
+2026-09-12 01:16:04.216 [pid:39672] [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+2026-09-12 01:16:04.383 [pid:39672] [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+2026-09-12 01:16:04.716 [pid:39672] [tid:1] BangumiAuthService initialized
+2026-09-12 01:16:04.797 [pid:39672] [tid:1] ScrapingCacheService initialized (entries: 2)
+2026-09-12 01:16:05.244 [pid:39672] [tid:1] Navigation smoke: Library=OK (page=LibraryPage)
+2026-09-12 01:16:05.306 [pid:39672] [tid:1] Navigation smoke: SaveManager=OK (page=SaveManagerPage)
+2026-09-12 01:16:05.325 [pid:39672] [tid:1] Navigation smoke: PatchCenter=OK (page=PatchCenterPage)
+2026-09-12 01:16:05.364 [pid:39672] [tid:1] Navigation smoke: Settings=OK (page=SettingsPage)
+2026-09-12 01:16:05.374 [pid:39672] [tid:1] Navigation smoke: Home=OK (page=MainPage)
+2026-09-12 01:16:05.407 [pid:39672] [tid:1] Main window created and activated: handle=0xC6095C
+2026-09-12 01:16:05.420 [pid:39672] [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 01:16:05.421 [pid:39672] [tid:1] OnLaunched: startup sequence completed
+
+--- FIRST-CHANCE LOG (tail) ---
+01:16:03.565 System.InvalidOperationException: Operation is not valid due to the current state of the object.
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+01:16:03.576 System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+(no matching events in the last 6 minutes)
+(no fresh WER report folders for Galbox)
+
+PROBE VERDICT: CRASHED
+ report saved to    : E:\tmp\Galbox_crash\_probe\artifacts-v2\navrapid-20260912-011602.txt
