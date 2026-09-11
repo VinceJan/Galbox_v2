@@ -473,10 +473,12 @@ public class GameScrapingService : IGameScrapingService
                     Description = item.Summary,
                     CoverImageUrl = UpgradeToHttps(item.Images?.Large ?? item.Images?.Common),
                     // v0 search results carry an infobox, so the developer and release date
-                    // are available without a second detail request.
+                    // are available without a second detail request. Tags only exist here too
+                    // (the dedicated tags endpoint answers 404).
                     Developer = item.GetDeveloper(),
                     ReleaseDate = item.GetReleaseDate(),
                     Rating = item.Rating?.Score is > 0 ? item.Rating!.Score : null,
+                    Tags = item.GetTopTags(),
                     MatchScore = CalculateMatchScore(gameName, allTitles)
                 };
 
@@ -623,10 +625,11 @@ public class GameScrapingService : IGameScrapingService
         var subject = await _bangumiApi.GetSubjectAsync(subjectId, cancellationToken).ConfigureAwait(false);
         if (subject == null) return null;
 
-        // Get additional data (characters, tags). These endpoints are optional: a failure
-        // here must not discard the subject data that was already retrieved successfully.
+        // Get additional data (characters). This endpoint is optional: a failure here must not
+        // discard the subject data that was already retrieved successfully.
+        // Tags are NOT fetched here - /v0/subjects/{id}/tags answers 404; they come from the
+        // search response instead (BangumiSearchItem.Tags).
         List<BangumiCharacter> characters;
-        List<BangumiTag> tags;
 
         try
         {
@@ -636,16 +639,6 @@ public class GameScrapingService : IGameScrapingService
         {
             _logger?.LogWarning(ex, "Bangumi characters unavailable for subject {SubjectId}", subjectId);
             characters = new List<BangumiCharacter>();
-        }
-
-        try
-        {
-            tags = await _bangumiApi.GetTagsAsync(subjectId, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning(ex, "Bangumi tags unavailable for subject {SubjectId}", subjectId);
-            tags = new List<BangumiTag>();
         }
 
         var metadata = new GameMetadata
@@ -666,8 +659,8 @@ public class GameScrapingService : IGameScrapingService
         if (!string.IsNullOrWhiteSpace(subject.NameCn))
             metadata.Titles.Add(subject.NameCn);
 
-        // Add tags
-        metadata.Tags = tags.Select(t => t.Name).ToList();
+        // Tags are intentionally left empty here: the Bangumi tags endpoint returns 404, so the
+        // search result's tags are kept instead (MergeDetails only overwrites non-empty values).
 
         // Add characters
         metadata.Characters = characters.Select(c => new CharacterInfo

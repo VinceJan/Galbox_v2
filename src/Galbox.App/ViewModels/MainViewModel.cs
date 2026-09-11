@@ -18,6 +18,7 @@ public partial class MainViewModel : ObservableObject
     private readonly INavigationService _navigationService;
     private readonly IGameUtilityService _gameUtilityService;
     private readonly ILogger<MainViewModel> _logger;
+    private readonly IScrapingSettingsProvider _scrapingSettings;
 
     /// <summary>
     /// Whether the page is loading data.
@@ -76,12 +77,14 @@ public partial class MainViewModel : ObservableObject
         GalboxDbContext dbContext,
         INavigationService navigationService,
         IGameUtilityService gameUtilityService,
-        ILogger<MainViewModel> logger)
+        ILogger<MainViewModel> logger,
+        IScrapingSettingsProvider scrapingSettings)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _scrapingSettings = scrapingSettings ?? throw new ArgumentNullException(nameof(scrapingSettings));
     }
 
     /// <summary>
@@ -293,6 +296,10 @@ public partial class MainViewModel : ObservableObject
             SuccessMessage = $"已将 '{game.DisplayName}' 添加到游戏库";
             _logger.LogInformation("Added new game: {GameName} from {FolderPath}", game.DisplayName, folderPath);
 
+            // D1: honor "scrape automatically when a game is added" from the home page too,
+            // so the setting behaves the same wherever the game is added from.
+            await TryStartAutoScrapeAsync(game.Id);
+
             // Clear success message after delay
             await Task.Delay(3000);
             SuccessMessage = null;
@@ -305,6 +312,30 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Navigates to the scraping view when "add game then auto scrape" is enabled.
+    /// </summary>
+    private async Task TryStartAutoScrapeAsync(int gameId)
+    {
+        try
+        {
+            await _scrapingSettings.RefreshAsync();
+
+            if (!_scrapingSettings.AutoScrapeOnAdd)
+            {
+                return;
+            }
+
+            _logger.LogInformation("AutoScrapeOnAdd is enabled, starting scraping for game {GameId}", gameId);
+            _navigationService.NavigateTo("ScrapingProgress", gameId);
+        }
+        catch (Exception ex)
+        {
+            // Auto scraping must never break adding a game.
+            _logger.LogWarning(ex, "Failed to start automatic scraping for game {GameId}", gameId);
         }
     }
 }

@@ -76,6 +76,12 @@ public class BangumiApi : ApiClient
     /// <summary>
     /// Get tags for a subject.
     /// </summary>
+    /// <remarks>
+    /// Not usable: <c>GET /v0/subjects/{id}/tags</c> answers <b>404</b> for anonymous requests
+    /// (verified against the live API), so this method always returns an empty list.
+    /// Tag data is available from the search response instead
+    /// (see <see cref="BangumiSearchItem.Tags"/>).
+    /// </remarks>
     public async Task<List<BangumiTag>> GetTagsAsync(
         int subjectId,
         CancellationToken cancellationToken = default)
@@ -161,6 +167,14 @@ public class BangumiSearchItem
     [JsonPropertyName("date")]
     public string? Date { get; set; }
 
+    /// <summary>
+    /// Subject tags as returned by the v0 search response (ordered by popularity).
+    /// This is the only working source of Bangumi tags - the dedicated
+    /// <c>/v0/subjects/{id}/tags</c> endpoint returns 404.
+    /// </summary>
+    [JsonPropertyName("tags")]
+    public List<BangumiTag>? Tags { get; set; }
+
     public List<string> GetAllTitles()
     {
         var titles = new List<string>();
@@ -169,6 +183,25 @@ public class BangumiSearchItem
         if (!string.IsNullOrWhiteSpace(NameCn))
             titles.Add(NameCn);
         return titles;
+    }
+
+    /// <summary>
+    /// Returns the most popular tag names.
+    /// </summary>
+    /// <param name="maxCount">Maximum number of tags to keep.</param>
+    public List<string> GetTopTags(int maxCount = 15)
+    {
+        if (Tags == null || Tags.Count == 0)
+        {
+            return new List<string>();
+        }
+
+        return Tags
+            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+            .OrderByDescending(t => t.Count)
+            .Take(maxCount)
+            .Select(t => t.Name)
+            .ToList();
     }
 
     /// <summary>

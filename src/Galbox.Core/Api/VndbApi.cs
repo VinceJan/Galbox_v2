@@ -20,11 +20,16 @@ public class VndbApi : ApiClient
         "id, title, alttitle, titles{lang,title,official,main}, image.url, rating, released, length_minutes";
 
     /// <summary>
-    /// Field list for single-VN detail requests (search fields plus description / developers / tags / characters).
+    /// Field list for single-VN detail requests (search fields plus description / developers / tags).
     /// </summary>
+    /// <remarks>
+    /// <c>characters</c> is deliberately absent: it is not a member of the VNDB <c>vn</c> object,
+    /// so requesting it (even as <c>characters{...}</c>) makes the whole detail request fail with
+    /// HTTP 400 and the developer/description/tags are lost with it.
+    /// </remarks>
     private const string DetailFields =
         "id, title, alttitle, titles{lang,title,official,main}, image.url, rating, released, length_minutes, " +
-        "description, developers{id,name}, tags{id,name,rating}, characters{id,name,original,image.url}";
+        "description, developers{id,name}, tags{id,name,rating}";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

@@ -55,7 +55,9 @@ internal static class Program
             new A4ErrorCheckCheck(),
             new A5ScrapingSearchCheck(),
             new A6MetadataFieldsCheck(),
-            new A7UpstreamContractCheck()
+            new A7UpstreamContractCheck(),
+            new A8NavigationPageCheck(),
+            new A9StartupWithCacheCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
