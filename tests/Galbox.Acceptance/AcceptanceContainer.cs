@@ -235,6 +235,24 @@ public static class AcceptanceContainer
         services.AddScoped<ISaveNodeScanService>(sp => new SaveNodeScanService(
             sp.GetRequiredService<GalboxDbContext>()));
 
+        // --- Reserved features: interfaces only, front end hidden (spec lines 173-174) -----
+        // The shipping app registers exactly one thing for the two P2 features: the catalog that
+        // answers "is this feature on?" with "no, and here is what it would need". Nothing else is
+        // registered - in particular NOT IFlowchartProvider / IAchievementProvider /
+        // IAchievementEvidenceSource, because there is no server to answer them, and a stub in the
+        // container is precisely the fake availability A92 exists to catch.
+        //
+        // Registered by assembly-qualified name rather than by type, for the same reason the two
+        // services above are: this harness then still COMPILES against the revision that does not
+        // contain Galbox.Core.Community yet, and the required "register the checks, watch them FAIL,
+        // implement, watch them PASS" sequence is possible from a single harness revision. When the
+        // types are absent the registration is skipped and A91 reports the missing registration.
+        RegisterIfPresentIn(
+            services,
+            "Galbox.Core",
+            "Galbox.Core.Community.IReservedFeatureCatalog",
+            "Galbox.Core.Community.ReservedFeatureCatalog");
+
         // Same validation switches as the shipping app. Without them the harness could happily
         // resolve a graph that the application itself refuses to start with - which is exactly
         // how five captive-dependency defects stayed hidden. A failure here is reported by the
@@ -244,6 +262,35 @@ public static class AcceptanceContainer
             ValidateScopes = true,
             ValidateOnBuild = true
         });
+    }
+
+    /// <summary>
+    /// Registers <paramref name="implementationTypeName"/> as <paramref name="serviceTypeName"/> when
+    /// both types exist in the named Galbox assembly.
+    /// </summary>
+    /// <remarks>
+    /// The assembly-qualified twin of <see cref="RegisterIfPresent(IServiceCollection, string, string, string)"/>,
+    /// used for <c>Galbox.Core.Community</c> - the layer that is being reserved, and therefore absent
+    /// from the revision the A90-A92 checks are first run against. Like its sibling it is a mirror of
+    /// a real registration in <c>App.xaml.cs</c>, not an acceptance-time convenience: when the types
+    /// are missing nothing is registered, the container hands out null, and A91 fails on the missing
+    /// registration exactly as it should.
+    /// </remarks>
+    private static void RegisterIfPresentIn(
+        IServiceCollection services,
+        string assemblyName,
+        string serviceTypeName,
+        string implementationTypeName)
+    {
+        var serviceType = Type.GetType($"{serviceTypeName}, {assemblyName}");
+        var implementationType = Type.GetType($"{implementationTypeName}, {assemblyName}");
+
+        if (serviceType is null || implementationType is null)
+        {
+            return;
+        }
+
+        services.AddSingleton(serviceType, implementationType);
     }
 
     /// <summary>
