@@ -15,7 +15,6 @@ namespace Galbox.App.Services;
 /// </summary>
 public class ErrorCheckingService : IErrorCheckingService
 {
-    private readonly GalboxDbContext _dbContext;
     private readonly ILogger<ErrorCheckingService> _logger;
 
     // Pre-compiled regex patterns for efficiency
@@ -84,13 +83,23 @@ public class ErrorCheckingService : IErrorCheckingService
     };
 
     /// <summary>
+    /// Factory for the (Singleton) error-checking service.
+    ///
+    /// Previously this service was registered as a Singleton while consuming a Scoped
+    /// <c>GalboxDbContext</c>: the container handed it the one root-resolved context, which then
+    /// lived - and was used - for the whole process. Creating a short-lived context per operation
+    /// is what removes the "A second operation was started on this context instance" failure.
+    /// </summary>
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
+
+    /// <summary>
     /// Creates an ErrorCheckingService with injected dependencies.
     /// </summary>
     public ErrorCheckingService(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         ILogger<ErrorCheckingService> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -199,8 +208,11 @@ public class ErrorCheckingService : IErrorCheckingService
     /// </summary>
     public async Task<List<GameErrorRecord>> GetErrorHistoryAsync(int gameId, CancellationToken cancellationToken = default)
     {
-        return await _dbContext.ErrorRecords
+        using var db = _dbContextFactory.CreateDbContext();
+
+        return await db.ErrorRecords
             .Where(e => e.GameInfoId == gameId)
+            .AsNoTracking()
             .OrderByDescending(e => e.DetectedTime)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -211,7 +223,9 @@ public class ErrorCheckingService : IErrorCheckingService
     /// </summary>
     public async Task<bool> MarkErrorResolvedAsync(int errorRecordId, CancellationToken cancellationToken = default)
     {
-        var errorRecord = await _dbContext.ErrorRecords
+        using var db = _dbContextFactory.CreateDbContext();
+
+        var errorRecord = await db.ErrorRecords
             .FirstOrDefaultAsync(e => e.Id == errorRecordId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -224,7 +238,7 @@ public class ErrorCheckingService : IErrorCheckingService
         errorRecord.IsResolved = true;
         errorRecord.ResolvedTime = DateTime.UtcNow;
 
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Marked error {Id} as resolved", errorRecordId);
         return true;
@@ -301,13 +315,32 @@ public class ErrorCheckingService : IErrorCheckingService
     /// </summary>
     public async Task<List<GameErrorRecord>> GetAllUnresolvedErrorsAsync(CancellationToken cancellationToken = default)
     {
-        return await _dbContext.ErrorRecords
+        using var db = _dbContextFactory.CreateDbContext();
+
+        // Severity is stored as text, so ordering by it would sort alphabetically
+        // (Minor > Major > Info > Critical) and put Critical last. Order by the parsed enum
+        // severity instead, newest first inside the same severity.
+        var records = await db.ErrorRecords
             .Where(e => !e.IsResolved)
             .Include(e => e.GameInfo)
-            .OrderByDescending(e => e.Severity)
-            .ThenByDescending(e => e.DetectedTime)
+            .AsNoTracking()
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        return records
+            .OrderByDescending(e => ParseSeverity(e.Severity))
+            .ThenByDescending(e => e.DetectedTime)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Parses the stored severity text, treating an unrecognised value as the least severe.
+    /// </summary>
+    private static ErrorSeverity ParseSeverity(string severity)
+    {
+        return Enum.TryParse<ErrorSeverity>(severity, ignoreCase: true, out var parsed)
+            ? parsed
+            : ErrorSeverity.Info;
     }
 
     #region Private Detection Methods
@@ -982,6 +1015,13 @@ public class ErrorCheckingService : IErrorCheckingService
     /// </summary>
     private async Task SaveErrorsToDatabaseAsync(int gameId, List<GameErrorInfo> errors, CancellationToken cancellationToken)
     {
+        if (errors.Count == 0)
+        {
+            return;
+        }
+
+        using var db = _dbContextFactory.CreateDbContext();
+
         foreach (var error in errors)
         {
             var record = new GameErrorRecord
@@ -999,13 +1039,10 @@ public class ErrorCheckingService : IErrorCheckingService
                 IsResolved = false
             };
 
-            _dbContext.ErrorRecords.Add(record);
+            db.ErrorRecords.Add(record);
         }
 
-        if (errors.Count > 0)
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        }
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     #endregion

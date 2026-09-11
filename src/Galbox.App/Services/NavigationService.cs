@@ -26,7 +26,10 @@ public class NavigationService : INavigationService
         { "Settings", typeof(SettingsPage) },
         { "GameDetail", typeof(GameDetailPage) },
         // D1 fix: the scraping view now has a route, so the scraping feature is reachable from the UI.
-        { "ScrapingProgress", typeof(ScrapingProgressPage) }
+        { "ScrapingProgress", typeof(ScrapingProgressPage) },
+        // W2: the error report module was fully implemented and registered in DI but had no page,
+        // no key and no menu item, so nothing could reach it.
+        { "ErrorReport", typeof(ErrorReportPage) }
     };
 
     /// <summary>
@@ -219,7 +222,6 @@ public class NavigationService : INavigationService
             SelectNavigationItem("Library");
         }
     }
-
     /// <summary>
     /// Selects a navigation item by key.
     /// </summary>

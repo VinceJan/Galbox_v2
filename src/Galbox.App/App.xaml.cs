@@ -36,7 +36,27 @@ public partial class App : Application
         // Configure DI container
         var services = new ServiceCollection();
         ConfigureServices(services);
-        Services = services.BuildServiceProvider();
+
+        try
+        {
+            // ValidateScopes: resolving a scoped service from the root provider becomes a hard
+            // error instead of silently handing out one shared instance forever.
+            // ValidateOnBuild: a registration that cannot be constructed fails here and now
+            // instead of failing later, in front of the user, inside a page constructor.
+            Services = services.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateScopes = true,
+                ValidateOnBuild = true
+            });
+
+            StartupDiagnostics.Log("DI container built (ValidateScopes=true, ValidateOnBuild=true)");
+        }
+        catch (Exception ex)
+        {
+            // Without a container the application cannot run at all. Fail loudly.
+            StartupDiagnostics.ReportStartupFailure(ex, windowCreated: false);
+            throw;
+        }
     }
 
     /// <summary>
@@ -51,12 +71,33 @@ public partial class App : Application
             builder.SetMinimumLevel(LogLevel.Information);
         });
 
-        // Database Context (SQLite)
+        // ---------------------------------------------------------------- Database (SQLite)
+        // IDbContextFactory, not a root-resolved DbContext.
+        //
+        // Every page and every ViewModel is resolved from the root container
+        // (App.Services.GetRequiredService<...>()). With the previous
+        // AddDbContext<GalboxDbContext>(...) registration (Scoped by default) plus a root
+        // provider built without ValidateScopes, the whole application shared ONE context that
+        // was never disposed: two overlapping operations on it threw
+        // "A second operation was started on this context instance before a previous operation
+        // completed", which the audit observed as random red error banners. Singleton services
+        // that captured the scoped context (ISaveManagementService, IErrorCheckingService) made
+        // it permanent.
+        //
+        // The factory is the fix: it is a singleton that must not be disposed (EF Core owns the
+        // pool), and it hands out a short-lived context per unit of work.
         var dbPath = Path.Combine(GetAppDataPath(), "galbox.db");
-        services.AddDbContext<GalboxDbContext>(options =>
+        services.AddDbContextFactory<GalboxDbContext>(options =>
         {
             options.UseSqlite($"Data Source={dbPath}");
         });
+
+        // A scope-local context is still registered for the code paths that deliberately run
+        // inside `using var scope = Services.CreateScope()` (the startup migration,
+        // BangumiAuthService, AutoScrapingService, ScrapingSettingsProvider, the background
+        // play-time writer in LibraryViewModel). It is created by the factory, so it is never
+        // shared with another scope - and resolving it from the ROOT now throws, as intended.
+        services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<GalboxDbContext>>().CreateDbContext());
 
         // HTTP Client Wrappers for APIs
         // Note: Named HttpClient "BangumiAuth" must be registered BEFORE IBangumiAuthService factory
@@ -169,70 +210,36 @@ public partial class App : Application
     /// <summary>
     /// Handles application launch.
     /// </summary>
+    /// <remarks>
+    /// THREAD AFFINITY: everything on this path runs on the UI thread and MUST keep running on it.
+    /// WinUI window and UI objects may only be created on the thread that owns the dispatcher, so
+    /// every await below uses <c>ConfigureAwait(true)</c> (the default, written out explicitly so
+    /// it cannot be "optimised" back to false).
+    ///
+    /// This is not theoretical: with <c>ConfigureAwait(false)</c> any await that genuinely yields
+    /// (e.g. ScrapingCacheService.InitializeAsync once the cache folder contains files) resumed
+    /// on a thread-pool thread, <c>new MainWindow()</c> then threw
+    /// <c>COMException 0x8001010E (RPC_E_WRONG_THREAD)</c>, and the catch below swallowed it -
+    /// leaving a live process with no window and no error message. Verified A/B by the parent
+    /// session and re-verified for this change.
+    /// </remarks>
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         base.OnLaunched(args);
 
         try
         {
-            // Ensure database is created and migrated
-            using var scope = Services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
-            await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+            StartupDiagnostics.Log("OnLaunched: startup sequence begins");
 
-            // Add missing columns for EngineType / VndbId if not exists (SQLite migration)
-            try
-            {
-                // Columns that were added to GameInfo after the first release. EnsureCreatedAsync
-                // does not alter an existing table, so each one is added explicitly.
-                var requiredColumns = new (string Name, string Definition)[]
-                {
-                    ("EngineType", "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0"),
-                    ("VndbId", "ALTER TABLE Games ADD COLUMN VndbId TEXT NULL")
-                };
+            await PrepareDatabaseAsync().ConfigureAwait(true);
+            await InitializeDeferredServicesAsync().ConfigureAwait(true);
 
-                var connection = dbContext.Database.GetDbConnection();
-                await connection.OpenAsync().ConfigureAwait(false);
-
-                foreach (var (columnName, alterStatement) in requiredColumns)
-                {
-                    using var command = connection.CreateCommand();
-                    command.CommandText =
-                        $"SELECT name FROM pragma_table_info('Games') WHERE name='{columnName}'";
-                    var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
-
-                    if (result == null || result == DBNull.Value)
-                    {
-                        command.CommandText = alterStatement;
-                        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-                    }
-                }
-
-                await connection.CloseAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                // Migration failed, log but continue
-                System.Diagnostics.Debug.WriteLine($"Database migration warning: {ex.Message}");
-            }
-
-            // Initialize services that require async initialization
-            var bangumiAuthService = Services.GetService<IBangumiAuthService>() as BangumiAuthService;
-            if (bangumiAuthService != null)
-            {
-                await bangumiAuthService.InitializeAsync().ConfigureAwait(false);
-            }
-
-            var scrapingCacheService = Services.GetService<IScrapingCacheService>() as ScrapingCacheService;
-            if (scrapingCacheService != null)
-            {
-                await scrapingCacheService.InitializeAsync().ConfigureAwait(false);
-            }
-
-            // Create and initialize the main window
+            // Create and initialize the main window - on the UI thread.
             MainWindow = new MainWindow();
             MainWindow.InitializeNavigation();
             MainWindow.Activate();
+
+            StartupDiagnostics.Log($"Main window created and activated: handle=0x{MainWindow.WindowHandle.ToInt64():X}");
 
             // Set the window handle for process monitor hotkey registration
             var processMonitor = Services.GetService<IProcessMonitorService>();
@@ -240,12 +247,98 @@ public partial class App : Application
             {
                 processMonitor.SetHotkeyWindowHandle(MainWindow.WindowHandle);
             }
+
+            // Turn the process monitor on: boss key, real running-state detection and
+            // screenshot-on-exit are dead without this call, and every library game has to be
+            // registered for the monitor to watch anything.
+            var monitorStartup = await ProcessMonitorStartup
+                .RegisterLibraryAndStartAsync(Services)
+                .ConfigureAwait(true);
+
+            StartupDiagnostics.Log(
+                $"Process monitor: started={monitorStartup.Started}, "
+                + $"registered={monitorStartup.GamesRegistered}/{monitorStartup.GamesInLibrary}"
+                + (monitorStartup.ErrorMessage is null ? string.Empty : $", error={monitorStartup.ErrorMessage}"));
+
+            StartupDiagnostics.Log(StartupDiagnostics.StartupCompletedMarker);
         }
         catch (Exception ex)
         {
-            // Log the exception and show error to user
-            var logger = Services.GetService<ILogger<App>>();
-            logger?.LogError(ex, "Error during application launch");
+            // Never silent again: log to %LocalAppData%\Galbox\logs and, when the window never
+            // made it into existence, raise a visible message box.
+            StartupDiagnostics.ReportStartupFailure(ex, windowCreated: MainWindow is not null);
+        }
+    }
+
+    /// <summary>
+    /// Creates the SQLite schema when needed and adds the columns that were introduced after the
+    /// first release. Runs inside an explicit scope; the context comes from the factory.
+    /// </summary>
+    private static async Task PrepareDatabaseAsync()
+    {
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
+
+        StartupDiagnostics.Log($"Preparing database: {dbContext.Database.GetDbConnection().DataSource}");
+        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(true);
+
+        // Add missing columns for EngineType / VndbId if not exists (SQLite migration)
+        try
+        {
+            // Columns that were added to GameInfo after the first release. EnsureCreatedAsync
+            // does not alter an existing table, so each one is added explicitly.
+            var requiredColumns = new (string Name, string Definition)[]
+            {
+                ("EngineType", "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0"),
+                ("VndbId", "ALTER TABLE Games ADD COLUMN VndbId TEXT NULL")
+            };
+
+            var connection = dbContext.Database.GetDbConnection();
+            await connection.OpenAsync().ConfigureAwait(true);
+
+            foreach (var (columnName, alterStatement) in requiredColumns)
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"SELECT name FROM pragma_table_info('Games') WHERE name='{columnName}'";
+                var result = await command.ExecuteScalarAsync().ConfigureAwait(true);
+
+                if (result == null || result == DBNull.Value)
+                {
+                    command.CommandText = alterStatement;
+                    await command.ExecuteNonQueryAsync().ConfigureAwait(true);
+                    StartupDiagnostics.Log($"Database migration: added column Games.{columnName}");
+                }
+            }
+
+            await connection.CloseAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // Migration failed, log but continue
+            StartupDiagnostics.LogException("database migration", ex);
+            System.Diagnostics.Debug.WriteLine($"Database migration warning: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Initializes the services that need an async warm-up before the window is shown.
+    /// </summary>
+    private static async Task InitializeDeferredServicesAsync()
+    {
+        var bangumiAuthService = Services.GetService<IBangumiAuthService>() as BangumiAuthService;
+        if (bangumiAuthService != null)
+        {
+            await bangumiAuthService.InitializeAsync().ConfigureAwait(true);
+            StartupDiagnostics.Log("BangumiAuthService initialized");
+        }
+
+        var scrapingCacheService = Services.GetService<IScrapingCacheService>() as ScrapingCacheService;
+        if (scrapingCacheService != null)
+        {
+            await scrapingCacheService.InitializeAsync().ConfigureAwait(true);
+            StartupDiagnostics.Log(
+                $"ScrapingCacheService initialized (entries: {scrapingCacheService.GetCacheStats().TotalEntries})");
         }
     }
 }

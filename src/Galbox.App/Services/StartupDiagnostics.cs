@@ -19,6 +19,23 @@ namespace Galbox.App.Services;
 /// </summary>
 public static class StartupDiagnostics
 {
+    /// <summary>
+    /// Log marker written when the startup sequence finished normally. Exposed as a constant so
+    /// the acceptance harness (A9) can assert on the same string the application writes.
+    /// </summary>
+    public const string StartupCompletedMarker = "OnLaunched: startup sequence completed";
+
+    /// <summary>
+    /// Log marker written when the startup sequence failed. Exposed for the same reason.
+    /// </summary>
+    public const string StartupFailureMarker = "EXCEPTION in OnLaunched";
+
+    /// <summary>
+    /// Caption of the modal failure dialog. A window with this title is a failure report, not a
+    /// successfully started application.
+    /// </summary>
+    public const string StartupFailureCaption = "Galbox 启动失败";
+
     private const uint MB_OK = 0x00000000;
     private const uint MB_ICONERROR = 0x00000010;
     private const uint MB_TOPMOST = 0x00040000;
@@ -95,7 +112,7 @@ public static class StartupDiagnostics
             : "Galbox 启动失败，主窗口无法创建。\n\n详情见日志：";
 
         TryShowMessageBox(
-            "Galbox 启动失败",
+            StartupFailureCaption,
             $"{summary}\n{CurrentLogPath}\n\n{exception.GetType().Name}: {exception.Message}");
     }
 

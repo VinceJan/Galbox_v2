@@ -16,7 +16,7 @@ namespace Galbox.App.ViewModels;
 /// </summary>
 public partial class LibraryViewModel : ObservableObject, IDisposable
 {
-    private readonly GalboxDbContext _dbContext;
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly INavigationService _navigationService;
     private readonly IGameUtilityService _gameUtilityService;
     private readonly ILogger<LibraryViewModel> _logger;
@@ -111,14 +111,14 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
     /// Creates a LibraryViewModel with injected dependencies.
     /// </summary>
     public LibraryViewModel(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         INavigationService navigationService,
         IGameUtilityService gameUtilityService,
         ILogger<LibraryViewModel> logger,
         IServiceProvider serviceProvider,
         IScrapingSettingsProvider scrapingSettings)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -151,13 +151,17 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
 
             // Load all games
             AllGames.Clear();
-            var games = await _dbContext.Games
-                .OrderByDescending(g => g.AddedTime)
-                .ToListAsync();
-
-            foreach (var game in games)
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                AllGames.Add(game);
+                var games = await db.Games
+                    .AsNoTracking()
+                    .OrderByDescending(g => g.AddedTime)
+                    .ToListAsync();
+
+                foreach (var game in games)
+                {
+                    AllGames.Add(game);
+                }
             }
 
             TotalGamesCount = AllGames.Count;
@@ -375,18 +379,21 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
             _logger.LogInformation("Detected engine type: {EngineType} for game: {GameName}", game.EngineType, game.NameOriginal);
 
             // Check if game already exists
-            var existingGame = await _dbContext.Games
-                .FirstOrDefaultAsync(g => g.InstallPath == folderPath);
-
-            if (existingGame != null)
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                ErrorMessage = "该游戏文件夹已在游戏库中";
-                return 0;
-            }
+                var existingGame = await db.Games
+                    .FirstOrDefaultAsync(g => g.InstallPath == folderPath);
 
-            // Add to database
-            _dbContext.Games.Add(game);
-            await _dbContext.SaveChangesAsync();
+                if (existingGame != null)
+                {
+                    ErrorMessage = "该游戏文件夹已在游戏库中";
+                    return 0;
+                }
+
+                // Add to database
+                db.Games.Add(game);
+                await db.SaveChangesAsync();
+            }
 
             // Add to collections
             AllGames.Add(game);
@@ -492,7 +499,9 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
                     }
 
                     // Check if game already exists
-                    var existingGame = await _dbContext.Games
+                    using var db = _dbContextFactory.CreateDbContext();
+
+                    var existingGame = await db.Games
                         .FirstOrDefaultAsync(g => g.InstallPath == subDir);
                     if (existingGame != null)
                     {
@@ -521,8 +530,8 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
                     _logger.LogInformation("Detected engine type: {EngineType} for game: {GameName}", game.EngineType, game.NameOriginal);
 
                     // Add to database
-                    _dbContext.Games.Add(game);
-                    await _dbContext.SaveChangesAsync();
+                    db.Games.Add(game);
+                    await db.SaveChangesAsync();
 
                     // Add to collections
                     AllGames.Add(game);
@@ -604,13 +613,16 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
                 game.LaunchCount++;
                 game.LastSessionTime = DateTime.UtcNow;
 
-                // Update in database using the main context
-                var dbGame = await _dbContext.Games.FindAsync(game.Id);
-                if (dbGame != null)
+                // Update in database using a short-lived context
+                using (var db = _dbContextFactory.CreateDbContext())
                 {
-                    dbGame.LaunchCount = game.LaunchCount;
-                    dbGame.LastSessionTime = game.LastSessionTime;
-                    await _dbContext.SaveChangesAsync();
+                    var dbGame = await db.Games.FindAsync(game.Id);
+                    if (dbGame != null)
+                    {
+                        dbGame.LaunchCount = game.LaunchCount;
+                        dbGame.LastSessionTime = game.LastSessionTime;
+                        await db.SaveChangesAsync();
+                    }
                 }
 
                 // Capture game ID for background task

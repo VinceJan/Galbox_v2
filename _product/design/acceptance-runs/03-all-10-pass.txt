@@ -1,11 +1,11 @@
 ====================================================================================================
  GALBOX HEADLESS ACCEPTANCE RUN
 ====================================================================================================
- UTC started        : 2026-09-11 15:20:04Z
+ UTC started        : 2026-09-11 15:36:14Z
  OS                 : Microsoft Windows 10.0.26200
  Process arch       : X64
  Runtime            : .NET 8.0.31
- Executable         : E:\tmp\Galbox_v2\tests\Galbox.Acceptance\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.Acceptance.exe
+ Executable         : E:\tmp\Galbox_v2\tests\Galbox.Acceptance\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.Acceptance.exe
  Working directory  : E:\tmp\Galbox_v2
  Game folder        : D:\GAME\Dreamin'_Her (exists: True)
  Scraping query     : "Dreamin' Her"
@@ -51,12 +51,12 @@ DETAILS  :
     IsScraped          : False
     EngineType         : Unknown
     DisplayName        : Dreamin' Her
-    AddedTime (UTC)    : 2026-09-11 15:20:06Z
+    AddedTime (UTC)    : 2026-09-11 15:36:15Z
   --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
     games after reset  : 0 (expected 0)
     DB size after reset: 4096 bytes
   --- re-seeded test game for later checks: Id=1 ---
-RESULT   : PASS  (1331 ms)
+RESULT   : PASS  (1391 ms)
 
 ####################################################################################################
 # [A1] FindExecutableInFolder picks the intended launcher
@@ -74,7 +74,7 @@ DETAILS  :
   Service result name: dreaminher.exe
     exists           : True
     size             : 123392 bytes
-RESULT   : PASS  (16 ms)
+RESULT   : PASS  (15 ms)
 
 ####################################################################################################
 # [A2] CalculateFolderSize reports the real folder size
@@ -86,7 +86,7 @@ DETAILS  :
   Service result     : 1079379981 bytes (1.005 GB)
   Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
   Deviation          : 0 bytes (0%)
-RESULT   : PASS  (110 ms)
+RESULT   : PASS  (114 ms)
 
 ####################################################################################################
 # [A3] DetectSaveLocationAsync finds the Ren'Py save folder
@@ -128,7 +128,7 @@ DETAILS  :
   ErrorMessage       : (null)
   ExtendedInfo       : 1 entries
     GameName = Dreamin'_Her
-RESULT   : PASS  (8 ms)
+RESULT   : PASS  (9 ms)
 
 ####################################################################################################
 # [A4] CheckGameAsync runs without internal failure
@@ -154,7 +154,7 @@ DETAILS  :
   Query string       : "Dreamin' Her"
   Persistent cache   : DISABLED for this run (guarantees a live network query)
   HttpClient timeout : 30s per request, as configured by the container
-  Total elapsed      : 1373 ms
+  Total elapsed      : 1661 ms
   SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
   HasResults         : True
   BestMatch          : Bangumi (4 items)
@@ -164,7 +164,7 @@ DETAILS  :
     SearchQuery         : "Dreamin' Her"
     Success             : True
     ErrorMessage        : (null)
-    ElapsedMilliseconds : 969
+    ElapsedMilliseconds : 1648
     Items               : 4
     ExtendedErrorInfo   : (null)
     Items (raw, in returned order):
@@ -234,7 +234,7 @@ Touhou Artificial Dream in Arcadia Steam charts, data, update history.
     SearchQuery         : "Dreamin' Her"
     Success             : True
     ErrorMessage        : (null)
-    ElapsedMilliseconds : 1310
+    ElapsedMilliseconds : 1299
     Items               : 2
     ExtendedErrorInfo   : (null)
     Items (raw, in returned order):
@@ -276,7 +276,7 @@ Touhou Artificial Dream in Arcadia Steam charts, data, update history.
     Items               : 0
     ExtendedErrorInfo   : (null)
     (no items)
-RESULT   : PASS  (1385 ms)
+RESULT   : PASS  (1670 ms)
 
 ####################################################################################################
 # [A6] Scraped metadata is complete enough to use
@@ -353,7 +353,7 @@ DETAILS  :
   
   Best-match row title present      : True
   Best-match row cover URL present  : True
-RESULT   : PASS  (5 ms)
+RESULT   : PASS  (7 ms)
 
 ####################################################################################################
 # [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
@@ -420,18 +420,18 @@ DETAILS  :
     Bangumi holds this game  : True (total=4)
     VNDB reachable           : True (corrected HTTP 200)
     VNDB holds this game     : True (results[]=2)
-RESULT   : PASS  (2173 ms)
+RESULT   : PASS  (2096 ms)
 
 ####################################################################################################
 # [A8] Navigation, page and XAML resource completeness (no feature without a door)
 ####################################################################################################
 EXPECTED : every navigation key resolves to an existing page, every DI-registered ViewModel is referenced by a view (or whitelisted with a reason), every page is reachable, every converter a view uses is registered, and every MainWindow menu item maps to a navigation key
-ACTUAL   : 3 completeness failure(s) across 7 view(s) and 8 ViewModel(s)
+ACTUAL   : 8 navigation keys, 8 ViewModels, 8 views, 73 converter reference(s) all consistent
 DETAILS  :
   Repository root      : E:\tmp\Galbox_v2
   Views folder         : E:\tmp\Galbox_v2\src\Galbox.App\Views (exists: True)
-  View XAML files      : 7
-  View code-behind files: 7
+  View XAML files      : 8
+  View code-behind files: 8
   
   --- A8.1 navigation keys -> page types ---
     [OK]   Home             -> Galbox.App.Views.MainPage
@@ -441,10 +441,11 @@ DETAILS  :
     [OK]   Settings         -> Galbox.App.Views.SettingsPage
     [OK]   GameDetail       -> Galbox.App.Views.GameDetailPage
     [OK]   ScrapingProgress -> Galbox.App.Views.ScrapingProgressPage
+    [OK]   ErrorReport      -> Galbox.App.Views.ErrorReportPage
   
   --- A8.2 ViewModels registered in App.xaml.cs -> view that references them ---
     Registered ViewModels: 8
-    [FAIL] ErrorReportViewModel       referenced by: (nothing under Views/)
+    [OK]   ErrorReportViewModel       referenced by: ErrorReportPage.xaml.cs
     [OK]   GameDetailViewModel        referenced by: GameDetailPage.xaml.cs
     [OK]   LibraryViewModel           referenced by: LibraryPage.xaml.cs
     [OK]   MainViewModel              referenced by: MainPage.xaml.cs
@@ -454,6 +455,7 @@ DETAILS  :
     [OK]   SettingsViewModel          referenced by: SettingsPage.xaml.cs
   
   --- A8.3 every page in Views/ is reachable ---
+    [OK]   ErrorReportPage          navigationKey=True, explicitNavigateTo=True
     [OK]   GameDetailPage           navigationKey=True, explicitNavigateTo=True
     [OK]   LibraryPage              navigationKey=True, explicitNavigateTo=True
     [OK]   MainPage                 navigationKey=True, explicitNavigateTo=True
@@ -464,78 +466,85 @@ DETAILS  :
   
   --- A8.4 converters referenced by a view are registered ---
     App.xaml resource keys: 11
-    [FAIL] GameDetailPage.xaml        missing: InverseCountToVisibilityConverter
+    [OK]   ErrorReportPage.xaml       7 converter reference(s), all registered
+    [OK]   GameDetailPage.xaml        12 converter reference(s), all registered
     [OK]   LibraryPage.xaml           9 converter reference(s), all registered
     [OK]   MainPage.xaml              9 converter reference(s), all registered
     [OK]   PatchCenterPage.xaml       10 converter reference(s), all registered
     [OK]   SaveManagerPage.xaml       9 converter reference(s), all registered
     [OK]   ScrapingProgressPage.xaml  4 converter reference(s), all registered
-    [FAIL] SettingsPage.xaml          missing: SettingsVersionTextConverter
-    Total converter references checked: 66
+    [OK]   SettingsPage.xaml          13 converter reference(s), all registered
+    Total converter references checked: 73
   
   --- A8.5 MainWindow.xaml menu items -> navigation keys ---
+    [OK]   menu Tag 'ErrorReport' -> ErrorReportPage
     [OK]   menu Tag 'Home' -> MainPage
     [OK]   menu Tag 'Library' -> LibraryPage
     [OK]   menu Tag 'PatchCenter' -> PatchCenterPage
     [OK]   menu Tag 'SaveManager' -> SaveManagerPage
+    [OK]   menu Tag 'ScrapingProgress' -> ScrapingProgressPage
   
-  Sub-check failures : 3
-    - A8.2: ViewModel 'ErrorReportViewModel' is registered in DI but no file under Views/ references it - the feature has no user-visible door.
-    - A8.4: GameDetailPage.xaml references unregistered converter(s): InverseCountToVisibilityConverter.
-    - A8.4: SettingsPage.xaml references unregistered converter(s): SettingsVersionTextConverter.
-RESULT   : FAIL  (80 ms)
+  Sub-check failures : 0
+RESULT   : PASS  (77 ms)
 
 ####################################################################################################
 # [A9] The GUI application opens a window while scrape-cache data is present
 ####################################################################################################
 EXPECTED : with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s
-ACTUAL   : MainWindowHandle=0x0, visibleTopLevelWindows=0, alive=True, exitedEarly=False
+ACTUAL   : window present: MainWindowHandle=0x18032E ("WinUI Desktop"), startup log reports completion, pid alive after 2044 ms
 DETAILS  :
   Repository root      : E:\tmp\Galbox_v2
-  Application          : E:\tmp\Galbox_v2\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
-  Application built    : 2026-09-11 15:18:36Z (newest file in the output folder)
-  Newest source file   : 2026-09-11 15:18:14Z (src/Galbox.App, obj/bin excluded)
+  Application          : E:\tmp\Galbox_v2\src\Galbox.App\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Application built    : 2026-09-11 15:34:24Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 15:33:07Z (src/Galbox.App, obj/bin excluded)
   Cache precondition  : 2 existing search_*.json file(s), left untouched:
       search_dreamin'_her.json (11859 bytes)
       search_sabbatofthewitch.json (1640 bytes)
   Cache directory      : C:\Users\Jiang\AppData\Local\Galbox\ScrapingCache
-  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260911.log (exists: False, bytes before launch: 0)
-  Launched             : pid 16144
+  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260911.log (exists: True, bytes before launch: 1929)
+  Launched             : pid 30152
   Alive when measured  : True (measured before the cleanup kill)
-  MainWindowHandle     : 0x0 (zero)
-  Visible top-level windows owned by the process: 0
-  Elapsed              : 30067 ms (timeout 30s)
+  MainWindowHandle     : 0x18032E (non-zero)
+  Visible top-level windows owned by the process: 1
+  Elapsed              : 2044 ms (timeout 30s)
   Exited before window : False
   Cache files now      : 2 search_*.json
-  --- startup log lines written by this launch: NONE ---
-  FAIL REASON: the process stayed alive but never created a visible top-level window (the classic 'double-click does nothing' failure: the startup exception was swallowed)
-RESULT   : FAIL  (30202 ms)
+  --- startup log lines written by this launch (8) ---
+      6-09-11 23:36:20.822 [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+      2026-09-11 23:36:20.896 [tid:1] OnLaunched: startup sequence begins
+      2026-09-11 23:36:21.557 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+      2026-09-11 23:36:21.788 [tid:1] BangumiAuthService initialized
+      2026-09-11 23:36:21.864 [tid:1] ScrapingCacheService initialized (entries: 2)
+      2026-09-11 23:36:22.234 [tid:1] Main window created and activated: handle=0x18032E
+      2026-09-11 23:36:22.259 [tid:1] Process monitor: started=True, registered=1/1
+      2026-09-11 23:36:22.260 [tid:1] OnLaunched: startup sequence completed
+  Window title         : "WinUI Desktop"
+  Window is the startup-failure dialog: False
+  Startup log says     : completed=True, failed=False
+RESULT   : PASS  (2198 ms)
 
 ====================================================================================================
  ACCEPTANCE SUMMARY
 ====================================================================================================
  ID   STATUS        TIME  CHECK
 ----------------------------------------------------------------------------------------------------
- A0   PASS       1331 ms  Database isolation, schema creation and GameInfo round-trip
- A1   PASS         16 ms  FindExecutableInFolder picks the intended launcher
- A2   PASS        110 ms  CalculateFolderSize reports the real folder size
- A3   PASS          8 ms  DetectSaveLocationAsync finds the Ren'Py save folder
+ A0   PASS       1391 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   PASS         15 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS        114 ms  CalculateFolderSize reports the real folder size
+ A3   PASS          9 ms  DetectSaveLocationAsync finds the Ren'Py save folder
  A4   PASS         25 ms  CheckGameAsync runs without internal failure
- A5   PASS       1385 ms  SearchGameAsync returns live results from the four sources
- A6   PASS          5 ms  Scraped metadata is complete enough to use
- A7   PASS       2173 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
- A8   FAIL         80 ms  Navigation, page and XAML resource completeness (no feature without a door)
- A9   FAIL      30202 ms  The GUI application opens a window while scrape-cache data is present
+ A5   PASS       1670 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       2096 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+ A8   PASS         77 ms  Navigation, page and XAML resource completeness (no feature without a door)
+ A9   PASS       2198 ms  The GUI application opens a window while scrape-cache data is present
 ----------------------------------------------------------------------------------------------------
- PASSED : 8
- FAILED : 2
+ PASSED : 10
+ FAILED : 0
  ERRORS : 0
  TOTAL  : 10
- FAILING CHECKS:
-   A8: expected [every navigation key resolves to an existing page, every DI-registered ViewModel is referenced by a view (or whitelisted with a reason), every page is reachable, every converter a view uses is registered, and every MainWindow menu item maps to a navigation key] but measured [3 completeness failure(s) across 7 view(s) and 8 ViewModel(s)]
-   A9: expected [with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s] but measured [MainWindowHandle=0x0, visibleTopLevelWindows=0, alive=True, exitedEarly=False]
 
- EXIT CODE: 1  (at least one check did not PASS)
+ EXIT CODE: 0  (all checks PASS)
  DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\acceptance.db
  GAME     : D:\GAME\Dreamin'_Her
 ====================================================================================================

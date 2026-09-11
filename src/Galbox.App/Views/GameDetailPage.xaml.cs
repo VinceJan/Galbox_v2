@@ -92,6 +92,68 @@ public sealed partial class GameDetailPage : Page
         navigationService.NavigateTo("ScrapingProgress", ViewModel.GameId);
     }
 
+    #region Command forwarding for buttons inside DataTemplates
+
+    // A DataTemplate owns its own namescope, so {Binding ...Command, ElementName=RootGrid} can
+    // never reach the page's ViewModel and the buttons below used to do nothing at all. The row
+    // is passed through Tag and forwarded here instead.
+
+    /// <summary>Opens the document of the clicked row.</summary>
+    private void OnOpenDocumentClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Galbox.Data.Entities.GameDocument document })
+        {
+            ViewModel.OpenDocumentCommand.Execute(document);
+        }
+    }
+
+    /// <summary>Opens the screenshot of the clicked thumbnail.</summary>
+    private void OnOpenScreenshotClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Galbox.Data.Entities.GameScreenshot screenshot })
+        {
+            ViewModel.OpenScreenshotCommand.Execute(screenshot);
+        }
+    }
+
+    /// <summary>Plays the media file of the clicked row.</summary>
+    private void OnPlayMediaClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Galbox.Data.Entities.GameMediaFile media })
+        {
+            ViewModel.PlayMediaCommand.Execute(media);
+        }
+    }
+
+    /// <summary>Filters the library by the clicked tag.</summary>
+    private void OnTagClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string tag })
+        {
+            ViewModel.NavigateToTagCommand.Execute(tag);
+        }
+    }
+
+    /// <summary>Restores the clicked save backup (real ZIP extraction via the save service).</summary>
+    private void OnRestoreBackupClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Galbox.Data.Entities.GameSaveBackup backup })
+        {
+            ViewModel.RestoreSaveBackupCommand.Execute(backup);
+        }
+    }
+
+    /// <summary>Deletes the clicked save backup.</summary>
+    private void OnDeleteBackupClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Galbox.Data.Entities.GameSaveBackup backup })
+        {
+            ViewModel.DeleteSaveBackupCommand.Execute(backup);
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// Handles navigation to this page and loads the game data.
     /// </summary>

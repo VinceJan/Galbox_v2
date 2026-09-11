@@ -60,10 +60,15 @@ public static class AcceptanceContainer
         });
 
         // --- Database (only the path differs from the shipping app) --------------------
-        services.AddDbContext<GalboxDbContext>(options =>
+        // Mirrors App.xaml.cs exactly: an IDbContextFactory (the singleton a long-lived service
+        // may hold) plus a scope-local context created from it. Registering a root-resolved
+        // scoped context instead is what used to make the whole application share one DbContext.
+        services.AddDbContextFactory<GalboxDbContext>(options =>
         {
             options.UseSqlite($"Data Source={DatabasePath}");
         });
+
+        services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<GalboxDbContext>>().CreateDbContext());
 
         // --- HTTP clients (verbatim from App.xaml.cs) ---------------------------------
         // A transparent recording handler is appended to each pipeline so the report can show
@@ -141,7 +146,15 @@ public static class AcceptanceContainer
         services.AddSingleton<IErrorCheckingService, ErrorCheckingService>();
         services.AddSingleton<IGameUtilityService, GameUtilityService>();
 
-        return services.BuildServiceProvider();
+        // Same validation switches as the shipping app. Without them the harness could happily
+        // resolve a graph that the application itself refuses to start with - which is exactly
+        // how five captive-dependency defects stayed hidden. A failure here is reported by the
+        // preflight before any check runs.
+        return services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true,
+            ValidateOnBuild = true
+        });
     }
 
     /// <summary>

@@ -116,6 +116,22 @@
 
 ## 5. 已知的集成风险（合并时要注意）
 
+### 5.0 合并排雷结果（2026-09-11 实测，用 git merge-tree，未触碰工作区）
+
+| 分支 | 合并到主线 | 结果 |
+|---|---|---|
+| `feat/renpy-parser`（解析器，84315e3） | ✅ **可干净合并** | 无冲突 |
+| `feat/save-node-model`（数据层，3995d24） | ⚠️ **1 处冲突** | `src/Galbox.App/App.xaml.cs` |
+| `feat/patch-installer`（补丁安装器，1aedbfe） | 待测 | — |
+
+**那处冲突的成因与解法（已明确，不用猜）**：
+- **数据层**改了 `App.xaml.cs`：删掉手工 `ALTER TABLE` 补列循环，改为调用 `GalboxDatabaseInitializer`（正式迁移入口）
+- **接线批次**也改了 `App.xaml.cs`：修 7 处 `ConfigureAwait`、DI 改 `AddDbContextFactory`/`ValidateOnBuild`、接入 `StartupDiagnostics`、拆出 `PrepareDatabaseAsync`/`InitializeDeferredServicesAsync`
+- **解法**：保留接线批次的重构结构（线程亲和性 + DI + 启动诊断），**把其中的"手工补列循环"整段替换为 `await GalboxDatabaseInitializer.InitializeAsync(...)`**。两边的意图不矛盾——数据层本来就是来取代那段手工循环的。
+
+### 5.1 其它
+
+
 1. **两套 Schema 管理并存**：刮削代理在 `App.xaml.cs` 加了手工 `ALTER TABLE` 补列循环；数据层代理在建正式 EF 迁移。**合并时后者应取代前者**，否则会打架。
 2. **`VndbId` 有两处定义**：已在实体与 DbContext 中定义（`[MaxLength(20)]`），数据层生成迁移时**不要重复定义语义不同的同名字段**。
 3. **线上用户库已被手工改过**（27 列，含 VndbId）。**迁移验证请用老库快照**：

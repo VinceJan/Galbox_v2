@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using Galbox.App.Services;
 
 namespace Galbox.Acceptance.Checks;
 
@@ -115,6 +117,7 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 
         Process? process = null;
         var windowHandle = IntPtr.Zero;
+        var windowTitle = string.Empty;
         int visibleTopLevelWindows = 0;
         var elapsed = TimeSpan.Zero;
         var exitBeforeWindow = false;
@@ -174,6 +177,7 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
             // verdict would always read "not alive" no matter how healthy the startup was.
             process.Refresh();
             aliveBeforeCleanup = !process.HasExited;
+            windowTitle = windowHandle != IntPtr.Zero ? ReadWindowTitle(windowHandle) : string.Empty;
         }
         finally
         {
@@ -208,6 +212,11 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
         var processAlive = aliveBeforeCleanup;
         var hasWindow = windowHandle != IntPtr.Zero || visibleTopLevelWindows > 0;
 
+        // A visible window is NOT sufficient: the startup failure handler raises its own modal
+        // window, and treating that as "started fine" would invert the verdict of this check.
+        var windowIsFailureDialog = windowTitle.Equals(
+            StartupDiagnostics.StartupFailureCaption, StringComparison.Ordinal);
+
         details.Add($"Alive when measured  : {processAlive} (measured before the cleanup kill)");
         details.Add($"MainWindowHandle     : 0x{windowHandle.ToInt64():X} ({(windowHandle == IntPtr.Zero ? "zero" : "non-zero")})");
         details.Add($"Visible top-level windows owned by the process: {visibleTopLevelWindows}");
@@ -226,24 +235,45 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
             details.Add("--- startup log lines written by this launch: NONE ---");
         }
 
-        if (processAlive && hasWindow)
+        // The application reports a healthy startup by writing StartupCompletedMarker, and a failed
+        // one by writing StartupFailureMarker plus (when no window exists) the failure dialog.
+        var startupCompleted = logTail.Any(line =>
+            line.Contains(StartupDiagnostics.StartupCompletedMarker, StringComparison.Ordinal));
+        var startupFailed = logTail.Any(line =>
+            line.Contains(StartupDiagnostics.StartupFailureMarker, StringComparison.Ordinal));
+
+        details.Add($"Window title         : \"{windowTitle}\"");
+        details.Add($"Window is the startup-failure dialog: {windowIsFailureDialog}");
+        details.Add($"Startup log says     : completed={startupCompleted}, failed={startupFailed}");
+
+        if (processAlive && hasWindow && !windowIsFailureDialog && startupCompleted && !startupFailed)
         {
             return CheckResult.Pass(
                     Id, Title, expected,
-                    $"window present: MainWindowHandle=0x{windowHandle.ToInt64():X}, "
-                  + $"visibleTopLevelWindows={visibleTopLevelWindows}, pid alive after {elapsed.TotalMilliseconds:F0} ms")
+                    $"window present: MainWindowHandle=0x{windowHandle.ToInt64():X} (\"{windowTitle}\"), "
+                  + $"startup log reports completion, pid alive after {elapsed.TotalMilliseconds:F0} ms")
                 .With(details.ToArray());
         }
 
         var reason = exitBeforeWindow
             ? "the application exited before any window appeared"
-            : "the process stayed alive but never created a visible top-level window (the classic "
-            + "'double-click does nothing' failure: the startup exception was swallowed)";
+            : windowIsFailureDialog
+                ? "the only window is the startup-failure dialog, so the application did NOT start "
+                + "successfully (a window alone must never be accepted as success)"
+                : !startupCompleted
+                    ? "the startup log never reported completion (the application could not finish "
+                    + "starting, and in the pre-fix build it did so silently)"
+                    : startupFailed
+                        ? "the startup log reported a failure (EXCEPTION in OnLaunched)"
+                        : "the process stayed alive but never created a visible top-level window "
+                        + "(the classic 'double-click does nothing' failure: the startup exception "
+                        + "was swallowed)";
 
         details.Add($"FAIL REASON: {reason}");
         return CheckResult.Fail(Id, Title, expected,
-                $"MainWindowHandle=0x{windowHandle.ToInt64():X}, visibleTopLevelWindows={visibleTopLevelWindows}, "
-              + $"alive={processAlive}, exitedEarly={exitBeforeWindow}")
+                $"MainWindowHandle=0x{windowHandle.ToInt64():X} (\"{windowTitle}\"), "
+              + $"visibleTopLevelWindows={visibleTopLevelWindows}, alive={processAlive}, "
+              + $"exitedEarly={exitBeforeWindow}, completed={startupCompleted}, failed={startupFailed}")
             .With(details.ToArray());
     }
 
@@ -335,6 +365,33 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
         };
 
         return JsonSerializer.Serialize(entry, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowTextLengthW(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    /// <summary>Reads the title of a window (used to tell the app window from the failure dialog).</summary>
+    private static string ReadWindowTitle(IntPtr hWnd)
+    {
+        try
+        {
+            var length = GetWindowTextLengthW(hWnd);
+            if (length <= 0)
+            {
+                return string.Empty;
+            }
+
+            var buffer = new StringBuilder(length + 1);
+            GetWindowTextW(hWnd, buffer, buffer.Capacity);
+            return buffer.ToString();
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>Reads the lines the application appended to its startup log, if any.</summary>

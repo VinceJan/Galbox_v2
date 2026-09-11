@@ -456,38 +456,12 @@
                                                 </StackPanel>
 
                                                 <!-- Action Buttons -->
+                                                <!-- The download/install buttons were removed together with
+                                                     their commands: neither did anything real (a sleep loop
+                                                     and a fabricated local path). Patch sources are a
+                                                     separate work line; until then this page only shows what
+                                                     really exists in the database. -->
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                    <!-- Download Button -->
-                                                    <Button
-                                                        Command="{Binding ViewModel.DownloadPatchCommand, ElementName=RootGrid}"
-                                                        CommandParameter="{Binding}"
-                                                        Visibility="{Binding Status, Converter={StaticResource PatchStatusToVisibilityConverter}, ConverterParameter=Available}"
-                                                        CornerRadius="8"
-                                                        Padding="12,6">
-                                                        <Button.Content>
-                                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                                                <FontIcon FontSize="14" Glyph="&#xE896;"/>
-                                                                <TextBlock Text="下载"/>
-                                                            </StackPanel>
-                                                        </Button.Content>
-                                                    </Button>
-
-                                                    <!-- Install Button -->
-                                                    <Button
-                                                        Command="{Binding ViewModel.InstallPatchCommand, ElementName=RootGrid}"
-                                                        CommandParameter="{Binding}"
-                                                        Visibility="{Binding Status, Converter={StaticResource PatchStatusToVisibilityConverter}, ConverterParameter=Downloaded}"
-                                                        Style="{StaticResource AccentButtonStyle}"
-                                                        CornerRadius="8"
-                                                        Padding="12,6">
-                                                        <Button.Content>
-                                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                                                <FontIcon FontSize="14" Glyph="&#xE75C;"/>
-                                                                <TextBlock Text="安装"/>
-                                                            </StackPanel>
-                                                        </Button.Content>
-                                                    </Button>
-
                                                     <!-- Installed Badge -->
                                                     <Border
                                                         Background="{ThemeResource SystemAccentColor}"
@@ -502,8 +476,8 @@
 
                                                     <!-- Details Button -->
                                                     <Button
-                                                        Command="{Binding ViewModel.ShowPatchDetailsCommand, ElementName=RootGrid}"
-                                                        CommandParameter="{Binding}"
+                                                        Click="OnPatchDetailsClick"
+                                                        Tag="{Binding}"
                                                         CornerRadius="8"
                                                         Padding="12,6"
                                                         Background="Transparent">
@@ -536,9 +510,12 @@
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 HorizontalAlignment="Center"/>
                             <TextBlock
-                                Text="该游戏可能没有可用的补丁"
+                                Text="尚未配置补丁源，本地也还没有这个游戏的补丁记录。补丁源接入后，这里会显示可下载的补丁。"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                TextWrapping="Wrap"
+                                MaxWidth="360"
+                                TextAlignment="Center"
                                 HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>

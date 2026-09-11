@@ -16,7 +16,16 @@ namespace Galbox.App.ViewModels;
 public partial class ErrorReportViewModel : ObservableObject
 {
     private readonly IErrorCheckingService _errorCheckingService;
-    private readonly GalboxDbContext _dbContext;
+
+    /// <summary>
+    /// Factory for short-lived contexts.
+    ///
+    /// The ViewModels are resolved from the root container, so they must not take a scoped
+    /// <c>GalboxDbContext</c>: that registration produced one context shared by the whole
+    /// application, which is the documented cause of the random
+    /// "A second operation was started on this context instance" error banner.
+    /// </summary>
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly ILogger<ErrorReportViewModel> _logger;
 
     /// <summary>
@@ -126,11 +135,11 @@ public partial class ErrorReportViewModel : ObservableObject
     /// </summary>
     public ErrorReportViewModel(
         IErrorCheckingService errorCheckingService,
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         ILogger<ErrorReportViewModel> logger)
     {
         _errorCheckingService = errorCheckingService ?? throw new ArgumentNullException(nameof(errorCheckingService));
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         InitializeFilterOptions();
@@ -185,10 +194,15 @@ public partial class ErrorReportViewModel : ObservableObject
 
             // Load games with errors
             var gameIds = errors.Select(e => e.GameInfoId).Distinct().ToList();
-            var games = await _dbContext.Games
-                .Where(g => gameIds.Contains(g.Id))
-                .ToListAsync()
-                .ConfigureAwait(false);
+            List<GameInfo> games;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                games = await db.Games
+                    .Where(g => gameIds.Contains(g.Id))
+                    .AsNoTracking()
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+            }
 
             GamesWithErrors.Clear();
             foreach (var game in games)
@@ -407,6 +421,56 @@ public partial class ErrorReportViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Mark a persisted error record as resolved.
+    /// </summary>
+    /// <remarks>
+    /// This is the command the "all unresolved errors" list uses. It takes the
+    /// <see cref="GameErrorRecord"/> itself because those rows carry a real database id, which is
+    /// what <see cref="IErrorCheckingService.MarkErrorResolvedAsync"/> needs (freshly detected
+    /// <see cref="GameErrorInfo"/> objects still have Id == 0 until they are reloaded).
+    /// </remarks>
+    [RelayCommand]
+    private async Task MarkRecordResolvedAsync(GameErrorRecord? record)
+    {
+        if (record == null)
+        {
+            StatusMessage = "No error selected";
+            return;
+        }
+
+        IsLoading = true;
+        ErrorMessage = null;
+
+        try
+        {
+            var success = await _errorCheckingService.MarkErrorResolvedAsync(record.Id).ConfigureAwait(true);
+
+            if (success)
+            {
+                AllUnresolvedErrors.Remove(record);
+                StatusMessage = $"已将「{record.Title}」标记为已解决";
+                _logger.LogInformation("Marked error record {RecordId} as resolved", record.Id);
+
+                // Refresh the counters and the per-game list.
+                await LoadAllUnresolvedErrorsAsync().ConfigureAwait(true);
+            }
+            else
+            {
+                ErrorMessage = "无法标记为已解决：记录可能已被删除";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking record {RecordId} as resolved", record.Id);
+            ErrorMessage = $"标记失败：{ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    /// <summary>
     /// Open download URL for external tool.
     /// </summary>
     [RelayCommand]
@@ -447,7 +511,12 @@ public partial class ErrorReportViewModel : ObservableObject
 
         try
         {
-            var allGames = await _dbContext.Games.ToListAsync().ConfigureAwait(false);
+            List<GameInfo> allGames;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                allGames = await db.Games.AsNoTracking().ToListAsync().ConfigureAwait(false);
+            }
+
             var results = await _errorCheckingService.BatchCheckGamesAsync(allGames).ConfigureAwait(false);
 
             var totalErrors = results.Sum(r => r.Value.Count);

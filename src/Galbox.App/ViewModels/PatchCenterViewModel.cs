@@ -10,11 +10,20 @@ namespace Galbox.App.ViewModels;
 
 /// <summary>
 /// ViewModel for the Patch Center Page.
-/// Manages game patches and translations from moyu.moe API (stub).
+///
+/// Patch sources are not wired up yet (the moYu/NextMoe integration is a separate work line), so
+/// this ViewModel deliberately shows only what really exists in the database and says so in the
+/// UI. It used to generate fabricated patches ("{game} 汉化补丁", "https://moyu.moe/patches/example",
+/// ExternalId <c>stub_trans_*</c>) with pseudo-random probability and write them into the user's
+/// real SQLite database; that generation has been removed completely.
 /// </summary>
 public partial class PatchCenterViewModel : ObservableObject
 {
-    private readonly GalboxDbContext _dbContext;
+    /// <summary>
+    /// Factory for short-lived contexts; this ViewModel is resolved from the root container and
+    /// must not hold a scoped DbContext.
+    /// </summary>
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly INavigationService _navigationService;
     private readonly ILogger<PatchCenterViewModel> _logger;
 
@@ -100,20 +109,6 @@ public partial class PatchCenterViewModel : ObservableObject
     private int _installedPatchesCount;
 
     /// <summary>
-    /// Whether a download operation is in progress.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(DownloadPatchCommand))]
-    private bool _isDownloading;
-
-    /// <summary>
-    /// Whether an install operation is in progress.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(InstallPatchCommand))]
-    private bool _isInstalling;
-
-    /// <summary>
     /// Selected patch for details view.
     /// </summary>
     [ObservableProperty]
@@ -129,11 +124,11 @@ public partial class PatchCenterViewModel : ObservableObject
     /// Creates a PatchCenterViewModel with injected dependencies.
     /// </summary>
     public PatchCenterViewModel(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         INavigationService navigationService,
         ILogger<PatchCenterViewModel> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -154,8 +149,10 @@ public partial class PatchCenterViewModel : ObservableObject
             // Load installed patches
             await LoadInstalledPatchesAsync();
 
-            // Generate stub data for demonstration
-            await GenerateStubPatchDataAsync();
+            // Preselect the newest game so the patch area is not empty on first visit.
+            // No patch data is invented: until a patch source is configured the list stays empty
+            // and the empty state explains why.
+            SelectDefaultGame();
 
             _logger.LogInformation("Loaded patch center: {GamesCount} games needing patches, {InstalledCount} installed patches",
                 GamesNeedingPatchesCount, InstalledPatchesCount);
@@ -178,22 +175,20 @@ public partial class PatchCenterViewModel : ObservableObject
     {
         GamesNeedingPatches.Clear();
 
-        // Get all games
-        var games = await _dbContext.Games
-            .OrderByDescending(g => g.AddedTime)
-            .ToListAsync();
-
-        // Filter games that might need patches
-        // For now, we show all games as potential candidates
-        foreach (var game in games)
+        using (var db = _dbContextFactory.CreateDbContext())
         {
-            // Check if game has any installed patches
-            var hasInstalledPatches = await _dbContext.Patches
-                .AnyAsync(p => p.GameInfoId == game.Id && p.Status == PatchStatus.Installed);
+            // Get all games
+            var games = await db.Games
+                .AsNoTracking()
+                .OrderByDescending(g => g.AddedTime)
+                .ToListAsync();
 
-            // Add game to list if it doesn't have patches installed
-            // In real implementation, this would check against API data
-            GamesNeedingPatches.Add(game);
+            // Filter games that might need patches
+            // For now, we show all games as potential candidates
+            foreach (var game in games)
+            {
+                GamesNeedingPatches.Add(game);
+            }
         }
 
         GamesNeedingPatchesCount = GamesNeedingPatches.Count;
@@ -209,71 +204,63 @@ public partial class PatchCenterViewModel : ObservableObject
     {
         InstalledPatches.Clear();
 
-        var installed = await _dbContext.Patches
-            .Where(p => p.Status == PatchStatus.Installed)
-            .Include(p => p.GameInfo)
-            .OrderByDescending(p => p.InstalledTime)
-            .ToListAsync();
-
-        foreach (var patch in installed)
+        using (var db = _dbContextFactory.CreateDbContext())
         {
-            InstalledPatches.Add(patch);
+            var installed = await db.Patches
+                .AsNoTracking()
+                .Where(p => p.Status == PatchStatus.Installed)
+                .Include(p => p.GameInfo)
+                .OrderByDescending(p => p.InstalledTime)
+                .ToListAsync();
+
+            foreach (var patch in installed)
+            {
+                InstalledPatches.Add(patch);
+            }
         }
 
         InstalledPatchesCount = InstalledPatches.Count;
     }
 
     /// <summary>
-    /// Generates stub patch data for demonstration purposes.
-    /// This simulates data from moyu.moe API until real API is implemented.
+    /// Selects the newest library game so the patch panel opens on something meaningful.
     /// </summary>
-    private async Task GenerateStubPatchDataAsync()
+    /// <remarks>
+    /// This replaces the removed stub generator. That method used to also write fabricated patch
+    /// rows ("{game} 汉化补丁" / "https://moyu.moe/patches/example" / ExternalId
+    /// <c>stub_trans_*</c>) straight into the user's database, with the patch type decided by
+    /// pseudo-random name heuristics ("name length is even", "name contains a space").
+    /// </remarks>
+    private void SelectDefaultGame()
     {
-        // Stub data generation - simulates API response
-        // In production, this would call moyu.moe API
-
-        if (GamesNeedingPatches.Count > 0)
+        if (GamesNeedingPatches.Count > 0 && SelectedGame is null)
         {
-            // Select first game to show demo patches
             SelectedGame = GamesNeedingPatches.FirstOrDefault();
-
-            if (SelectedGame != null)
-            {
-                await LoadPatchesForGameAsync(SelectedGame.Id);
-            }
         }
     }
 
     /// <summary>
-    /// Loads available patches for a specific game.
-    /// This is a stub method that returns simulated patch data.
+    /// Loads the patches that actually exist in the database for a specific game.
     /// </summary>
+    /// <remarks>
+    /// No patch is ever invented here. Patch sources are not wired up yet (separate work line), so
+    /// for a game without stored patches this legitimately finds nothing and the page shows its
+    /// "no patch source configured" empty state.
+    /// </remarks>
     public async Task LoadPatchesForGameAsync(int gameId)
     {
         AvailablePatches.Clear();
 
         try
         {
-            // First check if we have patches in the database for this game
-            var existingPatches = await _dbContext.Patches
-                .Where(p => p.GameInfoId == gameId)
-                .ToListAsync();
-
-            // If no existing patches, generate stub data
-            if (existingPatches.Count == 0)
+            // Read the patches stored for this game; nothing is generated when the list is empty.
+            List<PatchRecord> existingPatches;
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                var game = await _dbContext.Games.FindAsync(gameId);
-                if (game != null)
-                {
-                    // Generate stub patches based on game
-                    var stubPatches = GenerateStubPatchesForGame(game);
-                    foreach (var patch in stubPatches)
-                    {
-                        _dbContext.Patches.Add(patch);
-                    }
-                    await _dbContext.SaveChangesAsync();
-                    existingPatches = stubPatches;
-                }
+                existingPatches = await db.Patches
+                    .AsNoTracking()
+                    .Where(p => p.GameInfoId == gameId)
+                    .ToListAsync();
             }
 
             // Add to available patches collection
@@ -294,70 +281,6 @@ public partial class PatchCenterViewModel : ObservableObject
             _logger.LogError(ex, "Error loading patches for game {GameId}", gameId);
             ErrorMessage = $"加载补丁失败：{ex.Message}";
         }
-    }
-
-    /// <summary>
-    /// Generates stub patches for a game for demonstration.
-    /// </summary>
-    private List<PatchRecord> GenerateStubPatchesForGame(GameInfo game)
-    {
-        var patches = new List<PatchRecord>();
-
-        // Always add a translation patch stub
-        patches.Add(new PatchRecord
-        {
-            GameInfoId = game.Id,
-            Name = $"{game.DisplayName} 汉化补丁",
-            PatchType = "Translation",
-            Version = "v1.0",
-            SizeBytes = 50 * 1024 * 1024, // 50 MB
-            Source = "moyu.moe",
-            DownloadUrl = "https://moyu.moe/patches/example",
-            Description = "简体中文汉化补丁，包含完整文本翻译。\n来源：moyu.moe",
-            Status = PatchStatus.Available,
-            AddedTime = DateTime.UtcNow,
-            ExternalId = $"stub_trans_{game.Id}"
-        });
-
-        // Add a fix patch stub (50% chance)
-        if (game.DisplayName.Length % 2 == 0)
-        {
-            patches.Add(new PatchRecord
-            {
-                GameInfoId = game.Id,
-                Name = $"{game.DisplayName} 修复补丁",
-                PatchType = "Fix",
-                Version = "v2.1",
-                SizeBytes = 15 * 1024 * 1024, // 15 MB
-                Source = "moyu.moe",
-                DownloadUrl = "https://moyu.moe/patches/example_fix",
-                Description = "修复游戏启动问题和存档兼容性问题。",
-                Status = PatchStatus.Available,
-                AddedTime = DateTime.UtcNow,
-                ExternalId = $"stub_fix_{game.Id}"
-            });
-        }
-
-        // Add an adult patch stub (30% chance based on game name)
-        if (game.DisplayName.Contains(" "))
-        {
-            patches.Add(new PatchRecord
-            {
-                GameInfoId = game.Id,
-                Name = $"{game.DisplayName} 18+补丁",
-                PatchType = "Adult",
-                Version = "v1.5",
-                SizeBytes = 200 * 1024 * 1024, // 200 MB
-                Source = "moyu.moe",
-                DownloadUrl = "https://moyu.moe/patches/example_adult",
-                Description = "18+内容解锁补丁，恢复完整游戏内容。",
-                Status = PatchStatus.Available,
-                AddedTime = DateTime.UtcNow,
-                ExternalId = $"stub_adult_{game.Id}"
-            });
-        }
-
-        return patches;
     }
 
     /// <summary>
@@ -488,26 +411,15 @@ public partial class PatchCenterViewModel : ObservableObject
     {
         try
         {
-            // First check if we have patches in the database for this game
-            var existingPatches = await _dbContext.Patches
-                .Where(p => p.GameInfoId == gameId)
-                .ToListAsync().ConfigureAwait(false);
-
-            // If no existing patches, generate stub data
-            if (existingPatches.Count == 0)
+            // Read the patches stored for this game; nothing is invented when the list is empty.
+            List<PatchRecord> existingPatches;
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                var game = await _dbContext.Games.FindAsync(gameId).ConfigureAwait(false);
-                if (game != null)
-                {
-                    // Generate stub patches based on game
-                    var stubPatches = GenerateStubPatchesForGame(game);
-                    foreach (var patch in stubPatches)
-                    {
-                        _dbContext.Patches.Add(patch);
-                    }
-                    await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-                    existingPatches = stubPatches;
-                }
+                existingPatches = await db.Patches
+                    .AsNoTracking()
+                    .Where(p => p.GameInfoId == gameId)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
             }
 
             // Get dispatcher for UI thread updates
@@ -555,149 +467,12 @@ public partial class PatchCenterViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Downloads a patch (stub implementation with simulated progress).
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanDownloadPatch))]
-    private async Task DownloadPatchAsync(PatchRecord? patch)
-    {
-        if (patch == null)
-        {
-            _logger.LogWarning("No patch to download");
-            return;
-        }
-
-        if (patch.Status == PatchStatus.Downloading || patch.Status == PatchStatus.Installed)
-        {
-            ErrorMessage = "补丁正在下载或已安装";
-            return;
-        }
-
-        IsDownloading = true;
-        ErrorMessage = null;
-
-        try
-        {
-            // Update status to downloading
-            patch.Status = PatchStatus.Downloading;
-            patch.DownloadProgress = 0;
-            await _dbContext.SaveChangesAsync();
-
-            // Simulate download progress (stub implementation)
-            for (int i = 0; i <= 100; i += 10)
-            {
-                patch.DownloadProgress = i;
-                await Task.Delay(200); // Simulate download delay
-            }
-
-            // Update status to downloaded
-            patch.Status = PatchStatus.Downloaded;
-            patch.DownloadedTime = DateTime.UtcNow;
-            patch.DownloadProgress = 100;
-            patch.LocalPath = $"C:\\Galbox\\Patches\\{patch.Name}.zip"; // Stub path
-
-            await _dbContext.SaveChangesAsync();
-
-            // Update UI
-            AvailablePatches.Clear();
-            var patches = await _dbContext.Patches.Where(p => p.GameInfoId == patch.GameInfoId).ToListAsync();
-            foreach (var p in patches)
-            {
-                AvailablePatches.Add(p);
-            }
-            ApplyPatchFilters();
-
-            SuccessMessage = $"已成功下载 '{patch.Name}'";
-            _logger.LogInformation("Downloaded patch {PatchName} for game {GameId}", patch.Name, patch.GameInfoId);
-
-            // Clear success message after delay
-            await Task.Delay(3000);
-            SuccessMessage = null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error downloading patch {PatchName}", patch.Name);
-            ErrorMessage = $"下载补丁失败：{ex.Message}";
-
-            // Reset status
-            patch.Status = PatchStatus.Available;
-            patch.DownloadProgress = 0;
-            await _dbContext.SaveChangesAsync();
-        }
-        finally
-        {
-            IsDownloading = false;
-        }
-    }
-
-    /// <summary>
-    /// Installs a downloaded patch (stub implementation).
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanInstallPatch))]
-    private async Task InstallPatchAsync(PatchRecord? patch)
-    {
-        if (patch == null)
-        {
-            _logger.LogWarning("No patch to install");
-            return;
-        }
-
-        if (patch.Status != PatchStatus.Downloaded && patch.Status != PatchStatus.Available)
-        {
-            ErrorMessage = "补丁必须先下载才能安装";
-            return;
-        }
-
-        IsInstalling = true;
-        ErrorMessage = null;
-
-        try
-        {
-            // Update status to installing
-            patch.Status = PatchStatus.Installing;
-            await _dbContext.SaveChangesAsync();
-
-            // Simulate installation (stub implementation)
-            await Task.Delay(1000);
-
-            // Update status to installed
-            patch.Status = PatchStatus.Installed;
-            patch.InstalledTime = DateTime.UtcNow;
-            await _dbContext.SaveChangesAsync();
-
-            // Update UI collections
-            AvailablePatches.Clear();
-            var patches = await _dbContext.Patches.Where(p => p.GameInfoId == patch.GameInfoId).ToListAsync();
-            foreach (var p in patches)
-            {
-                AvailablePatches.Add(p);
-            }
-            ApplyPatchFilters();
-
-            // Reload installed patches
-            await LoadInstalledPatchesAsync();
-
-            SuccessMessage = $"已成功安装 '{patch.Name}'";
-            _logger.LogInformation("Installed patch {PatchName} for game {GameId}", patch.Name, patch.GameInfoId);
-
-            // Clear success message after delay
-            await Task.Delay(3000);
-            SuccessMessage = null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error installing patch {PatchName}", patch.Name);
-            ErrorMessage = $"安装补丁失败：{ex.Message}";
-
-            // Reset status
-            patch.Status = PatchStatus.Downloaded;
-            await _dbContext.SaveChangesAsync();
-        }
-        finally
-        {
-            IsInstalling = false;
-        }
-    }
+    // NOTE: the previous DownloadPatchAsync / InstallPatchAsync commands were removed.
+    // They did not download or install anything: the download slept in a loop while writing a
+    // fabricated local path (C:\\Galbox\\Patches\\{name}.zip), and the install only slept and
+    // flipped a status column. Binding them to the patch cards would have produced two buttons
+    // that claim success and change nothing, so the buttons were removed with them. Real patch
+    // sources/downloads are a separate work line.
 
     /// <summary>
     /// Shows details for a patch.
@@ -765,22 +540,6 @@ public partial class PatchCenterViewModel : ObservableObject
         }
 
         _navigationService.NavigateTo("GameDetail", game.Id);
-    }
-
-    /// <summary>
-    /// Checks if a patch can be downloaded.
-    /// </summary>
-    public bool CanDownloadPatch(PatchRecord patch)
-    {
-        return patch.Status == PatchStatus.Available && !IsDownloading;
-    }
-
-    /// <summary>
-    /// Checks if a patch can be installed.
-    /// </summary>
-    public bool CanInstallPatch(PatchRecord patch)
-    {
-        return (patch.Status == PatchStatus.Downloaded || patch.Status == PatchStatus.Available) && !IsInstalling;
     }
 }
 

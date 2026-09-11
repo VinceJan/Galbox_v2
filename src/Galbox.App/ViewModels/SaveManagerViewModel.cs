@@ -19,7 +19,7 @@ public partial class SaveManagerViewModel : ObservableObject
     /// </summary>
     private const int SuccessMessageDelayMs = 3000;
 
-    private readonly GalboxDbContext _dbContext;
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly ISaveManagementService _saveManagementService;
     private readonly ILogger<SaveManagerViewModel> _logger;
 
@@ -146,11 +146,11 @@ public partial class SaveManagerViewModel : ObservableObject
     /// Creates a SaveManagerViewModel with injected dependencies.
     /// </summary>
     public SaveManagerViewModel(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         ISaveManagementService saveManagementService,
         ILogger<SaveManagerViewModel> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _saveManagementService = saveManagementService ?? throw new ArgumentNullException(nameof(saveManagementService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -171,15 +171,31 @@ public partial class SaveManagerViewModel : ObservableObject
             // Load all games
             AllGames.Clear();
 
-            var games = await _dbContext.Games
+            // One context for the whole page load, and one grouped query for the backup counts
+            // and last-backup times instead of two queries per game (the previous N+1 pattern).
+            using var db = _dbContextFactory.CreateDbContext();
+
+            var games = await db.Games
+                .AsNoTracking()
                 .OrderByDescending(g => g.LastSessionTime)
                 .ToListAsync();
+
+            var backupStats = await db.SaveBackups
+                .AsNoTracking()
+                .GroupBy(b => b.GameInfoId)
+                .Select(g => new
+                {
+                    GameId = g.Key,
+                    Count = g.Count(),
+                    LastBackupTime = g.Max(b => b.CreatedTime)
+                })
+                .ToDictionaryAsync(x => x.GameId);
 
             // Convert to GameSaveInfo with backup counts
             foreach (var game in games)
             {
-                var backupCount = await _dbContext.SaveBackups
-                    .CountAsync(b => b.GameInfoId == game.Id);
+                backupStats.TryGetValue(game.Id, out var stats);
+                var backupCount = stats?.Count ?? 0;
 
                 var saveInfo = new GameSaveInfo
                 {
@@ -191,7 +207,7 @@ public partial class SaveManagerViewModel : ObservableObject
                     InstallPath = game.InstallPath,
                     BackupCount = backupCount,
                     HasSaves = backupCount > 0,
-                    LastBackupTime = await GetLastBackupTimeAsync(game.Id),
+                    LastBackupTime = stats?.LastBackupTime,
                     LastSessionTime = game.LastSessionTime,
                     TotalPlayTimeSeconds = game.TotalPlayTimeSeconds
                 };
@@ -222,7 +238,10 @@ public partial class SaveManagerViewModel : ObservableObject
     /// </summary>
     private async Task<DateTime?> GetLastBackupTimeAsync(int gameId)
     {
-        var lastBackup = await _dbContext.SaveBackups
+        using var db = _dbContextFactory.CreateDbContext();
+
+        var lastBackup = await db.SaveBackups
+            .AsNoTracking()
             .Where(b => b.GameInfoId == gameId)
             .OrderByDescending(b => b.CreatedTime)
             .FirstOrDefaultAsync();
@@ -455,7 +474,14 @@ public partial class SaveManagerViewModel : ObservableObject
         try
         {
             // Get full game info from database
-            var game = await _dbContext.Games.FindAsync(SelectedGame.Id);
+            GameInfo? game;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                game = await db.Games
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(g => g.Id == SelectedGame.Id);
+            }
+
             if (game == null)
             {
                 ErrorMessage = "数据库中未找到该游戏";

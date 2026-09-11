@@ -69,6 +69,22 @@
                         <SymbolIcon Symbol="Download"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <!-- W2: navigation entries for two modules that were implemented and registered in
+                     DI but had no page/nav key/menu item at all (they were unreachable). -->
+                <NavigationViewItem
+                    Content="刮削进度"
+                    Tag="ScrapingProgress">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Sync"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem
+                    Content="错误报告"
+                    Tag="ErrorReport">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Repair"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame"/>

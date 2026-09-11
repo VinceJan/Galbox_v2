@@ -14,7 +14,7 @@ namespace Galbox.App.ViewModels;
 /// </summary>
 public partial class MainViewModel : ObservableObject
 {
-    private readonly GalboxDbContext _dbContext;
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly INavigationService _navigationService;
     private readonly IGameUtilityService _gameUtilityService;
     private readonly ILogger<MainViewModel> _logger;
@@ -74,13 +74,13 @@ public partial class MainViewModel : ObservableObject
     /// Creates a MainViewModel with injected dependencies.
     /// </summary>
     public MainViewModel(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         INavigationService navigationService,
         IGameUtilityService gameUtilityService,
         ILogger<MainViewModel> logger,
         IScrapingSettingsProvider scrapingSettings)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -97,12 +97,15 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
+            using var db = _dbContextFactory.CreateDbContext();
+
             // Load total games count
-            TotalGamesCount = await _dbContext.Games.CountAsync();
+            TotalGamesCount = await db.Games.CountAsync();
 
             // Load favorite games (top 5)
             FavoriteGames.Clear();
-            var favorites = await _dbContext.Games
+            var favorites = await db.Games
+                .AsNoTracking()
                 .Where(g => g.IsFavorite)
                 .OrderByDescending(g => g.LastSessionTime ?? g.AddedTime)
                 .Take(5)
@@ -115,7 +118,8 @@ public partial class MainViewModel : ObservableObject
 
             // Load recent games (last played, top 10)
             RecentGames.Clear();
-            var recentGames = await _dbContext.Games
+            var recentGames = await db.Games
+                .AsNoTracking()
                 .Where(g => g.LastSessionTime != null)
                 .OrderByDescending(g => g.LastSessionTime)
                 .Take(10)
@@ -129,7 +133,8 @@ public partial class MainViewModel : ObservableObject
             // Load currently playing games (games played in last 7 days)
             CurrentlyPlayingGames.Clear();
             var lastWeek = DateTime.UtcNow.AddDays(-7);
-            var playingGames = await _dbContext.Games
+            var playingGames = await db.Games
+                .AsNoTracking()
                 .Where(g => g.LastSessionTime != null && g.LastSessionTime >= lastWeek)
                 .OrderByDescending(g => g.TotalPlayTimeSeconds)
                 .Take(10)
@@ -268,21 +273,24 @@ public partial class MainViewModel : ObservableObject
             };
 
             // Check if game already exists
-            var existingGame = await _dbContext.Games
-                .FirstOrDefaultAsync(g => g.InstallPath == folderPath);
-
-            if (existingGame != null)
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                ErrorMessage = "该游戏文件夹已在游戏库中";
-                return;
+                var existingGame = await db.Games
+                    .FirstOrDefaultAsync(g => g.InstallPath == folderPath);
+
+                if (existingGame != null)
+                {
+                    ErrorMessage = "该游戏文件夹已在游戏库中";
+                    return;
+                }
+
+                // Add to database
+                db.Games.Add(game);
+                await db.SaveChangesAsync();
+
+                // Update total count
+                TotalGamesCount = await db.Games.CountAsync();
             }
-
-            // Add to database
-            _dbContext.Games.Add(game);
-            await _dbContext.SaveChangesAsync();
-
-            // Update total count
-            TotalGamesCount = await _dbContext.Games.CountAsync();
 
             // Add to recent games
             RecentGames.Insert(0, game);

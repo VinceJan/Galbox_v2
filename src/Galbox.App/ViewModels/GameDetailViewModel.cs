@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Galbox.App.Services;
 using Galbox.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,8 @@ namespace Galbox.App.ViewModels;
 /// </summary>
 public partial class GameDetailViewModel : ObservableObject
 {
-    private readonly GalboxDbContext _dbContext;
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
+    private readonly ISaveManagementService _saveManagementService;
     private readonly ILogger<GameDetailViewModel> _logger;
     private Process? _runningProcess;
 
@@ -198,11 +200,27 @@ public partial class GameDetailViewModel : ObservableObject
     private GameSaveBackup? _selectedSaveBackup;
 
     /// <summary>
+    /// Whether a save backup/restore operation is running (guards re-entrancy on the buttons).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isBackupInProgress;
+
+    /// <summary>
+    /// Success/neutral status text shown to the user after a backup operation.
+    /// </summary>
+    [ObservableProperty]
+    private string? _statusMessage;
+
+    /// <summary>
     /// Creates a GameDetailViewModel with injected dependencies.
     /// </summary>
-    public GameDetailViewModel(GalboxDbContext dbContext, ILogger<GameDetailViewModel> logger)
+    public GameDetailViewModel(
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
+        ISaveManagementService saveManagementService,
+        ILogger<GameDetailViewModel> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+        _saveManagementService = saveManagementService ?? throw new ArgumentNullException(nameof(saveManagementService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -226,13 +244,18 @@ public partial class GameDetailViewModel : ObservableObject
         try
         {
             // Load game with all related data
-            var game = await _dbContext.Games
-                .Include(g => g.Characters)
-                .Include(g => g.Documents)
-                .Include(g => g.MediaFiles)
-                .Include(g => g.Screenshots)
-                .Include(g => g.SaveBackups)
-                .FirstOrDefaultAsync(g => g.Id == gameId);
+            GameInfo? game;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                game = await db.Games
+                    .AsNoTracking()
+                    .Include(g => g.Characters)
+                    .Include(g => g.Documents)
+                    .Include(g => g.MediaFiles)
+                    .Include(g => g.Screenshots)
+                    .Include(g => g.SaveBackups)
+                    .FirstOrDefaultAsync(g => g.Id == gameId);
+            }
 
             if (game == null)
             {
@@ -447,7 +470,17 @@ public partial class GameDetailViewModel : ObservableObject
                     Game.TotalPlayTimeSeconds += (long)sessionDuration.TotalSeconds;
                     FormattedPlayTime = Game.FormattedPlayTime;
 
-                    await _dbContext.SaveChangesAsync();
+                    using (var db = _dbContextFactory.CreateDbContext())
+                    {
+                        var tracked = await db.Games.FindAsync(Game.Id);
+                        if (tracked != null)
+                        {
+                            tracked.LaunchCount = Game.LaunchCount;
+                            tracked.LastSessionTime = Game.LastSessionTime;
+                            tracked.TotalPlayTimeSeconds = Game.TotalPlayTimeSeconds;
+                            await db.SaveChangesAsync();
+                        }
+                    }
 
                     _logger.LogInformation("Game {GameName} exited after {Duration} seconds", DisplayName, sessionDuration.TotalSeconds);
                 }
@@ -531,7 +564,15 @@ public partial class GameDetailViewModel : ObservableObject
             Game.IsFavorite = !Game.IsFavorite;
             IsFavorite = Game.IsFavorite;
 
-            await _dbContext.SaveChangesAsync();
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                var tracked = await db.Games.FindAsync(Game.Id);
+                if (tracked != null)
+                {
+                    tracked.IsFavorite = Game.IsFavorite;
+                    await db.SaveChangesAsync();
+                }
+            }
 
             _logger.LogInformation("Toggled favorite status for {GameName}: {IsFavorite}", DisplayName, IsFavorite);
         }
@@ -646,8 +687,14 @@ public partial class GameDetailViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Creates a new save backup.
+    /// Creates a real save backup through <see cref="ISaveManagementService"/>.
     /// </summary>
+    /// <remarks>
+    /// This used to write a database row whose <c>BackupPath</c> pointed at a folder that was
+    /// never created - the backup list looked populated while nothing existed on disk. The save
+    /// management service writes a real ZIP archive of the detected save files, and reports
+    /// honestly when it cannot find any save files to back up.
+    /// </remarks>
     [RelayCommand]
     private async Task CreateSaveBackupAsync()
     {
@@ -657,25 +704,33 @@ public partial class GameDetailViewModel : ObservableObject
             return;
         }
 
+        if (IsBackupInProgress)
+        {
+            return;
+        }
+
+        IsBackupInProgress = true;
+        ErrorMessage = null;
+        StatusMessage = null;
+
         try
         {
-            // This is a stub - actual implementation would need to identify save locations
-            var backupName = $"Backup_{DateTime.Now:yyyyMMdd_HHmmss}";
-            var backup = new GameSaveBackup
+            var backup = await _saveManagementService.CreateBackupAsync(
+                Game,
+                $"手动备份 - {DateTime.Now:yyyy-MM-dd HH:mm}");
+
+            if (backup == null)
             {
-                GameInfoId = Game.Id,
-                Name = backupName,
-                BackupPath = System.IO.Path.Combine(Game.InstallPath, "Backups", backupName),
-                CreatedTime = DateTime.UtcNow,
-                Description = "自动创建的备份"
-            };
+                ErrorMessage = "创建备份失败：未检测到存档文件。";
+                _logger.LogWarning("No save files found to back up for {GameName}", DisplayName);
+                return;
+            }
 
-            _dbContext.SaveBackups.Add(backup);
-            await _dbContext.SaveChangesAsync();
-
-            SaveBackups.Add(backup);
-
-            _logger.LogInformation("Created save backup {BackupName} for {GameName}", backupName, DisplayName);
+            SaveBackups.Insert(0, backup);
+            StatusMessage = $"已创建备份：{backup.Name}（{backup.FormattedSize}）";
+            _logger.LogInformation(
+                "Created save backup {BackupName} for {GameName} at {BackupPath}",
+                backup.Name, DisplayName, backup.BackupPath);
         }
         catch (Exception ex)
         {
@@ -683,27 +738,49 @@ public partial class GameDetailViewModel : ObservableObject
             _logger.LogError(ex, "Error creating save backup for {GameName}", DisplayName);
             ErrorMessage = $"创建备份失败：{ex.Message}";
         }
+        finally
+        {
+            IsBackupInProgress = false;
+        }
     }
 
     /// <summary>
-    /// Restores a save backup.
+    /// Restores a save backup through <see cref="ISaveManagementService"/>, which really unpacks
+    /// the ZIP archive over the game's save files.
     /// </summary>
     [RelayCommand]
-    private Task RestoreSaveBackupAsync(GameSaveBackup? backup)
+    private async Task RestoreSaveBackupAsync(GameSaveBackup? backup)
     {
         if (backup == null)
         {
             Debug.WriteLine("[GameDetailViewModel] No backup to restore");
-            return Task.CompletedTask;
+            return;
         }
+
+        if (IsBackupInProgress)
+        {
+            return;
+        }
+
+        IsBackupInProgress = true;
+        ErrorMessage = null;
+        StatusMessage = null;
 
         try
         {
-            // This is a stub - actual implementation would restore files
             _logger.LogInformation("Restoring save backup {BackupName} for {GameName}", backup.Name, DisplayName);
 
-            // Show a message (in real implementation would restore files)
-            ErrorMessage = "存档备份恢复功能尚未实现";
+            var restored = await _saveManagementService.RestoreBackupAsync(backup.Id);
+
+            if (restored)
+            {
+                StatusMessage = $"已恢复备份：{backup.Name}";
+            }
+            else
+            {
+                ErrorMessage = $"恢复备份失败：{backup.Name}（备份文件缺失、被占用或校验未通过，详见日志）";
+                _logger.LogWarning("Restore reported failure for backup {BackupName}", backup.Name);
+            }
         }
         catch (Exception ex)
         {
@@ -711,8 +788,45 @@ public partial class GameDetailViewModel : ObservableObject
             _logger.LogError(ex, "Error restoring save backup {BackupName}", backup.Name);
             ErrorMessage = $"恢复备份失败：{ex.Message}";
         }
+        finally
+        {
+            IsBackupInProgress = false;
+        }
+    }
 
-        return Task.CompletedTask;
+    /// <summary>
+    /// Deletes a save backup (archive on disk plus its database row).
+    /// </summary>
+    [RelayCommand]
+    private async Task DeleteSaveBackupAsync(GameSaveBackup? backup)
+    {
+        if (backup == null)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        try
+        {
+            var deleted = await _saveManagementService.DeleteBackupAsync(backup.Id);
+
+            if (deleted)
+            {
+                SaveBackups.Remove(backup);
+                StatusMessage = $"已删除备份：{backup.Name}";
+            }
+            else
+            {
+                ErrorMessage = $"删除备份失败：{backup.Name}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting save backup {BackupName}", backup.Name);
+            ErrorMessage = $"删除备份失败：{ex.Message}";
+        }
     }
 
     /// <summary>

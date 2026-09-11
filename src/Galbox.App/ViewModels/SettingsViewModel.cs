@@ -20,7 +20,11 @@ namespace Galbox.App.ViewModels;
 /// </summary>
 public partial class SettingsViewModel : ObservableObject
 {
-    private readonly GalboxDbContext _dbContext;
+    /// <summary>
+    /// Factory for short-lived contexts. This ViewModel is a Singleton, so it must never hold a
+    /// <c>GalboxDbContext</c> (see App.xaml.cs: the root container must stay context-free).
+    /// </summary>
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly IProcessMonitorService _processMonitorService;
     private readonly ILogger<SettingsViewModel> _logger;
     private readonly IServiceProvider _serviceProvider;
@@ -237,12 +241,12 @@ public partial class SettingsViewModel : ObservableObject
     /// Creates a SettingsViewModel with injected dependencies.
     /// </summary>
     public SettingsViewModel(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         IProcessMonitorService processMonitorService,
         ILogger<SettingsViewModel> logger,
         IServiceProvider serviceProvider)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _processMonitorService = processMonitorService ?? throw new ArgumentNullException(nameof(processMonitorService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -262,14 +266,18 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             // Get or create settings record
-            var settings = await _dbContext.UserSettings.FirstOrDefaultAsync();
-
-            if (settings == null)
+            UserSettings? settings;
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                // Create default settings
-                settings = new UserSettings();
-                _dbContext.UserSettings.Add(settings);
-                await _dbContext.SaveChangesAsync();
+                settings = await db.UserSettings.AsNoTracking().FirstOrDefaultAsync();
+
+                if (settings == null)
+                {
+                    // Create default settings
+                    settings = new UserSettings();
+                    db.UserSettings.Add(settings);
+                    await db.SaveChangesAsync();
+                }
             }
 
             // Load all settings into observable properties
@@ -490,21 +498,24 @@ public partial class SettingsViewModel : ObservableObject
 
         try
         {
-            // Get existing settings
-            var settings = await _dbContext.UserSettings.FirstOrDefaultAsync();
-
-            if (settings == null)
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                settings = new UserSettings();
-                _dbContext.UserSettings.Add(settings);
+                // Get existing settings
+                var settings = await db.UserSettings.FirstOrDefaultAsync();
+
+                if (settings == null)
+                {
+                    settings = new UserSettings();
+                    db.UserSettings.Add(settings);
+                }
+
+                // Update all settings from observable properties
+                UpdateEntityFromSettings(settings);
+
+                settings.LastModified = DateTime.UtcNow;
+
+                await db.SaveChangesAsync();
             }
-
-            // Update all settings from observable properties
-            UpdateEntityFromSettings(settings);
-
-            settings.LastModified = DateTime.UtcNow;
-
-            await _dbContext.SaveChangesAsync();
 
             // Apply runtime settings
             ApplyRuntimeSettings();

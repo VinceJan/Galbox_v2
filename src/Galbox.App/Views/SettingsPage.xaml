@@ -43,6 +43,9 @@
         <converters:DefaultScrapingSourceConverter x:Key="DefaultScrapingSourceConverter"/>
         <converters:SettingsScreenshotFormatToJpgVisibilityConverter x:Key="SettingsScreenshotFormatToJpgVisibilityConverter"/>
         <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
+        <!-- W6: referenced by the "About" card; without this registration x:Bind's
+             LookupConverter returns null and the whole binding throws while converting. -->
+        <converters:SettingsVersionTextConverter x:Key="SettingsVersionTextConverter"/>
     </Page.Resources>
 
     <Grid Padding="24">

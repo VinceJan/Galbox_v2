@@ -19,6 +19,7 @@
         <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
         <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
         <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+        <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
         <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter"/>
         <converters:PathToImageConverter x:Key="PathToImageConverter"/>
         <converters:ByteSizeConverter x:Key="ByteSizeConverter"/>
@@ -154,8 +155,8 @@
                                         <Button
                                             Content="{Binding}"
                                             Style="{StaticResource TagButtonStyle}"
-                                            Command="{Binding ViewModel.NavigateToTagCommand, ElementName=RootGrid}"
-                                            CommandParameter="{Binding}"/>
+                                            Click="OnTagClick"
+                                            Tag="{Binding}"/>
                                     </DataTemplate>
                                 </ItemsRepeater.ItemTemplate>
                             </ItemsRepeater>
@@ -332,8 +333,8 @@
                             <ItemsRepeater.ItemTemplate>
                                 <DataTemplate>
                                     <Button
-                                        Command="{Binding ViewModel.OpenDocumentCommand, ElementName=RootGrid}"
-                                        CommandParameter="{Binding}"
+                                        Click="OnOpenDocumentClick"
+                                        Tag="{Binding}"
                                         HorizontalAlignment="Stretch"
                                         HorizontalContentAlignment="Left"
                                         Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
@@ -378,8 +379,8 @@
                                         Width="80"
                                         Height="60"
                                         Padding="0"
-                                        Command="{Binding ViewModel.OpenScreenshotCommand, ElementName=RootGrid}"
-                                        CommandParameter="{Binding}"
+                                        Click="OnOpenScreenshotClick"
+                                        Tag="{Binding}"
                                         Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                                         CornerRadius="4">
                                         <Image
@@ -410,8 +411,8 @@
 
                                         <Button
                                             Grid.Column="0"
-                                            Command="{Binding ViewModel.PlayMediaCommand, ElementName=RootGrid}"
-                                            CommandParameter="{Binding}"
+                                            Click="OnPlayMediaClick"
+                                            Tag="{Binding}"
                                             HorizontalAlignment="Stretch"
                                             HorizontalContentAlignment="Left"
                                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
@@ -439,11 +440,21 @@
                     <StackPanel>
                         <TextBlock Text="存档备份" Style="{StaticResource SectionHeaderStyle}"/>
 
-                        <!-- Create Backup Button -->
+                        <!-- Create Backup Button: calls ISaveManagementService, which writes a real ZIP -->
                         <Button
                             Content="创建备份"
                             Command="{x:Bind ViewModel.CreateSaveBackupCommand}"
+                            IsEnabled="{x:Bind ViewModel.IsBackupInProgress, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
                             Style="{StaticResource AccentButtonStyle}"
+                            Margin="0,0,0,12"/>
+
+                        <!-- Outcome of the last backup/restore/delete (success text) -->
+                        <InfoBar
+                            Title="存档备份"
+                            Message="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                            Severity="Success"
+                            IsOpen="{x:Bind ViewModel.StatusMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
+                            IsClosable="True"
                             Margin="0,0,0,12"/>
 
                         <!-- Backup List -->
@@ -474,16 +485,22 @@
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
 
+                                        <!-- Commands live on the page's ViewModel; a DataTemplate has
+                                             its own namescope, so ElementName cannot see the page.
+                                             These buttons therefore report the clicked row through Tag
+                                             and the code-behind forwards it to the command. -->
                                         <Button
                                             Grid.Column="1"
                                             Content="恢复"
-                                            Command="{Binding ViewModel.RestoreSaveBackupCommand, ElementName=RootGrid}"
-                                            CommandParameter="{Binding}"
+                                            Click="OnRestoreBackupClick"
+                                            Tag="{Binding}"
                                             CornerRadius="4"/>
 
                                         <Button
                                             Grid.Column="2"
                                             Content="删除"
+                                            Click="OnDeleteBackupClick"
+                                            Tag="{Binding}"
                                             CornerRadius="4"/>
                                     </Grid>
                                 </DataTemplate>

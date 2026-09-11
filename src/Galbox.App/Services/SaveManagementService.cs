@@ -13,7 +13,15 @@ namespace Galbox.App.Services;
 /// </summary>
 public class SaveManagementService : ISaveManagementService
 {
-    private readonly GalboxDbContext _dbContext;
+    /// <summary>
+    /// Creates a short-lived context per unit of work.
+    ///
+    /// This service is a Singleton, so it must never hold a DbContext: a captured context would
+    /// live for the whole process and any two overlapping backup/restore operations would throw
+    /// "A second operation was started on this context instance". The factory is the singleton
+    /// that is safe to hold.
+    /// </summary>
+    private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly ILogger<SaveManagementService> _logger;
 
     private bool _autoBackupEnabled = true;
@@ -23,13 +31,13 @@ public class SaveManagementService : ISaveManagementService
     /// <summary>
     /// Creates a SaveManagementService with injected dependencies.
     /// </summary>
-    /// <param name="dbContext">Database context for storing backup records</param>
+    /// <param name="dbContextFactory">Factory used to create a database context per operation</param>
     /// <param name="logger">Logger for diagnostics</param>
     public SaveManagementService(
-        GalboxDbContext dbContext,
+        IDbContextFactory<GalboxDbContext> dbContextFactory,
         ILogger<SaveManagementService> logger)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Initialize backup storage path
@@ -240,8 +248,11 @@ public class SaveManagementService : ISaveManagementService
                 Description = description
             };
 
-            _dbContext.SaveBackups.Add(backup);
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                db.SaveBackups.Add(backup);
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             // Report progress - cleaning up
             progress?.Report(new BackupProgress
@@ -324,10 +335,17 @@ public class SaveManagementService : ISaveManagementService
         try
         {
             // Get backup record from database
-            var backup = await _dbContext.SaveBackups
-                .Include(b => b.GameInfo)
-                .FirstOrDefaultAsync(b => b.Id == saveId, cancellationToken)
-                .ConfigureAwait(false);
+            // Include(b => b.GameInfo) is only needed while the context is alive, so the read is
+            // materialised before the context is disposed.
+            GameSaveBackup? backup;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                backup = await db.SaveBackups
+                    .Include(b => b.GameInfo)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(b => b.Id == saveId, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             if (backup == null)
             {
@@ -681,11 +699,16 @@ public class SaveManagementService : ISaveManagementService
 
         try
         {
-            var backups = await _dbContext.SaveBackups
-                .Where(b => b.GameInfoId == gameId)
-                .OrderByDescending(b => b.CreatedTime)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
+            List<GameSaveBackup> backups;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                backups = await db.SaveBackups
+                    .Where(b => b.GameInfoId == gameId)
+                    .AsNoTracking()
+                    .OrderByDescending(b => b.CreatedTime)
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             _logger.LogInformation(
                 "Retrieved {Count} backups for game: {GameId}",
@@ -720,9 +743,13 @@ public class SaveManagementService : ISaveManagementService
 
         try
         {
-            var backup = await _dbContext.SaveBackups
-                .FirstOrDefaultAsync(b => b.Id == saveId, cancellationToken)
-                .ConfigureAwait(false);
+            GameSaveBackup? backup;
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                backup = await db.SaveBackups
+                    .FirstOrDefaultAsync(b => b.Id == saveId, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             if (backup == null)
             {
@@ -738,8 +765,12 @@ public class SaveManagementService : ISaveManagementService
             }
 
             // Delete database record
-            _dbContext.SaveBackups.Remove(backup);
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                db.SaveBackups.Attach(backup);
+                db.SaveBackups.Remove(backup);
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             _logger.LogInformation("Backup deleted successfully: ID {SaveId}", saveId);
             return true;
@@ -777,21 +808,29 @@ public class SaveManagementService : ISaveManagementService
         try
         {
             // Get game info
-            var game = await _dbContext.Games
-                .FirstOrDefaultAsync(g => g.Id == gameId, cancellationToken)
-                .ConfigureAwait(false);
+            GameInfo? game;
+            GameSaveBackup? targetBackup;
 
-            if (game == null)
+            using (var db = _dbContextFactory.CreateDbContext())
             {
-                result.ErrorMessage = "Game not found";
-                _logger.LogWarning("Game not found with ID: {GameId}", gameId);
-                return result;
-            }
+                game = await db.Games
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(g => g.Id == gameId, cancellationToken)
+                    .ConfigureAwait(false);
 
-            // Get target backup
-            var targetBackup = await _dbContext.SaveBackups
-                .FirstOrDefaultAsync(b => b.Id == targetSaveId && b.GameInfoId == gameId, cancellationToken)
-                .ConfigureAwait(false);
+                if (game == null)
+                {
+                    result.ErrorMessage = "Game not found";
+                    _logger.LogWarning("Game not found with ID: {GameId}", gameId);
+                    return result;
+                }
+
+                // Get target backup
+                targetBackup = await db.SaveBackups
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(b => b.Id == targetSaveId && b.GameInfoId == gameId, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             if (targetBackup == null)
             {
@@ -1240,7 +1279,9 @@ public class SaveManagementService : ISaveManagementService
     {
         try
         {
-            var backups = await _dbContext.SaveBackups
+            using var db = _dbContextFactory.CreateDbContext();
+
+            var backups = await db.SaveBackups
                 .Where(b => b.GameInfoId == gameId)
                 .OrderByDescending(b => b.CreatedTime)
                 .ToListAsync(cancellationToken)
@@ -1254,7 +1295,7 @@ public class SaveManagementService : ISaveManagementService
             var backupsToDelete = backups.Skip(_maxBackupsPerGame).ToList();
 
             // Use transaction for atomic cleanup
-            using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -1276,10 +1317,10 @@ public class SaveManagementService : ISaveManagementService
                     }
 
                     // Delete record
-                    _dbContext.SaveBackups.Remove(backup);
+                    db.SaveBackups.Remove(backup);
                 }
 
-                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogInformation(

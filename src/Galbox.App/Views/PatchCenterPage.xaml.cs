@@ -27,6 +27,11 @@ public sealed partial class PatchCenterPage : Page
         // Get ViewModel from DI container
         ViewModel = App.Services.GetRequiredService<PatchCenterViewModel>();
 
+        // W3: every other page sets DataContext, this one did not - so every classic
+        // {Binding ...} on this page (including the ScrollViewer that hosts the patch list)
+        // silently resolved to null and the patch area stayed collapsed forever.
+        DataContext = ViewModel;
+
         // Initialize data loading
         Loaded += OnPageLoaded;
     }
@@ -74,5 +79,22 @@ public sealed partial class PatchCenterPage : Page
     {
         var flyout = (Flyout)Resources["PatchDetailsFlyoutKey"];
         flyout.ShowAt(target);
+    }
+
+    /// <summary>
+    /// Forwards the clicked patch row to the ViewModel's details command.
+    /// </summary>
+    /// <remarks>
+    /// The patch cards live in a DataTemplate, which has its own XAML namescope: the previous
+    /// <c>{Binding ViewModel.ShowPatchDetailsCommand, ElementName=RootGrid}</c> could not resolve
+    /// (RootGrid is a Grid with no ViewModel property) and the button was a no-op. The row is
+    /// passed through Tag instead.
+    /// </remarks>
+    private void OnPatchDetailsClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: PatchRecord patch })
+        {
+            ViewModel.ShowPatchDetailsCommand.Execute(patch);
+        }
     }
 }
