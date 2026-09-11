@@ -78,7 +78,15 @@ internal static class Program
             // --- Patch centre wiring (A30+; A20-A29 are reserved for other work lines) -----
             new A30PatchCenterWiringCheck(),
             new A31PatchInstallRoundTripCheck(),
-            new A32PatchRejectionVisibleCheck()
+            new A32PatchRejectionVisibleCheck(),
+
+            // --- Metadata sources (A40+; A33-A39 are reserved for other work lines) --------
+            // The other half of "four sources": ymgal and cngal were honest stubs that returned
+            // Success=false with a "pending API research" message, and nothing ever called them
+            // with a real contract. These three checks pin the contract down.
+            new A40YmgalSearchCheck(),
+            new A41CngalSearchCheck(),
+            new A42MetadataSourceContractCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));

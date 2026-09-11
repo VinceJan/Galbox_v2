@@ -128,21 +128,14 @@ public partial class App : Application
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        // ymgal / cngal metadata sources. The configuration lives in
+        // MetadataHttpClientDefaults so the shipping app and the headless acceptance replica
+        // (tests/Galbox.Acceptance/AcceptanceContainer.cs) cannot drift apart.
         services.AddHttpClient<YmgalHttpClient>()
-            .ConfigureHttpClient(client =>
-            {
-                // BaseAddress to be configured when API implementation is complete
-                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
-                client.Timeout = TimeSpan.FromSeconds(30);
-            });
+            .ConfigureHttpClient(MetadataHttpClientDefaults.ConfigureYmgal);
 
         services.AddHttpClient<CngalHttpClient>()
-            .ConfigureHttpClient(client =>
-            {
-                // BaseAddress to be configured when API implementation is complete
-                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
-                client.Timeout = TimeSpan.FromSeconds(30);
-            });
+            .ConfigureHttpClient(MetadataHttpClientDefaults.ConfigureCngal);
 
         // Image traffic (covers, backgrounds, character portraits). Separate from the metadata
         // clients so a slow image CDN cannot occupy the API pipelines.

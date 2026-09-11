@@ -22,8 +22,26 @@ It exists because "it compiles" was being treated as "it works".
 | A8 | Navigation / page / XAML completeness — the regression guard for "implemented but no door": every navigation key resolves to an existing page type, every ViewModel registered in `App.xaml.cs` is referenced by a view under `Views/`, every page is reachable, every converter a view uses is registered, and every `MainWindow.xaml` menu `Tag` is a known key. Source-level on purpose: a runtime test can never see a missing XAML file. |
 | A9 | The only check that starts the shipping GUI. With at least one `search_*.json` file in `%LocalAppData%\Galbox\ScrapingCache`, `Galbox.App.exe` must stay alive and own a visible top-level window within 30 s (`MainWindowHandle` cross-checked with an `EnumWindows` scan) **and** write a startup log that reports completion — a window alone is not accepted, because the startup-failure dialog is a window too. It exists because the worst defect so far — a thread-affinity `COMException` that left a live process with no window — was invisible to every headless check. |
 | A10 | **The save-node feature, end to end.** Resolves `ISaveNodeScanService` from the app-shaped container (the wiring assertion), scans a real game and requires exactly 12 de-duplicated nodes with non-empty scene labels, `auto-3` → 孤独感, CG 6/27 with the id set `{0101,0301,0401,0501,0801,2401}`, a second scan that inserts nothing, a missing/empty directory that fails with a concrete reason and leaves no row behind, and — driven through the real `SaveManagerViewModel` — a timeline with no blank label, 自动档/手动档 separation, the 疑似 route marker, the honest progress figure, the visible parse-failure state, the "还差 21 张" list, the empty state and the unsupported-engine state. |
+| A40 | **ymgal live search.** Resolves the real `YmgalApi` from the container, searches a real title (`サノバウィッチ`), and asserts the client config, that a request actually went to `/open/archive/search-game`, that the payload binds into the model, and that `GetGameAsync` returns that archive. |
+| A41 | **cngal live search.** Same shape for `CngalApi` with `三色绘恋`, asserting the documented `/api/home/Search` path and the entry-detail lookup. |
+| A42 | **Metadata-source behaviour contract** (no network assumptions required): both clients have a BaseAddress + identifying User-Agent + bounded timeout; an incomplete ymgal credential fails fast, names the missing environment variable and issues **0** requests; an unreachable cngal endpoint is reported as a transport failure, not as an empty result; and a legitimate zero-hit answer is reported as `Success = true` with no `LastError`. |
 
 Exit code: `0` when every check passes, `1` when anything fails or errors.
+
+## Metadata source configuration (ymgal / cngal)
+
+Neither source requires the user to apply for a key:
+
+* **ymgal** is OAuth2 client-credentials. Its developer documentation publishes a shared public
+  client, so the client works out of the box. A dedicated client id (recommended for a distributed
+  app) can be supplied through the environment and takes precedence:
+  `GALBOX_YMGAL_CLIENT_ID`, `GALBOX_YMGAL_CLIENT_SECRET` (set **both**, or neither),
+  `GALBOX_YMGAL_BASE_URL` (host override).
+* **cngal** is a fully open API with no authentication at all. Only `GALBOX_CNGAL_BASE_URL`
+  exists, for mirrors.
+
+A half-filled credential pair is reported as a configuration failure naming the missing variable -
+it never silently falls back to the public client, and it never issues a request.
 
 ## How to run
 

@@ -550,29 +550,37 @@ public class GameScrapingService : IGameScrapingService
             SearchQuery = gameName
         };
 
-        // Stub - ymgal API needs research
         var searchResponse = await _ymgalApi.SearchAsync(gameName, cancellationToken).ConfigureAwait(false);
 
-        if (searchResponse?.Items != null)
+        foreach (var item in searchResponse?.Items ?? new List<YmgalGameItem>())
         {
-            foreach (var item in searchResponse.Items)
+            var titles = new List<string>();
+            if (!string.IsNullOrWhiteSpace(item.Title)) titles.Add(item.Title);
+            if (!string.IsNullOrWhiteSpace(item.TitleCn)) titles.Add(item.TitleCn);
+
+            var metadata = new GameMetadata
             {
-                var titles = new List<string>();
-                if (!string.IsNullOrWhiteSpace(item.Title)) titles.Add(item.Title);
-                if (!string.IsNullOrWhiteSpace(item.TitleCn)) titles.Add(item.TitleCn);
+                SourceId = item.Id,
+                Source = ScraperSource.Ymgal,
+                TitleCn = item.TitleCn,
+                TitleOriginal = item.Title,
+                Titles = titles,
+                Description = item.Description,
+                CoverImageUrl = UpgradeToHttps(item.CoverUrl)
+            };
 
-                var metadata = new GameMetadata
-                {
-                    SourceId = item.Id,
-                    Source = ScraperSource.Ymgal,
-                    TitleCn = item.TitleCn,
-                    TitleOriginal = item.Title,
-                    Titles = titles,
-                    Description = item.Description,
-                    CoverImageUrl = UpgradeToHttps(item.CoverUrl)
-                };
+            result.Items.Add(metadata);
+        }
 
-                result.Items.Add(metadata);
+        // `Success == true` means ymgal answered, so an empty result is a legitimate "this title is
+        // not in the archive". Anything else is a failure and must be reported: returning zero
+        // items without an ErrorMessage is the silent-empty-result defect.
+        if (searchResponse is null || !searchResponse.Success)
+        {
+            ApplyApiFailure(_ymgalApi, result, "ymgal");
+            if (string.IsNullOrEmpty(result.ErrorMessage))
+            {
+                result.ErrorMessage = $"ymgal request failed: {searchResponse?.Message ?? "the source returned no response"}";
             }
         }
 
@@ -589,29 +597,35 @@ public class GameScrapingService : IGameScrapingService
             SearchQuery = gameName
         };
 
-        // Stub - cngal API needs research
         var searchResponse = await _cngalApi.SearchAsync(gameName, cancellationToken).ConfigureAwait(false);
 
-        if (searchResponse?.Items != null)
+        foreach (var item in searchResponse?.Items ?? new List<CngalGameItem>())
         {
-            foreach (var item in searchResponse.Items)
+            var titles = new List<string>();
+            if (!string.IsNullOrWhiteSpace(item.Title)) titles.Add(item.Title);
+            if (!string.IsNullOrWhiteSpace(item.TitleCn)) titles.Add(item.TitleCn);
+
+            var metadata = new GameMetadata
             {
-                var titles = new List<string>();
-                if (!string.IsNullOrWhiteSpace(item.Title)) titles.Add(item.Title);
-                if (!string.IsNullOrWhiteSpace(item.TitleCn)) titles.Add(item.TitleCn);
+                SourceId = item.Id,
+                Source = ScraperSource.Cngal,
+                TitleCn = item.TitleCn,
+                TitleOriginal = item.Title,
+                Titles = titles,
+                Description = item.Description,
+                CoverImageUrl = UpgradeToHttps(item.CoverUrl)
+            };
 
-                var metadata = new GameMetadata
-                {
-                    SourceId = item.Id,
-                    Source = ScraperSource.Cngal,
-                    TitleCn = item.TitleCn,
-                    TitleOriginal = item.Title,
-                    Titles = titles,
-                    Description = item.Description,
-                    CoverImageUrl = UpgradeToHttps(item.CoverUrl)
-                };
+            result.Items.Add(metadata);
+        }
 
-                result.Items.Add(metadata);
+        // See the note in SearchYmgalAsync: only a non-answering source is an error.
+        if (searchResponse is null || !searchResponse.Success)
+        {
+            ApplyApiFailure(_cngalApi, result, "cngal");
+            if (string.IsNullOrEmpty(result.ErrorMessage))
+            {
+                result.ErrorMessage = $"cngal request failed: {searchResponse?.Message ?? "the source returned no response"}";
             }
         }
 
