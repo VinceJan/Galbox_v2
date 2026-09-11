@@ -350,6 +350,36 @@ public sealed class A92ReservedNoFakeAvailabilityCheck : IAcceptanceCheck
                                    + "not crash the sync.");
                         details.Add($"  [FAIL] malformed CG json threw {actualException.GetType().Name}");
                     }
+
+                    // The label is the field the server matches a node on, so a node without a scene
+                    // label must produce a null - NOT a readable substitute. DisplayName falls back to
+                    // the snapshot description, the chapter and then the slot name, so carrying it
+                    // here would hand the server a string that cannot match any node and cannot be
+                    // told apart from a real label. A save that cannot be located is an honest
+                    // "cannot be placed"; a save located by a guess is a player at the wrong node.
+                    var unlabelled = new SaveNode
+                    {
+                        Id = 2,
+                        GameInfoId = 77,
+                        SlotName = "auto-7-LT1",
+                        ChapterName = "第三章",
+                        SnapshotDescription = "第一次遇见宁宁"
+                    };
+
+                    var unlabelledSample = projectOne.Invoke(null, new object[] { unlabelled });
+                    var carriedLabel = sampleType.GetProperty("SceneLabel")?.GetValue(unlabelledSample) as string;
+                    var displayedName = unlabelled.DisplayName;
+
+                    details.Add($"  [{(carriedLabel is null ? "OK" : "FAIL")}]   node with no SceneLabel -> "
+                              + $"SceneLabel={Format(carriedLabel)} (its DisplayName is '{displayedName}'; that string "
+                              + "must NOT be substituted)");
+
+                    if (carriedLabel is not null)
+                    {
+                        failures.Add($"{id}: a node with no SceneLabel projected SceneLabel='{carriedLabel}'. The "
+                                   + "projection must not substitute a display name for a script label - the server "
+                                   + "matches on that field and a substitute matches nothing while looking real.");
+                    }
                 }
             }
 

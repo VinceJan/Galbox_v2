@@ -73,11 +73,15 @@ public static class SaveNodePositionProjector
             SaveNodeId = node.Id,
             SlotName = node.SlotName,
 
-            // The label is what a node is matched on, so the stored label always wins. When the
-            // node has none, DisplayName is the best the product can honestly say about where this
-            // save is (it falls back to the snapshot description, the chapter, then the slot name).
-            // It is carried as a readable label only - the sync must not treat it as a scene label.
-            SceneLabel = !string.IsNullOrWhiteSpace(node.SceneLabel) ? node.SceneLabel : node.DisplayName,
+            // The label is what a node is matched on, so it is carried verbatim or not at all.
+            //
+            // There used to be a fallback to DisplayName here ("the node has no scene label, so send
+            // the best readable description instead"), and it was removed on purpose: DisplayName
+            // falls back to the snapshot description, then the chapter, then the slot name, so the
+            // server would have received a string that looks like a scene label, cannot match any
+            // node, and is indistinguishable from a real label. A save whose scene label is unknown
+            // cannot be placed on a flowchart, and the honest outcome is 'cannot be placed'.
+            SceneLabel = string.IsNullOrWhiteSpace(node.SceneLabel) ? null : node.SceneLabel,
 
             // The node's own route name, falling back to its group's, exactly as the timeline reads
             // it: a node must still carry the route it was taken on after its group is deleted.

@@ -295,6 +295,15 @@ public sealed record StoryPositionSample
     /// Story position identifier — the value a flowchart node is matched on: for Ren'Py the
     /// <c>scene_label</c> the save was taken at.
     /// </summary>
+    /// <remarks>
+    /// <b>Null when the stored node has no label, and there is deliberately no fallback.</b> The
+    /// obvious alternative — putting the node's display name here when the label is missing — would
+    /// fill a field the server matches on with a string that cannot match anything. A save with no
+    /// scene label genuinely cannot be placed on a graph, and saying so is the honest answer; the
+    /// cost of guessing is a player shown at the wrong node, and the cost of a null is one unplaced
+    /// save that the sync reports as unplaced. The other fields of this record (slot name, chapter,
+    /// save time) still describe the save for the report.
+    /// </remarks>
     public string? SceneLabel { get; init; }
 
     /// <summary>Route the save was taken on, when the node knows one.</summary>
