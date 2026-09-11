@@ -17,16 +17,35 @@ namespace Galbox.Acceptance.Checks;
 /// swallowed it, so the process stayed alive with a working message loop, no window and no error.
 /// Every other check calls a service headlessly and therefore cannot see it.
 ///
-/// Precondition (prepared here, never taken from the user's data):
+/// <para><b>Isolation (why this check launches the application against a private data folder).</b>
+/// The startup log used to live at the single, day-stamped
+/// <c>%LocalAppData%\Galbox\logs\startup-YYYYMMDD.log</c>, which every Galbox instance on the
+/// machine appends to. Measuring one launch out of that file is not sound: the byte offset this
+/// check captured before its own launch is meaningless once another instance has written in
+/// between, and the tail it reads can contain another process's
+/// <c>OnLaunched: startup sequence begins</c> - or, when that other instance failed to start, its
+/// <c>EXCEPTION in OnLaunched</c>, which turned a perfectly healthy launch into a FAIL. Observed in
+/// the wild before the fix: two interleaved startup sequences on the same second, from two
+/// processes, in one file.</para>
+///
+/// <para>The check therefore launches <c>Galbox.App.exe</c> with <c>GALBOX_DATA_DIR</c> pointing at
+/// a throwaway folder it owns (<see cref="AcceptanceWork"/>), and reads the startup log from
+/// <i>that</i> folder. The application already honours the variable for its database; the startup
+/// log and the backup store now follow the same data folder
+/// (<see cref="GalboxDataDirectory"/>), so the launched process writes its database, its scrape
+/// cache and its log inside the private folder and touches none of the user's data. The verdict is
+/// unchanged and, thanks to the pid prefix in every log line, provably about this process only.</para>
+///
+/// Precondition (prepared inside the private data folder, never from the user's data):
 ///   * the cache folder must contain at least one <c>search_*.json</c> file that the service will
-///     read. Existing files are left exactly as they are; only when the folder holds none does
-///     this check write its own probe file, and it removes that probe file again afterwards.
+///     read. The private folder starts empty, so this check writes its own probe entry and removes
+///     it again afterwards.
 ///
 /// Verdict: within the timeout the process must still be alive AND own a visible top-level window
 /// (<see cref="Process.MainWindowHandle"/> non-zero, cross-checked with an EnumWindows scan so a
-/// Win32-API quirk can never turn a real window into a false failure). On failure the newest
-/// <c>%LocalAppData%\Galbox\logs\startup-*.log</c> lines are attached, which is also what proves
-/// the startup-failure reporting is no longer silent.
+/// Win32-API quirk can never turn a real window into a false failure). On failure the startup log
+/// written by this launch is attached, which is also what proves the startup-failure reporting is
+/// no longer silent.
 /// </summary>
 public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 {
@@ -44,7 +63,8 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
     public async Task<CheckResult> RunAsync(AcceptanceContext context, CancellationToken cancellationToken)
     {
         var expected = "with at least one search_*.json cache file present, Galbox.App.exe is still "
-                     + $"alive and owns a visible top-level window within {WindowTimeout.TotalSeconds:F0}s";
+                     + $"alive and owns a visible top-level window within {WindowTimeout.TotalSeconds:F0}s, "
+                     + "and the startup log OF THAT PROCESS (its own private data folder) reports completion";
 
         var details = new List<string>();
 
@@ -80,40 +100,39 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                 .With(details.ToArray());
         }
 
-        // ------------------------------------------------------------- precondition: cache file
-        var cacheDirectory = Path.Combine(
+        // ------------------------------------------------- private data folder for this launch
+        // Everything the application persists - database, scrape cache, startup log - goes here.
+        // AcceptanceWork already owns %LocalAppData%\Galbox\acceptance\work and wipes the folder of
+        // this check at the start of every run, so the log read below can only contain this launch.
+        var work = AcceptanceWork.Create("a9");
+        var dataDirectory = Path.Combine(work, "appdata");
+
+        var defaultLogPath = GalboxDataDirectory.ResolveStartupLogPath(dataDirectoryOverride: null);
+        var privateLogPath = GalboxDataDirectory.ResolveStartupLogPath(dataDirectory);
+        var privateDatabasePath = Path.Combine(dataDirectory, "galbox.db");
+        var realDatabasePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Galbox",
-            "ScrapingCache");
+            "Galbox", "galbox.db");
+
+        var cacheDirectory = Path.Combine(dataDirectory, "ScrapingCache");
         Directory.CreateDirectory(cacheDirectory);
 
-        var existingCacheFiles = Directory.GetFiles(cacheDirectory, "search_*.json");
-        string? probeFile = null;
+        details.Add($"Private data folder  : {dataDirectory}  (passed to the child as "
+                  + $"{GalboxDataDirectory.DataDirectoryVariable})");
+        details.Add($"Real app database    : {realDatabasePath} (must stay untouched)");
+        details.Add($"Private database     : {privateDatabasePath}");
+        details.Add($"Private startup log  : {privateLogPath}");
+        details.Add($"Shared startup log   : {defaultLogPath} (NOT read by this check any more)");
 
-        if (existingCacheFiles.Length == 0)
-        {
-            probeFile = Path.Combine(cacheDirectory, "search_a9-startup-probe.json");
-            await File.WriteAllTextAsync(probeFile, BuildProbeCacheEntry(), cancellationToken).ConfigureAwait(false);
-            details.Add("Cache precondition  : folder was EMPTY, wrote a probe entry "
-                      + $"(removed again at the end of this check): {Path.GetFileName(probeFile)}");
-        }
-        else
-        {
-            details.Add($"Cache precondition  : {existingCacheFiles.Length} existing search_*.json file(s), left untouched:");
-            foreach (var file in existingCacheFiles)
-            {
-                details.Add($"    {Path.GetFileName(file)} ({new FileInfo(file).Length} bytes)");
-            }
-        }
+        // ------------------------------------------------------------- precondition: cache file
+        var probeFile = Path.Combine(cacheDirectory, "search_a9-startup-probe.json");
+        await File.WriteAllTextAsync(probeFile, BuildProbeCacheEntry(), cancellationToken).ConfigureAwait(false);
+        details.Add("Cache precondition  : private cache folder was EMPTY, wrote a probe entry "
+                  + $"(removed again at the end of this check): {Path.GetFileName(probeFile)}");
 
-        details.Add($"Cache directory      : {cacheDirectory}");
-
-        // The startup log the application writes; the A9 failure report is built from its tail.
-        var logPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Galbox", "logs", $"startup-{DateTime.Now:yyyyMMdd}.log");
-        var logLengthBefore = File.Exists(logPath) ? new FileInfo(logPath).Length : 0;
-        details.Add($"Startup log          : {logPath} (exists: {File.Exists(logPath)}, bytes before launch: {logLengthBefore})");
+        var logLengthBefore = File.Exists(privateLogPath) ? new FileInfo(privateLogPath).Length : 0;
+        details.Add($"Startup log          : {privateLogPath} (exists: {File.Exists(privateLogPath)}, "
+                  + $"bytes before launch: {logLengthBefore})");
 
         Process? process = null;
         var windowHandle = IntPtr.Zero;
@@ -132,6 +151,9 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                 UseShellExecute = false
             };
 
+            // The child's whole world: database, scrape cache and startup log live under this path.
+            startInfo.Environment[GalboxDataDirectory.DataDirectoryVariable] = dataDirectory;
+
             process = Process.Start(startInfo);
             if (process is null)
             {
@@ -139,7 +161,8 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                     .With(details.ToArray());
             }
 
-            details.Add($"Launched             : pid {process.Id}");
+            var launchedProcessId = process.Id;
+            details.Add($"Launched             : pid {launchedProcessId}");
             var stopwatch = Stopwatch.StartNew();
             var windowSeen = false;
 
@@ -174,7 +197,7 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                 {
                     windowSeen = true;
 
-                    var tail = ReadNewLogLines(logPath, logLengthBefore);
+                    var tail = ReadNewLogLines(privateLogPath, logLengthBefore);
 
                     if (tail.Any(line => line.Contains(StartupDiagnostics.StartupCompletedMarker, StringComparison.Ordinal))
                         || tail.Any(line => line.Contains(StartupDiagnostics.StartupFailureMarker, StringComparison.Ordinal)))
@@ -217,17 +240,14 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                 details.Add($"Cleanup warning: could not terminate pid {process?.Id}: {ex.Message}");
             }
 
-            if (probeFile is not null)
+            try
             {
-                try
-                {
-                    File.Delete(probeFile);
-                    details.Add($"Probe cache entry removed: {Path.GetFileName(probeFile)}");
-                }
-                catch (Exception ex)
-                {
-                    details.Add($"Cleanup warning: could not remove probe cache entry: {ex.Message}");
-                }
+                File.Delete(probeFile);
+                details.Add($"Probe cache entry removed: {Path.GetFileName(probeFile)}");
+            }
+            catch (Exception ex)
+            {
+                details.Add($"Cleanup warning: could not remove probe cache entry: {ex.Message}");
             }
         }
 
@@ -246,15 +266,15 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
         details.Add($"Exited before window : {exitBeforeWindow}");
         details.Add($"Cache files now      : {Directory.GetFiles(cacheDirectory, "search_*.json").Length} search_*.json");
 
-        var logTail = ReadNewLogLines(logPath, logLengthBefore);
-        if (logTail.Count > 0)
+        var logTail = ReadNewLogLines(privateLogPath, logLengthBefore);
+        details.Add($"--- startup log lines written by this launch ({logTail.Count}) ---");
+        if (logTail.Count == 0)
         {
-            details.Add($"--- startup log lines written by this launch ({logTail.Count}) ---");
-            details.AddRange(logTail.Select(line => $"    {line}"));
+            details.Add("    NONE");
         }
         else
         {
-            details.Add("--- startup log lines written by this launch: NONE ---");
+            details.AddRange(logTail.Select(line => $"    {line}"));
         }
 
         // The application reports a healthy startup by writing StartupCompletedMarker, and a failed
@@ -264,16 +284,43 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
         var startupFailed = logTail.Any(line =>
             line.Contains(StartupDiagnostics.StartupFailureMarker, StringComparison.Ordinal));
 
+        // ------------------------------------------------------------- provenance of every line
+        // The log is private to this launch, and every line says which process wrote it. Asserting
+        // both is what makes "I saw my own startup" a measurement instead of an assumption.
+        var ownProcessId = process?.Id ?? -1;
+        var ownPidToken = $"[pid:{ownProcessId}]";
+        var foreignLines = logTail.Where(line => !line.Contains(ownPidToken, StringComparison.Ordinal)).ToList();
+        var beginCount = logTail.Count(line =>
+            line.Contains("OnLaunched: startup sequence begins", StringComparison.Ordinal));
+
+        details.Add($"Log lines from this pid : {logTail.Count - foreignLines.Count}/{logTail.Count} "
+                  + $"(expected token \"{ownPidToken}\")");
+        details.Add($"Log lines from ANOTHER process: {foreignLines.Count}"
+                  + (foreignLines.Count == 0 ? string.Empty : " -> " + string.Join(" | ", foreignLines.Take(5))));
+        details.Add($"\"startup sequence begins\" lines in THIS log: {beginCount} (must be exactly 1)");
+
+        // The application really used the private data folder: if GALBOX_DATA_DIR had been ignored,
+        // these two files would not exist and the check would be reading the wrong world.
+        var privateDatabaseExists = File.Exists(privateDatabasePath);
+        var privateLogExists = File.Exists(privateLogPath);
+        details.Add($"Private database created by the launch : {privateDatabaseExists} "
+                  + (privateDatabaseExists ? $"({new FileInfo(privateDatabasePath).Length} bytes)" : string.Empty));
+        details.Add($"Private startup log exists            : {privateLogExists}");
+
         details.Add($"Window title         : \"{windowTitle}\"");
         details.Add($"Window is the startup-failure dialog: {windowIsFailureDialog}");
         details.Add($"Startup log says     : completed={startupCompleted}, failed={startupFailed}");
 
-        if (processAlive && hasWindow && !windowIsFailureDialog && startupCompleted && !startupFailed)
+        var isolationProven = foreignLines.Count == 0 && beginCount == 1 && privateDatabaseExists;
+
+        if (processAlive && hasWindow && !windowIsFailureDialog && startupCompleted && !startupFailed
+            && isolationProven)
         {
             return CheckResult.Pass(
                     Id, Title, expected,
                     $"window present: MainWindowHandle=0x{windowHandle.ToInt64():X} (\"{windowTitle}\"), "
-                  + $"startup log reports completion, pid alive after {elapsed.TotalMilliseconds:F0} ms")
+                  + $"startup log reports completion, pid alive after {elapsed.TotalMilliseconds:F0} ms, "
+                  + $"log isolated to pid {ownProcessId} ({logTail.Count} lines, 0 foreign)")
                 .With(details.ToArray());
         }
 
@@ -287,15 +334,21 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                     + "starting, and in the pre-fix build it did so silently)"
                     : startupFailed
                         ? "the startup log reported a failure (EXCEPTION in OnLaunched)"
-                        : "the process stayed alive but never created a visible top-level window "
-                        + "(the classic 'double-click does nothing' failure: the startup exception "
-                        + "was swallowed)";
+                        : !isolationProven
+                            ? "the launch did not prove its own isolation: "
+                            + $"{foreignLines.Count} line(s) from another process, {beginCount} "
+                            + "\"startup sequence begins\" line(s), private database created="
+                            + $"{privateDatabaseExists}"
+                            : "the process stayed alive but never created a visible top-level window "
+                            + "(the classic 'double-click does nothing' failure: the startup exception "
+                            + "was swallowed)";
 
         details.Add($"FAIL REASON: {reason}");
         return CheckResult.Fail(Id, Title, expected,
                 $"MainWindowHandle=0x{windowHandle.ToInt64():X} (\"{windowTitle}\"), "
               + $"visibleTopLevelWindows={visibleTopLevelWindows}, alive={processAlive}, "
-              + $"exitedEarly={exitBeforeWindow}, completed={startupCompleted}, failed={startupFailed}")
+              + $"exitedEarly={exitBeforeWindow}, completed={startupCompleted}, failed={startupFailed}, "
+              + $"foreignLogLines={foreignLines.Count}, beginsLines={beginCount}")
             .With(details.ToArray());
     }
 
