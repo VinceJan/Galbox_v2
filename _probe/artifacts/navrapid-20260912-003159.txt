@@ -1,0 +1,197 @@
+================================================================
+ GAlBOX RAPID NAVIGATION PROBE
+================================================================
+ started            : 2026-09-12 00:31:59Z
+ exe                : E:\tmp\Galbox_crash\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+ target switches    : 200
+ pacing (StepMs)    : 40
+ first-chance trace : True
+ report file        : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-20260912-003159.txt
+ process            : pid=28784
+ window acquired after 2000 ms -> handle=7474500
+ nav item resolved : 主页
+ nav item resolved : 游戏库
+ nav item resolved : 存档管理
+ nav item resolved : 补丁中心
+ nav item NOT FOUND : Settings
+
+--- rapid navigation: 200 switches, 40 ms pacing ---
+  ... 25/200 switches at 52.2s
+
+--- RESULT ---
+ switches completed : 33 / 200
+ select calls failed: 1
+ elapsed            : 68.8966409 s
+ PROCESS DIED       : YES
+ exit code          : 0xFFFFFFFF (-1)
+ died after switch  : 33
+ last item clicked  : 游戏库
+ next item would be : 存档管理
+
+--- APPLICATION LOG (app-YYYYMMDD.log, tail) ---
+ file: C:\Users\Jiang\AppData\Local\Galbox\logs\app-20260912.log
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin",
+    "E:\\Develop_tools\\vscode\\Microsoft VS Code\\bin",
+    "E:\\Develop_tools\\Antigravity\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Pandoc\\",
+    "C:\\Users\\Jiang\\.bun\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\nvm",
+    "C:\\nvm4w\\nodejs",
+    "C:\\Users\\Jiang\\AppData\\Local\\Microsoft\\WinGet\\Links",
+    "C:\\Users\\Jiang\\AppData\\Local\\GitHubDesktop\\bin",
+    "C:\\Users\\Jiang\\.claude\\bin",
+    "C:\\Users\\Jiang\\bin",
+    "D:\\Software\\Obsidian",
+    "C:\\Users\\Jiang\\.qoder\\bin\\qodercli",
+    "C:\\Users\\Jiang\\AppData\\Local\\OfficeCli",
+    "D:\\Software\\Warp\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\Cua\\cua-driver\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Zellij\\",
+    "C:\\Users\\Jiang\\AppData\\Local\\PowerToys\\DSCModules\\",
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\Antigravity IDE\\bin"
+  ],
+  "unknownArgs": [],
+  "jsonWriteError": null
+}
+2026-09-12 00:25:56.547 [pid 15740] selftest 成功：handle=0x9C0914 title='Galbox' elapsedMs=81.7 json='C:\Users\Jiang\AppData\Local\Temp\galbox-g0-20260912-002457\selftest-selftest.json'
+2026-09-12 00:25:59.597 [pid 15740] 退出 pid=15740 exitCode=0
+
+--- NAVIGATION SMOKE RESULT FILE ---
+ (no smoke result file)
+
+--- STARTUP LOG (tail) ---
+ file: C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log
+2026-09-12 00:33:09.299 [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 00:33:09.300 [tid:1] OnLaunched: startup sequence completed
+2026-09-12 00:33:09.576 [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+2026-09-12 00:33:09.647 [tid:1] OnLaunched: startup sequence begins
+2026-09-12 00:33:10.299 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+2026-09-12 00:33:10.370 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+2026-09-12 00:33:10.621 [tid:1] BangumiAuthService initialized
+2026-09-12 00:33:10.702 [tid:1] ScrapingCacheService initialized (entries: 2)
+2026-09-12 00:33:11.052 [tid:1] Main window created and activated: handle=0x15D0AC2
+2026-09-12 00:33:11.067 [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 00:33:11.068 [tid:1] OnLaunched: startup sequence completed
+2026-09-12 00:33:16.352 [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+2026-09-12 00:33:16.431 [tid:1] OnLaunched: startup sequence begins
+2026-09-12 00:33:17.123 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+2026-09-12 00:33:17.209 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+2026-09-12 00:33:17.502 [tid:1] BangumiAuthService initialized
+2026-09-12 00:33:17.586 [tid:1] ScrapingCacheService initialized (entries: 2)
+2026-09-12 00:33:18.087 [tid:1] Main window created and activated: handle=0x63058A
+2026-09-12 00:33:18.104 [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 00:33:18.105 [tid:1] OnLaunched: startup sequence completed
+
+--- FIRST-CHANCE LOG (tail) ---
+00:32:56.119 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:32:56.145 System.InvalidCastException: 不支持此接口
+
+不支持此接口
+
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:32:56.146 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:32:56.147 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+   at ABI.Microsoft.UI.Xaml.Data.PropertyChangedEventArgsRuntimeClassFactory.CreateInstance(String name)
+   at ABI.System.ComponentModel.PropertyChangedEventHandler.NativeDelegateWrapper.Invoke(Object sender, PropertyChangedEventArgs e)
+   at Galbox.App.ViewModels.PatchCenterViewModel.set_ErrorMessage(String value) in E:\tmp\Galbox_crash\src\Galbox.App\obj\x64\Debug\net8.0-windows10.0.19041.0\win-x64\CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.ObservablePropertyGenerator\Galbox.App.ViewModels.PatchCenterViewModel.g.cs:line 46
+   at Galbox.App.ViewModels.PatchCenterViewModel.LoadPatchesForGameSafeAsync(Int32 gameId) in E:\tmp\Galbox_crash\src\Galbox.App\ViewModels\PatchCenterViewModel.cs:line 466
+   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()
+
+00:33:04.420 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:33:04.441 System.InvalidCastException: 不支持此接口
+
+不支持此接口
+
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:33:04.442 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:33:04.442 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+   at ABI.Microsoft.UI.Xaml.Data.PropertyChangedEventArgsRuntimeClassFactory.CreateInstance(String name)
+   at ABI.System.ComponentModel.PropertyChangedEventHandler.NativeDelegateWrapper.Invoke(Object sender, PropertyChangedEventArgs e)
+   at Galbox.App.ViewModels.PatchCenterViewModel.set_ErrorMessage(String value) in E:\tmp\Galbox_crash\src\Galbox.App\obj\x64\Debug\net8.0-windows10.0.19041.0\win-x64\CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.ObservablePropertyGenerator\Galbox.App.ViewModels.PatchCenterViewModel.g.cs:line 46
+   at Galbox.App.ViewModels.PatchCenterViewModel.LoadPatchesForGameSafeAsync(Int32 gameId) in E:\tmp\Galbox_crash\src\Galbox.App\ViewModels\PatchCenterViewModel.cs:line 466
+   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()
+
+00:33:12.747 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:33:12.811 System.InvalidCastException: 不支持此接口
+
+不支持此接口
+
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:33:12.813 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:33:12.813 System.Runtime.InteropServices.COMException: 
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+   at ABI.Microsoft.UI.Xaml.Data.PropertyChangedEventArgsRuntimeClassFactory.CreateInstance(String name)
+   at ABI.System.ComponentModel.PropertyChangedEventHandler.NativeDelegateWrapper.Invoke(Object sender, PropertyChangedEventArgs e)
+   at Galbox.App.ViewModels.PatchCenterViewModel.set_ErrorMessage(String value) in E:\tmp\Galbox_crash\src\Galbox.App\obj\x64\Debug\net8.0-windows10.0.19041.0\win-x64\CommunityToolkit.Mvvm.SourceGenerators\CommunityToolkit.Mvvm.SourceGenerators.ObservablePropertyGenerator\Galbox.App.ViewModels.PatchCenterViewModel.g.cs:line 46
+   at Galbox.App.ViewModels.PatchCenterViewModel.LoadPatchesForGameSafeAsync(Int32 gameId) in E:\tmp\Galbox_crash\src\Galbox.App\ViewModels\PatchCenterViewModel.cs:line 466
+   at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw()
+
+----- [2026/9/12 0:28:42] Windows Error Reporting (Id=1001, Level=信息) -----
+故障存储段 1608469888873659944，类型 4
+事件名称: APPCRASH
+响应: 不可用
+Cab ID: 0
+
+问题签名:
+P1: Galbox.App.exe
+P2: 1.0.0.0
+P3: 6a870000
+P4: combase.dll
+P5: 10.0.26100.9444
+P6: 8c05274d
+P7: 80004003
+P8: 00000000000579e4
+P9: 
+P10: 
+
+附加文件:
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.c04e6faa-5b68-439b-b17e-7d5e1128773e.tmp.dmp
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.04838be9-b7b5-4f3a-a905-e7dcc970a8c6.tmp.WERInternalMetadata.xml
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.4e5bf05a-1248-4e0d-9cfd-fbefe4ef8a46.tmp.csv
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.f423cbc0-02be-4b16-ad11-61dc03cc78a1.tmp.txt
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.71ab4150-19a0-4f7a-b95b-f129e5caa495.tmp.xml
+
+可在此处获取这些文件:
+\\?\C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_Galbox.App.exe_ff58e22486865b6d9f628318d8a72983841775_4de96f0b_cc04c5bb-ca1a-4133-a212-bd74aa21c5a0
+
+分析符号: 
+重新检查解决方案: 0
+报告 ID: ba98925c-ca57-4555-9f6a-8b1bf0a6afef
+报告状态: 268435456
+哈希存储段: 1c8962f5f94d5e7346526ed78639fe28
+Cab GUID: 0
+
+----- [2026/9/12 0:28:33] Application Error (Id=1000, Level=错误) -----
+出错应用程序名称： Galbox.App.exe，版本： 1.0.0.0，时间戳： 0x6a870000
+出错模块名称： Microsoft.UI.Xaml.dll， 版本： 3.1.6.0，时间戳： 0xa252a1e7
+异常代码： 0xc000027b
+错误偏移： 0x00000000003a3385
+出错进程 ID： 0x6C4C
+出错应用程序开始时间： 0x1DD420A8ECC7315
+Faulting 应用程序路径： E:\tmp\Galbox_crash\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+Faulting 模块路径： C:\Program Files\WindowsApps\Microsoft.WindowsAppRuntime.1.6_6000.519.329.0_x64__8wekyb3d8bbwe\Microsoft.UI.Xaml.dll
+Report ID： ba98925c-ca57-4555-9f6a-8b1bf0a6afef
+Faulting 包全名： 
+Faulting 程序包相对应用程序 ID：  个
+
+(no fresh WER report folders for Galbox)
+
+PROBE VERDICT: CRASHED
+ report saved to    : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-20260912-003159.txt

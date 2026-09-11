@@ -1,0 +1,5 @@
+.symfix E:\tmp\symcache
+.reload
+.ecxr
+!analyze -v
+q

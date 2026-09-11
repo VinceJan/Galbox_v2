@@ -1,0 +1,6 @@
+.symfix E:\tmp\symcache
+.reload
+.exr -1
+dt 0x212000ec0b8 combase!STOWED_EXCEPTION_INFORMATION_V2 -r
+dps 0x21253f7acb0 L0x8
+q

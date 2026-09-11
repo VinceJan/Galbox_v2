@@ -123,7 +123,14 @@ internal static class Program
             // FAIL -> PASS pair possible from one harness revision.
             new A90ReservedInterfaceShapeCheck(),
             new A91ReservedFeatureHiddenCheck(),
-            new A92ReservedNoFakeAvailabilityCheck()
+            new A92ReservedNoFakeAvailabilityCheck(),
+
+            // A50: locks the rapid-navigation crash (0xC000027B) that only appears when the
+            // navigation menu is switched back to back. Two independent defects produced it; see
+            // PatchCenterViewModel for the thread-affinity half and PatchCenterPage.xaml for the
+            // Flyout half.
+            // the navigation menu is switched back to back.
+            new A50RapidNavigationSurvivalCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));

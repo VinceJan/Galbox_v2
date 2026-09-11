@@ -1,0 +1,77 @@
+
+Microsoft (R) Windows Debugger Version 10.0.17763.132 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Jiang\AppData\Local\CrashDumps\Galbox.App.exe.29716.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+Symbol search path is: srv*
+Executable search path is: 
+Windows 10 Version 26200 MP (16 procs) Free x64
+Product: WinNt, suite: SingleUserTS Personal
+26100.1.amd64fre.ge_release.240331-1435
+Machine Name:
+Debug session time: Sat Sep 12 00:16:57.000 2026 (UTC + 8:00)
+System Uptime: 0 days 3:59:41.372
+Process Uptime: 0 days 0:00:22.000
+................................................................
+................................................................
+................................................................
+..................................
+Loading unloaded module list
+....
+This dump file has an exception of interest stored in it.
+The stored exception information can be accessed via .ecxr.
+(7414.7eec): Unknown exception - code c000027b (first/second chance not available)
+KERNELBASE!RaiseFailFastException+0x188:
+00007ffd`c73da1a8 0f1f440000      nop     dword ptr [rax+rax]
+0:000> .symfix E:\tmp\symcache
+0:000> .reload
+................................................................
+................................................................
+................................................................
+..................................
+Loading unloaded module list
+....
+0:000> .exr -1
+ExceptionAddress: 00007ffcfba23385 (Microsoft_UI_Xaml!FailFastWithStowedExceptions+0x0000000000000059)
+   ExceptionCode: c000027b
+  ExceptionFlags: 00000001
+NumberParameters: 2
+   Parameter[0]: 0000021253f7ad70
+   Parameter[1]: 0000000000000002
+0:000> dt 0x212000ec0b8 combase!STOWED_EXCEPTION_INFORMATION_V2 -r
+   +0x000 Header           : _STOWED_EXCEPTION_INFORMATION_HEADER
+      +0x000 Size             : 0x38
+      +0x004 Signature        : 0x53453032
+   +0x008 ResultCode       : 80004003
+   +0x00c ExceptionForm    : 0y01
+   +0x00c ThreadId         : 0y000000000000000001111110111011 (0x1fbb)
+   +0x010 ExceptionAddress : 0x00007ffd`c7bc79e4 Void
+   +0x018 StackTraceWordSize : 8
+   +0x01c StackTraceWords  : 2
+   +0x020 StackTrace       : 0x00000212`53f7acb0 Void
+   +0x010 ErrorText        : 0x00007ffd`c7bc79e4  "譈???"
+   +0x028 NestedExceptionType : 0x314f454c
+   +0x030 NestedException  : 0x00000212`05240c48 Voi0:000> dps 0x21253f7acb0 L0x8
+00000212`53f7acb0  ????????`????????
+00000212`53f7acb8  ????????`????????
+00000212`53f7acc0  ????????`????????
+00000212`53f7acc8  ????????`????????
+00000212`53f7acd0  ????????`????????
+00000212`53f7acd8  ????????`????????
+00000212`53f7ace0  ????????`????????
+00000212`53f7ace8  ????????`????????
+0:000> q
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'

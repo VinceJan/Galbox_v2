@@ -1,0 +1,2732 @@
+====================================================================================================
+ GALBOX HEADLESS ACCEPTANCE RUN
+====================================================================================================
+ UTC started        : 2026-09-11 17:08:41Z
+ OS                 : Microsoft Windows 10.0.26200
+ Process arch       : X64
+ Runtime            : .NET 8.0.31
+ Executable         : E:\tmp\Galbox_final\tests\Galbox.Acceptance\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.Acceptance.exe
+ Working directory  : E:\tmp\Galbox_final
+ Game folder        : D:\GAME\Dreamin'_Her (exists: True)
+ Scraping query     : "Dreamin' Her"
+ Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\acceptance.db
+ Real app DB        : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (untouched)
+ Verbose logs       : False
+
+ Dependency-injection preflight (UI-free replica of App.xaml.cs ConfigureServices):
+   [OK]      IGameUtilityService      GameUtilityService
+   [OK]      ISaveManagementService   SaveManagementService
+   [OK]      IGameScrapingService     GameScrapingService
+   [OK]      IErrorCheckingService    ErrorCheckingService
+   [OK]      IScrapingCacheService    ScrapingCacheService
+   [OK]      IBangumiAuthService      BangumiAuthService
+   [OK]      IAutoScrapingService     AutoScrapingService
+   [OK]      IProcessMonitorService   ProcessMonitorService
+   [INFO]    INavigationService type present in Galbox.App assembly: True (intentionally not registered: it requires Microsoft.UI.Xaml.Controls)
+ moyu patch-source registrations (UI-free replica of App.xaml.cs):
+   [OK]      MoyuHttpClient           MoyuHttpClient
+   [OK]      MoyuApi                  MoyuApi
+   [OK]      MoyuOptions              MoyuOptions
+   [OK]      IMoyuKeyStore            MoyuDpapiKeyStore
+   [OK]      MoyuDownloadWatcher      MoyuDownloadWatcher
+   [OK]      MoyuBrowserLauncher      MoyuBrowserLauncher
+ Preflight failures : 0
+====================================================================================================
+
+####################################################################################################
+# [A0] Database isolation, schema creation and GameInfo round-trip
+####################################################################################################
+EXPECTED : fresh acceptance.db is (re)created, GameInfo persists and reads back identically, and a second reset proves the run is repeatable
+ACTUAL   : created=True, roundTrip=True, repeatable=True
+DETAILS  :
+  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\acceptance.db
+  Real app DB path   : C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+  In isolation       : True
+  EnsureDeleted()    : False
+  EnsureCreated()    : True
+  DB file exists     : True (4096 bytes)
+  Tables created     : 12 [Characters, Documents, ErrorRecords, Games, MediaFiles, Patches, SaveBackups, SaveGroups, SaveNodes, Screenshots, UserSettings, sqlite_sequence]
+  --- game library state on the fresh database ---
+    total games        : 0
+    IsScraped == true  : 0
+    IsScraped == false : 0   (library is empty on a fresh DB)
+  --- inserted test game, read back with AsNoTracking ---
+    Id                 : 1
+    NameOriginal       : Dreamin' Her
+    InstallPath        : D:\GAME\Dreamin'_Her
+    MainExecutable     : D:\GAME\Dreamin'_Her\dreaminher.exe
+    IsScraped          : False
+    EngineType         : Unknown
+    DisplayName        : Dreamin' Her
+    AddedTime (UTC)    : 2026-09-11 17:08:42Z
+  --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
+    games after reset  : 0 (expected 0)
+    DB size after reset: 4096 bytes
+  --- re-seeded test game for later checks: Id=1 ---
+RESULT   : PASS  (1319 ms)
+
+####################################################################################################
+# [A1] FindExecutableInFolder picks the intended launcher
+####################################################################################################
+EXPECTED : Path.GetFileName(result) == dreaminher.exe
+ACTUAL   : dreaminher.exe
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Folder exists      : True
+  *.exe found        : 2
+    raw[0] (OS order, first is what the service returns): dreaminher-32.exe
+    raw[1] (OS order, first is what the service returns): dreaminher.exe
+  exe files (sorted) : dreaminher-32.exe, dreaminher.exe
+  Service result     : D:\GAME\Dreamin'_Her\dreaminher.exe
+  Service result name: dreaminher.exe
+    exists           : True
+    size             : 123392 bytes
+RESULT   : PASS  (14 ms)
+
+####################################################################################################
+# [A2] CalculateFolderSize reports the real folder size
+####################################################################################################
+EXPECTED : > 900.00 MB (943718400 bytes)
+ACTUAL   : 1079379981 bytes (1.005 GB)
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Service result     : 1079379981 bytes (1.005 GB)
+  Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
+  Deviation          : 0 bytes (0%)
+RESULT   : PASS  (99 ms)
+
+####################################################################################################
+# [A3] DetectSaveLocationAsync finds the Ren'Py save folder
+####################################################################################################
+EXPECTED : Success == true, EngineType == Renpy, a detected path ending in 'saves', and a non-empty save-file list
+ACTUAL   : Success=true, EngineType=Renpy, PrimarySavePath=(null), AlternativePaths=1, SaveFiles=12
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.NameCn    : (null)
+  GameInfo.NameOriginal : Dreamin' Her
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.EngineType (stored, pre-detection) : Unknown
+  Expected engine    : Renpy
+  Detector folder key: Dreamin'_Her
+  AppData Roaming    : C:\Users\Jiang\AppData\Roaming
+  AppData folders matching 'Dreamin'_Her' / 'Dreamin'_Her-*' : 0
+  game\saves folder exists            : True
+  game\saves *.save file count        : 12
+  --- DetectSaveLocationAsync result (raw) ---
+  Success            : True
+  EngineType         : Renpy
+  PrimarySavePath    : (null)
+  AlternativePaths   : 1
+    alt[0]          : D:\GAME\Dreamin'_Her\game\saves (exists: True)
+  SaveFiles          : 12
+    D:\GAME\Dreamin'_Her\game\saves\1-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\1-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-10-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-2-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-3-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-4-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-6-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-7-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-8-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-9-LT1.save
+  ErrorMessage       : (null)
+  ExtendedInfo       : 1 entries
+    GameName = Dreamin'_Her
+RESULT   : PASS  (7 ms)
+
+####################################################################################################
+# [A4] CheckGameAsync runs without internal failure
+####################################################################################################
+EXPECTED : call returns a list, no internal ERROR is logged, and every item has a title, category and severity (0 items is a valid result)
+ACTUAL   : 0 finding(s), 0 row(s) persisted
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.NameOriginal : Dreamin' Her
+  Findings           : 0
+  (no issues reported - this is a valid outcome for an English-path Ren'Py game)
+  ErrorRecords rows persisted for this game: 0
+RESULT   : PASS  (22 ms)
+
+####################################################################################################
+# [A5] SearchGameAsync returns live results from the four sources
+####################################################################################################
+EXPECTED : at least one source returns >= 1 item AND ScrapingResult.BestMatch != null
+ACTUAL   : HasResults=true, BestMatch=Bangumi, total items=16
+DETAILS  :
+  Query string       : "Dreamin' Her"
+  Persistent cache   : DISABLED for this run (guarantees a live network query)
+  HttpClient timeout : 30s per request, as configured by the container
+  Total elapsed      : 1513 ms
+  SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
+  HasResults         : True
+  BestMatch          : Bangumi (4 items)
+  Result.Errors      : 0
+  
+  ================ SOURCE: Bangumi ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 912
+    Items               : 4
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : 309736
+          TitleCn       : Dreamin' Her -我梦见了她。-
+          TitleOriginal : Dreamin'Her  -僕は、彼女の夢を見る。-
+          Titles        : ["Dreamin'Her  -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。-"]
+          Rating        : 6.90
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+          ReleaseDate   : 2022-04-28
+          Developer     : LIFE0
+          Description   : 五十嵐蒼は疲れていた。
+母親の希望に合わせた受験勉強漬けの日々。
+趣味の小説もうまく書けない。
+自分の存在意義まで疑う高校３年生の夏。
+
+彼の癒やしは幼馴染の七瀬未来だけ。
+彼女と一緒にいられる時間が、
+唯一、蒼に安らぎをもたらしてくれていた。
+
+だが、そんな未来にすら理由もわからず拒絶され、
+絶望...
+      [1] IsBestMatch=False MatchScore=0
+          SourceId      : 534948
+          TitleCn       : 
+          TitleOriginal : ドリーミン・アワー
+          Titles        : ["ドリーミン・アワー"]
+          Rating        : (null)
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/cd/2c/534948_9663j.jpg
+          ReleaseDate   : 2025-01-25
+          Developer     : ツナ
+          Description   : 食べた夢の影響で姿が変わってしまう特異体質な
+夢魔幼なじみくんと日々会話する短編ノベルゲームです。
+わりと乙女向けで恋愛。基本優しい雰囲気、たまにシリアス。
+
+
+会話をすることで、
+ふたりのこれまで/これからが見えてくる…かもしれません。
+
+そうしたら、あとは選ぶだけです。
+      [2] IsBestMatch=False MatchScore=53.33
+          SourceId      : 683318
+          TitleCn       : 
+          TitleOriginal : The DREAMFIN PEAK
+          Titles        : ["The DREAMFIN PEAK"]
+          Rating        : (null)
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/ce/23/683318_Y3yb8.jpg
+          ReleaseDate   : (null)
+          Developer     : Levelonesucks
+          Description   : THE DREAMFIN PEAK is a short cozy game where you'll leap and latch through magic cliffs, then cast your rod to catch a fish.
+
+On paths untamed by feet before,...
+      [3] IsBestMatch=False MatchScore=23.33
+          SourceId      : 454778
+          TitleCn       : 
+          TitleOriginal : Touhou Artificial Dream in Arcadia
+          Titles        : ["Touhou Artificial Dream in Arcadia"]
+          Rating        : 7.30
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/79/a6/454778_q7r4x.jpg
+          ReleaseDate   : 2023-09-22
+          Developer     : Bar Holographic Otaku
+          Description   : Explore Gensokyo from an outsider's perspective in this old-school Touhou DRPG!
+Touhou Artificial Dream in Arcadia Steam charts, data, update history.
+  
+  ================ SOURCE: Vndb ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1281
+    Items               : 2
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : v28915
+          TitleCn       : Dreamin' Her -我梦见了她。-
+          TitleOriginal : Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-
+          Titles        : ["Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-" | "Dreamin' Her -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。-"]
+          Rating        : 77.30
+          CoverImageUrl : https://t.vndb.org/cv/01/84401.jpg
+          ReleaseDate   : 2022-04-28
+          Developer     : (null)
+          Description   : (null)
+      [1] IsBestMatch=False MatchScore=13.64
+          SourceId      : v50441
+          TitleCn       : (null)
+          TitleOriginal : Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop
+          Titles        : ["Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop" | "벚나무의 정령을 아이돌로 만드는 법" | "How to turn a Cherry tree spirit into an idol" | "桜の木の精霊をアイドルにする方法"]
+          Rating        : 60.60
+          CoverImageUrl : https://t.vndb.org/cv/58/111658.jpg
+          ReleaseDate   : 2024-03-22
+          Developer     : (null)
+          Description   : (null)
+  
+  ================ SOURCE: Ymgal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1436
+    Items               : 10
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : 38582
+          TitleCn       : Dreamin' Her -我梦见了她。
+          TitleOriginal : Dreamin' Her -僕は、彼女の夢を見る。-
+          Titles        : ["Dreamin' Her -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/d8/d80b13ec357643e29ca84f91e53fa6a3.webp
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [1] IsBestMatch=False MatchScore=20
+          SourceId      : 38839
+          TitleCn       : (null)
+          TitleOriginal : Her Sign
+          Titles        : ["Her Sign"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/b6/b64aa1d59dae40768c8e096c9a2358ca.jpg
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [2] IsBestMatch=False MatchScore=30
+          SourceId      : 36135
+          TitleCn       : (null)
+          TitleOriginal : Be Her Hero
+          Titles        : ["Be Her Hero"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/e4/e4bca2a699e54bd39ee072b86d887c45.jpg
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [3] IsBestMatch=False MatchScore=25.93
+          SourceId      : 25308
+          TitleCn       : (null)
+          TitleOriginal : Sweet Summer Dreamin’ -この夏・夢みる娘たち-
+          Titles        : ["Sweet Summer Dreamin’ -この夏・夢みる娘たち-"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/17/17fc77ddc4ff4ca093d33de75204d21b.jpg
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [4] IsBestMatch=False MatchScore=40
+          SourceId      : 27509
+          TitleCn       : (null)
+          TitleOriginal : He Beat Her.
+          Titles        : ["He Beat Her."]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/9c/9cc945d16c35454982b4a1b017457c10.jpg
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [5] IsBestMatch=False MatchScore=20
+          SourceId      : 24955
+          TitleCn       : (null)
+          TitleOriginal : Her Pen
+          Titles        : ["Her Pen"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/14/1497b962b514464cb2545e61f6d93560.jpg
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [6] IsBestMatch=False MatchScore=17.02
+          SourceId      : 39390
+          TitleCn       : (null)
+          TitleOriginal : Camp With Mom and My Annoying Friend Who Wants to Rail Her
+          Titles        : ["Camp With Mom and My Annoying Friend Who Wants to Rail Her"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/39/3942ef17248d4a7a9a3ca1a77522b83b.webp
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [7] IsBestMatch=False MatchScore=22.73
+          SourceId      : 19306
+          TitleCn       : (null)
+          TitleOriginal : 翼のはためき ～A Sound of her wings～
+          Titles        : ["翼のはためき ～A Sound of her wings～"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/3c/3c0d3835942a4b51bbb85cf1ab21bb4b.jpg
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [8] IsBestMatch=False MatchScore=17.24
+          SourceId      : 48949
+          TitleCn       : (null)
+          TitleOriginal : となりに彼女のいる幸せ～ in first snow with her ～
+          Titles        : ["となりに彼女のいる幸せ～ in first snow with her ～"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/2f/2f5ff2ab42a24b91b7ca5471ffe975cb.webp
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+      [9] IsBestMatch=False MatchScore=26.32
+          SourceId      : 22539
+          TitleCn       : 她的眼泪曾是我的光芒
+          TitleOriginal : Her Tears Were My Light
+          Titles        : ["Her Tears Were My Light" | "她的眼泪曾是我的光芒"]
+          Rating        : (null)
+          CoverImageUrl : https://cdn.ymgal.games/archive/main/0b/0b0cc8b4e71041d49ac97ce61e398e43.webp
+          ReleaseDate   : (null)
+          Developer     : (null)
+          Description   : (null)
+  
+  ================ SOURCE: Cngal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 326
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+RESULT   : PASS  (1523 ms)
+
+####################################################################################################
+# [A6] Scraped metadata is complete enough to use
+####################################################################################################
+EXPECTED : the best-matching item has a non-empty title AND a non-empty cover image URL
+ACTUAL   : title=Dreamin' Her -我梦见了她。-, coverUrl=present
+DETAILS  :
+  Query              : "Dreamin' Her"
+  Total items across all sources: 16
+  
+  Per-source totals:
+    source   | items | TitleCn | TitleOriginal | Rating | CoverImageUrl
+    ---------+-------+---------+---------------+--------+--------------
+    Bangumi  |     4 |       1 |             4 |      2 |             4
+    Cngal    |     0 |       0 |             0 |      0 |             0
+    Vndb     |     2 |       1 |             2 |      2 |             2
+    Ymgal    |    10 |       2 |            10 |      0 |            10
+  
+  Per-item field presence:
+    [Bangumi] SourceId=309736 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。-
+        TitleOriginal : Dreamin'Her  -僕は、彼女の夢を見る。-
+        Rating        : 6.90
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+        Description   : 260 chars
+        Tags          : 15
+        Characters    : 0
+    [Bangumi] SourceId=534948 MatchScore=0 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : ドリーミン・アワー
+        Rating        : MISSING
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/cd/2c/534948_9663j.jpg
+        Description   : 145 chars
+        Tags          : 4
+        Characters    : 0
+    [Bangumi] SourceId=683318 MatchScore=53.33 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : The DREAMFIN PEAK
+        Rating        : MISSING
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/ce/23/683318_Y3yb8.jpg
+        Description   : 701 chars
+        Tags          : 0
+        Characters    : 0
+    [Bangumi] SourceId=454778 MatchScore=23.33 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Touhou Artificial Dream in Arcadia
+        Rating        : 7.30
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/79/a6/454778_q7r4x.jpg
+        Description   : 151 chars
+        Tags          : 10
+        Characters    : 0
+    [Vndb] SourceId=v28915 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。-
+        TitleOriginal : Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-
+        Rating        : 77.30
+        CoverImageUrl : https://t.vndb.org/cv/01/84401.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Vndb] SourceId=v50441 MatchScore=13.64 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop
+        Rating        : 60.60
+        CoverImageUrl : https://t.vndb.org/cv/58/111658.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=38582 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。
+        TitleOriginal : Dreamin' Her -僕は、彼女の夢を見る。-
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/d8/d80b13ec357643e29ca84f91e53fa6a3.webp
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=38839 MatchScore=20 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Her Sign
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/b6/b64aa1d59dae40768c8e096c9a2358ca.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=36135 MatchScore=30 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Be Her Hero
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/e4/e4bca2a699e54bd39ee072b86d887c45.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=25308 MatchScore=25.93 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Sweet Summer Dreamin’ -この夏・夢みる娘たち-
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/17/17fc77ddc4ff4ca093d33de75204d21b.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=27509 MatchScore=40 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : He Beat Her.
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/9c/9cc945d16c35454982b4a1b017457c10.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=24955 MatchScore=20 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Her Pen
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/14/1497b962b514464cb2545e61f6d93560.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=39390 MatchScore=17.02 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Camp With Mom and My Annoying Friend Who Wants to Rail Her
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/39/3942ef17248d4a7a9a3ca1a77522b83b.webp
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=19306 MatchScore=22.73 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : 翼のはためき ～A Sound of her wings～
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/3c/3c0d3835942a4b51bbb85cf1ab21bb4b.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=48949 MatchScore=17.24 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : となりに彼女のいる幸せ～ in first snow with her ～
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/2f/2f5ff2ab42a24b91b7ca5471ffe975cb.webp
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Ymgal] SourceId=22539 MatchScore=26.32 IsBestMatch=False
+        TitleCn       : 她的眼泪曾是我的光芒
+        TitleOriginal : Her Tears Were My Light
+        Rating        : MISSING
+        CoverImageUrl : https://cdn.ymgal.games/archive/main/0b/0b0cc8b4e71041d49ac97ce61e398e43.webp
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+  
+  BestMatch structure (ScrapingResult.BestMatch is a SourceScrapingResult):
+    BestMatch.Source            : Bangumi
+    BestMatch.Items.Count       : 4
+    BestMatch.Items[0]          : SourceId=309736, TitleCn=Dreamin' Her -我梦见了她。-, TitleOriginal=Dreamin'Her  -僕は、彼女の夢を見る。-, MatchScore=90
+    item with IsBestMatch=true  : SourceId=309736, TitleCn=Dreamin' Her -我梦见了她。-, TitleOriginal=Dreamin'Her  -僕は、彼女の夢を見る。-, MatchScore=90
+  
+  Best-match row title present      : True
+  Best-match row cover URL present  : True
+RESULT   : PASS  (7 ms)
+
+####################################################################################################
+# [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+####################################################################################################
+EXPECTED : Bangumi and VNDB are both reachable AND both return >= 1 hit for this game when asked with a request shape they accept
+ACTUAL   : bangumiReachable=True, bangumiHasGame=True, vndbReachable=True, vndbHasGame=True
+DETAILS  :
+  --- HttpClient configuration built by the container ---
+    BangumiHttpClient  BaseAddress=https://api.bgm.tv/  Timeout=30s  UserAgent=Galbox/1.0
+    VndbHttpClient     BaseAddress=https://api.vndb.org/kana/  Timeout=30s  UserAgent=Galbox/1.0
+    YmgalHttpClient    BaseAddress=https://www.ymgal.games/  Timeout=30s  UserAgent=Galbox/1.0
+    CngalHttpClient    BaseAddress=https://api.cngal.org/  Timeout=30s  UserAgent=Galbox/1.0
+  
+  === [2] traffic recorded from the application's own HttpClient pipelines ===
+      (captured by a transparent recording handler appended to each pipeline)
+  
+    --- BangumiHttpClient: 1 HTTP exchange(s) ---
+        POST https://api.bgm.tv/v0/search/subjects  ->  HTTP 200
+          request body : {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+          response top-level JSON keys : [data, total, limit, offset]
+          response body : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美 ... [TRUNCATED, total 8701 chars]
+  
+    --- VndbHttpClient: 1 HTTP exchange(s) ---
+        POST https://api.vndb.org/kana/vn  ->  HTTP 200
+          request body : {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, alttitle, titles{lang,title,official,main}, image.url, rating, released, length_minutes","results":10}
+          response top-level JSON keys : [more, results]
+          response body : {"more":false,"results":[{"alttitle":"Dreamin' Her -僕は、彼女の夢を見る。-","id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"released":"2022-04-28","title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"alttitle":"벚나무의 정령을 아이돌로 만드는 법","id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"released":"2024-03-22","title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title ... [TRUNCATED, total 896 chars]
+  
+    --- YmgalHttpClient: 2 HTTP exchange(s) ---
+        GET https://www.ymgal.games/oauth/token?grant_type=client_credentials&client_id=ymgal&client_secret=luna0327&scope=public  ->  HTTP 200
+          response top-level JSON keys : [access_token, token_type, expires_in, scope]
+          response body : {"access_token":"2e1d2103-1bb0-4ff1-940d-2466375921f8","token_type":"bearer","expires_in":3173,"scope":"public"}
+        GET https://www.ymgal.games/open/archive/search-game?mode=list&keyword=Dreamin%27 Her&pageNum=1&pageSize=10  ->  HTTP 200
+          response top-level JSON keys : [success, code, data]
+          response body : {"success":true,"code":0,"data":{"result":[{"id":38582,"name":"Dreamin' Her -僕は、彼女の夢を見る。-","chineseName":"Dreamin' Her -我梦见了她。","state":"PUBLIC_PUBLISHED","weights":0,"mainImg":"https://cdn.ymgal.games/archive/main/d8/d80b13ec357643e29ca84f91e53fa6a3.webp","publishVersion":6,"publishTime":"2025-08-01 17:45:06","publisher":54583,"score":"0","orgId":15756,"orgName":"LIFE0","releaseDate":"2022-04-28","haveChinese":true},{"id":38839,"name":"Her Sign","state":"PUBLIC_PUBLISHED","weights":0,"mainImg":"https://cdn.ymgal.games/archive/main/b6/b64aa1d59dae40768c8e096c9a2358ca.jpg","publishVersion":0,"publishTime":"2021-08-07 00:00:00","score":"0","orgId":20085,"orgName":"Cryoslight","releaseDate":"20 ... [TRUNCATED, total 3466 chars]
+  
+    --- CngalHttpClient: 1 HTTP exchange(s) ---
+        GET https://api.cngal.org/api/home/Search?Types=Game&Text=Dreamin%27 Her&Page=1  ->  HTTP 200
+          response top-level JSON keys : [pagedResultDto]
+          response body : {"pagedResultDto":{"totalCount":0,"totalPages":0,"data":[],"showPrevious":false,"showNext":false,"showFirst":false,"showLast":true,"maxResultCount":10,"currentPage":1,"sorting":"Id desc","filterText":null,"screeningConditions":null}}
+  
+    --- interpretation ---
+    BangumiResponse readable by BangumiSearchResponse : True  (model binds [total, limit, offset, data])
+    VNDB app-shaped HTTP status                       : 200  (a non-200 is an app-side request bug)
+    ymgal requests issued during A5                   : 2
+    cngal requests issued during A5                   : 1
+  
+  === [3a] Bangumi, corrected request (v0 search API, matches the app's own model) ===
+    POST https://api.bgm.tv/v0/search/subjects
+    body: {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+    HTTP status : 200 
+    body        : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美しい海だった。\r\n薄桃色の砂浜に、一人の少女が佇んでいる。\r\n\r\n七瀬未来にそっくりな、夢の中の彼女――\r\n\r\n夢が、現実を侵していく……","name":"Dreamin'Her  -僕は、彼女の夢を見る。-","name_cn":"Dreamin' Her -我梦见了她。-","tags":[{"name":"Galgame","count":210,"total_coun ... [TRUNCATED, total 8701 chars]
+    total reported by Bangumi : 4
+    first 'data[0]' : id=309736, name=Dreamin'Her  -僕は、彼女の夢を見る。-, name_cn=Dreamin' Her -我梦见了她。-
+  
+  === [3b] VNDB, corrected request (array filter + titles{...} sub-fields) ===
+    POST https://api.vndb.org/kana/vn
+    body: {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, titles{lang,title,official,main}, image.url, rating, length_minutes","results":10}
+    HTTP status : 200 
+    body        : {"more":false,"results":[{"id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title":"How to turn a Cherry tree spirit into an idol"},{"lang":"ja","main":false,"official":true,"title":"桜の木の精霊をアイドルにする方法"},{"lang":"ko","main":true,"official":true,"title":"벚나무의 정령을 아이돌로 만드는 법"}]}]}
+    count reported by VNDB    : (absent - kana API returns 'more'/'results' only)
+    results[] length          : 2
+    first 'results[0]' : id=v28915, title=Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-, rating=77.3
+  
+  --- verdict inputs ---
+    Bangumi reachable        : True (app traffic HTTP [200], corrected HTTP 200)
+    Bangumi holds this game  : True (total=4)
+    VNDB reachable           : True (corrected HTTP 200)
+    VNDB holds this game     : True (results[]=2)
+RESULT   : PASS  (2298 ms)
+
+####################################################################################################
+# [A8] Navigation, page and XAML resource completeness (no feature without a door)
+####################################################################################################
+EXPECTED : every navigation key resolves to an existing page, every DI-registered ViewModel is referenced by a view (or whitelisted with a reason), every page is reachable, every converter a view uses is registered, and every MainWindow menu item maps to a navigation key
+ACTUAL   : 8 navigation keys, 8 ViewModels, 8 views, 83 converter reference(s) all consistent
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_final
+  Views folder         : E:\tmp\Galbox_final\src\Galbox.App\Views (exists: True)
+  View XAML files      : 8
+  View code-behind files: 8
+  
+  --- A8.1 navigation keys -> page types ---
+    [OK]   Home             -> Galbox.App.Views.MainPage
+    [OK]   Library          -> Galbox.App.Views.LibraryPage
+    [OK]   SaveManager      -> Galbox.App.Views.SaveManagerPage
+    [OK]   PatchCenter      -> Galbox.App.Views.PatchCenterPage
+    [OK]   Settings         -> Galbox.App.Views.SettingsPage
+    [OK]   GameDetail       -> Galbox.App.Views.GameDetailPage
+    [OK]   ScrapingProgress -> Galbox.App.Views.ScrapingProgressPage
+    [OK]   ErrorReport      -> Galbox.App.Views.ErrorReportPage
+  
+  --- A8.2 ViewModels registered in App.xaml.cs -> view that references them ---
+    Registered ViewModels: 8
+    [OK]   ErrorReportViewModel       referenced by: ErrorReportPage.xaml.cs
+    [OK]   GameDetailViewModel        referenced by: GameDetailPage.xaml.cs
+    [OK]   LibraryViewModel           referenced by: LibraryPage.xaml.cs
+    [OK]   MainViewModel              referenced by: MainPage.xaml.cs
+    [OK]   PatchCenterViewModel       referenced by: PatchCenterPage.xaml.cs
+    [OK]   SaveManagerViewModel       referenced by: SaveManagerPage.xaml.cs
+    [OK]   ScrapingProgressViewModel  referenced by: ScrapingProgressPage.xaml.cs
+    [OK]   SettingsViewModel          referenced by: SettingsPage.xaml.cs
+  
+  --- A8.3 every page in Views/ is reachable ---
+    [OK]   ErrorReportPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   GameDetailPage           navigationKey=True, explicitNavigateTo=True
+    [OK]   LibraryPage              navigationKey=True, explicitNavigateTo=True
+    [OK]   MainPage                 navigationKey=True, explicitNavigateTo=True
+    [OK]   PatchCenterPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   SaveManagerPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   ScrapingProgressPage     navigationKey=True, explicitNavigateTo=True
+    [OK]   SettingsPage             navigationKey=True, explicitNavigateTo=True
+  
+  --- A8.4 converters referenced by a view are registered ---
+    App.xaml resource keys: 11
+    [OK]   ErrorReportPage.xaml       11 converter reference(s), all registered
+    [OK]   GameDetailPage.xaml        12 converter reference(s), all registered
+    [OK]   LibraryPage.xaml           12 converter reference(s), all registered
+    [OK]   MainPage.xaml              9 converter reference(s), all registered
+    [OK]   PatchCenterPage.xaml       13 converter reference(s), all registered
+    [OK]   SaveManagerPage.xaml       9 converter reference(s), all registered
+    [OK]   ScrapingProgressPage.xaml  4 converter reference(s), all registered
+    [OK]   SettingsPage.xaml          13 converter reference(s), all registered
+    Total converter references checked: 83
+  
+  --- A8.5 MainWindow.xaml menu items -> navigation keys ---
+    [OK]   menu Tag 'ErrorReport' -> ErrorReportPage
+    [OK]   menu Tag 'Home' -> MainPage
+    [OK]   menu Tag 'Library' -> LibraryPage
+    [OK]   menu Tag 'PatchCenter' -> PatchCenterPage
+    [OK]   menu Tag 'SaveManager' -> SaveManagerPage
+    [OK]   menu Tag 'ScrapingProgress' -> ScrapingProgressPage
+  
+  Sub-check failures : 0
+RESULT   : PASS  (68 ms)
+
+####################################################################################################
+# [A9] The GUI application opens a window while scrape-cache data is present
+####################################################################################################
+EXPECTED : with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s, and the startup log OF THAT PROCESS (its own private data folder) reports completion
+ACTUAL   : window present: MainWindowHandle=0x110AE6 ("Galbox 1.0.0"), startup log reports completion, pid alive after 2362 ms, log isolated to pid 25136 (11 lines, 0 foreign)
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_final
+  Application          : E:\tmp\Galbox_final\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Application built    : 2026-09-11 17:08:40Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 17:08:12Z (src/Galbox.App, obj/bin excluded)
+  Private data folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a9-9208\appdata  (passed to the child as GALBOX_DATA_DIR)
+  Real app database    : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (must stay untouched)
+  Private database     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a9-9208\appdata\galbox.db
+  Private startup log  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a9-9208\appdata\logs\startup-20260912.log
+  Shared startup log   : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (NOT read by this check any more)
+  Cache precondition  : private cache folder was EMPTY, wrote a probe entry (removed again at the end of this check): search_a9-startup-probe.json
+  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a9-9208\appdata\logs\startup-20260912.log (exists: False, bytes before launch: 0)
+  Launched             : pid 25136
+  Probe cache entry removed: search_a9-startup-probe.json
+  Alive when measured  : True (measured before the cleanup kill)
+  MainWindowHandle     : 0x110AE6 (non-zero)
+  Visible top-level windows owned by the process: 1
+  Elapsed              : 2362 ms (timeout 30s)
+  Exited before window : False
+  Cache files now      : 0 search_*.json
+  --- startup log lines written by this launch (11) ---
+      2026-09-12 01:08:47.168 [pid:25136] [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+      2026-09-12 01:08:47.248 [pid:25136] [tid:1] OnLaunched: startup sequence begins
+      2026-09-12 01:08:47.883 [pid:25136] [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a9-9208\appdata\galbox.db
+      2026-09-12 01:08:48.238 [pid:25136] [tid:1] Database initialization: mode=FreshInstall, applied=2
+      2026-09-12 01:08:48.239 [pid:25136] [tid:1] Database schema problems:
+      2026-09-12 01:08:48.239 [pid:25136] [tid:1] missing column: Games.VndbId
+      2026-09-12 01:08:48.406 [pid:25136] [tid:1] BangumiAuthService initialized
+      2026-09-12 01:08:48.482 [pid:25136] [tid:1] ScrapingCacheService initialized (entries: 2)
+      2026-09-12 01:08:48.812 [pid:25136] [tid:1] Main window created and activated: handle=0x110AE6
+      2026-09-12 01:08:48.824 [pid:25136] [tid:1] Process monitor: started=False, registered=0/0, error=SqliteException: SQLite Error 1: 'no such column: g.VndbId'.
+      2026-09-12 01:08:48.825 [pid:25136] [tid:1] OnLaunched: startup sequence completed
+  Log lines from this pid : 11/11 (expected token "[pid:25136]")
+  Log lines from ANOTHER process: 0
+  "startup sequence begins" lines in THIS log: 1 (must be exactly 1)
+  Private database created by the launch : True (192512 bytes)
+  Private startup log exists            : True
+  Window title         : "Galbox 1.0.0"
+  Window is the startup-failure dialog: False
+  Startup log says     : completed=True, failed=False
+RESULT   : PASS  (2532 ms)
+
+####################################################################################################
+# [A10] Save-node scan produces the real timeline data (12 nodes, labels, CG 6/27)
+####################################################################################################
+EXPECTED : ISaveNodeScanService resolves from the app-shaped container, one scan of 'D:\GAME\Dreamin'_Her' yields exactly 12 nodes with non-empty SceneLabel, the auto-3 node is '孤独感', CG is 6/27 with ids {0101,0301,0401,0501,0801,2401}, a second scan inserts nothing, and a scan of a missing directory fails with a concrete reason without writing any row
+ACTUAL   : service=resolved, nodes=12 (scan#2 still 12), emptySceneLabels=0, auto3.DisplayName='孤独感', cg=6/27 ids={0101,0301,0401,0501,0801,2401}, missingDir=AnalysisFailed/84 chars, rows unchanged by the failed scan=True
+DETAILS  :
+  GameInfo.Id          : 1
+  GameInfo.NameOriginal: Dreamin' Her
+  GameInfo.InstallPath : D:\GAME\Dreamin'_Her
+  GameInfo.EngineType  : Unknown
+  Acceptance DB        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\acceptance.db
+  Missing-path probe   : D:\GAME\__galbox_a10_missing_game__ (exists: False)
+  
+  --- A10.1 ISaveNodeScanService is registered and resolvable ---
+    resolved type      : Galbox.Services.Saves.SaveNodeScanService
+    [OK]   ISaveNodeScanService resolved.
+  
+  --- A10.2 first scan ---
+  Scan report (raw):
+      result        : SUCCESS
+      game          : id=1 install='D:\GAME\Dreamin'_Her'
+      saveDirectory : dreamin_her-1631775296
+      elapsed       : 0.54s
+      nodes         : slots=12 added=12 updated=0 skipped=0 failed=0 stale=0 afterScan=12
+      cg (game-level): 6/27 unlocked=[0101,0301,0401,0501,0801,2401]
+      scene progress : 122/345 (clusters=9, suspectedGroups=1)
+      slots         :
+        - auto-1-LT1       Added     Parsed        matchedBy=New        node=1
+        - auto-2-LT1       Added     Parsed        matchedBy=New        node=2
+        - 1-5-LT1          Added     Parsed        matchedBy=New        node=3
+        - 1-1-LT1          Added     Parsed        matchedBy=New        node=4
+        - auto-3-LT1       Added     Parsed        matchedBy=New        node=5
+        - auto-4-LT1       Added     Parsed        matchedBy=New        node=6
+        - auto-5-LT1       Added     Parsed        matchedBy=New        node=7
+        - auto-6-LT1       Added     Parsed        matchedBy=New        node=8
+        - auto-7-LT1       Added     Parsed        matchedBy=New        node=9
+        - auto-8-LT1       Added     Parsed        matchedBy=New        node=10
+        - auto-9-LT1       Added     Parsed        matchedBy=New        node=11
+        - auto-10-LT1      Added     Parsed        matchedBy=New        node=12
+      diagnostics   :
+        ! 10 script(s) exist in more than one archive; the 00patch copy was treated as the effective one: gui.rpy, macro/macro_screen.rpy, moviegallery.rpy, options.rpy, scenario/kakoend.rpy, scenario/main_scenario.rpy, scenario/script_test_chat.rpy, scenario/test.rpy, screens.rpy, script.rpy
+        ! probe UserAppData: exists=True saves=12 persistent=True path='C:\Users\Jiang\AppData\Roaming\RenPy\dreamin_her-1631775296'
+        ! probe GameLocal: exists=True saves=12 persistent=True path='D:\GAME\Dreamin'_Her\game\saves'
+        ! Scene progress (the honest replacement for a chapter percentage): 122/345 = 35.36% of all labels, 86/290 story scenes. The game defines no chapters, so no chapter figure is invented.
+        ! Scene-set clustering (Jaccard >= 0.34) produced 9 cluster(s), 1 of which hold two or more saves and are exposed as speculative groups: 疑似路线 1={auto-1-LT1/auto-2-LT1/1-5-LT1/1-1-LT1}
+    report.SlotCount          : 12
+    report.NodeCountAfterScan : 12
+    report added/updated/skipped/failed : 12/0/0/0
+    report.CgUnlockedIds      : {0101,0301,0401,0501,0801,2401}
+    report scene progress     : 122/345
+    report clusters / groups  : 9 / 1
+  
+  --- A10.2 node count after scan #1: 12 (expected 12) ---
+    SlotName                SceneLabel                       RouteName     Status   SaveModifiedTime (UTC)
+    auto-10-LT1             昔もこういう話してたよね                     (empty)       Parsed   2026-04-08 15:57:49
+    auto-9-LT1              念の為お掃除しておく                       (empty)       Parsed   2026-04-08 15:59:57
+    auto-8-LT1              絶妙なトロッコ問題                        (empty)       Parsed   2026-04-08 16:01:57
+    auto-7-LT1              合鍵                               (empty)       Parsed   2026-04-08 16:04:58
+    auto-6-LT1              俺結婚した？？                          (empty)       Parsed   2026-04-08 16:07:29
+    auto-5-LT1              たまにからかわれるんだ                      (empty)       Parsed   2026-04-08 16:10:51
+    auto-4-LT1              七瀬邸へ                             (empty)       Parsed   2026-04-08 16:15:23
+    auto-3-LT1              孤独感                              (empty)       Parsed   2026-04-08 16:18:04
+    1-1-LT1                 だーれだ                             疑似路线 1        Parsed   2026-04-08 16:18:58
+    1-5-LT1                 だーれだ                             疑似路线 1        Parsed   2026-04-08 16:19:13
+    auto-2-LT1              だーれだ                             疑似路线 1        Parsed   2026-04-08 16:19:16
+    auto-1-LT1              進路希望について                         疑似路线 1        Parsed   2026-06-21 03:08:37
+  
+  --- A10.3 every node carries a non-empty SceneLabel ---
+    nodes with a scene label : 12/12
+    nodes WITHOUT a label    : 0
+  
+  --- A10.4 the auto-3 save is named 孤独感 ---
+    auto-3 node found        : True
+    auto-3 SlotName          : auto-3-LT1
+    auto-3 SceneLabel        : 孤独感
+    auto-3 DisplayName       : 孤独感
+    auto-3 stored slot name is an empty string (the trap): False
+    json._save_name on the 12 saves      : 12/12 are empty (the game never names a save, so the slot name cannot be the label)
+    SlotName column actually holds       : auto-10-LT1, auto-9-LT1, auto-8-LT1, auto-7-LT1, auto-6-LT1, auto-5-LT1, auto-4-LT1, auto-3-LT1, 1-1-LT1, 1-5-LT1, auto-2-LT1, auto-1-LT1
+    nodes whose DisplayName is blank     : 0 (must be 0)
+  
+  --- A10.5 CG progress is game-level and exactly {0101,0301,0401,0501,0801,2401} ---
+    CgUnlockedCount values on the 12 nodes : {6} (expected {6})
+    CgTotalCount values on the 12 nodes    : {27} (expected {27})
+    union of CgUnlockedIdsJson             : {0101,0301,0401,0501,0801,2401}
+    expected id set                        : {0101,0301,0401,0501,0801,2401}
+    set equality                           : True
+    nodes with no CgUnlockedIdsJson        : 0
+    report.CgUnlockedCount/CgTotalCount    : 6/27
+  
+  --- A10.6 idempotency: a second scan must add nothing ---
+      result        : SUCCESS
+      game          : id=1 install='D:\GAME\Dreamin'_Her'
+      saveDirectory : dreamin_her-1631775296
+      elapsed       : 0.35s
+      nodes         : slots=12 added=0 updated=0 skipped=12 failed=0 stale=0 afterScan=12
+      cg (game-level): 6/27 unlocked=[0101,0301,0401,0501,0801,2401]
+      scene progress : 122/345 (clusters=9, suspectedGroups=1)
+      slots         :
+        - auto-1-LT1       Unchanged Parsed        matchedBy=FilePath   node=1
+        - auto-2-LT1       Unchanged Parsed        matchedBy=FilePath   node=2
+        - 1-5-LT1          Unchanged Parsed        matchedBy=FilePath   node=3
+        - 1-1-LT1          Unchanged Parsed        matchedBy=FilePath   node=4
+        - auto-3-LT1       Unchanged Parsed        matchedBy=FilePath   node=5
+        - auto-4-LT1       Unchanged Parsed        matchedBy=FilePath   node=6
+        - auto-5-LT1       Unchanged Parsed        matchedBy=FilePath   node=7
+        - auto-6-LT1       Unchanged Parsed        matchedBy=FilePath   node=8
+        - auto-7-LT1       Unchanged Parsed        matchedBy=FilePath   node=9
+        - auto-8-LT1       Unchanged Parsed        matchedBy=FilePath   node=10
+        - auto-9-LT1       Unchanged Parsed        matchedBy=FilePath   node=11
+        - auto-10-LT1      Unchanged Parsed        matchedBy=FilePath   node=12
+      diagnostics   :
+        ! 10 script(s) exist in more than one archive; the 00patch copy was treated as the effective one: gui.rpy, macro/macro_screen.rpy, moviegallery.rpy, options.rpy, scenario/kakoend.rpy, scenario/main_scenario.rpy, scenario/script_test_chat.rpy, scenario/test.rpy, screens.rpy, script.rpy
+        ! probe UserAppData: exists=True saves=12 persistent=True path='C:\Users\Jiang\AppData\Roaming\RenPy\dreamin_her-1631775296'
+        ! probe GameLocal: exists=True saves=12 persistent=True path='D:\GAME\Dreamin'_Her\game\saves'
+        ! Scene progress (the honest replacement for a chapter percentage): 122/345 = 35.36% of all labels, 86/290 story scenes. The game defines no chapters, so no chapter figure is invented.
+        ! Scene-set clustering (Jaccard >= 0.34) produced 9 cluster(s), 1 of which hold two or more saves and are exposed as speculative groups: 疑似路线 1={auto-1-LT1/auto-2-LT1/1-5-LT1/1-1-LT1}
+    node count after scan #1 : 12
+    node count after scan #2 : 12 (expected 12)
+    report#2 added/updated/skipped : 0/0/12
+    row ids identical        : True  before=[1,2,3,4,5,6,7,8,9,10,11,12] after=[1,2,3,4,5,6,7,8,9,10,11,12]
+  
+  --- A10.7 a missing directory fails with a reason and leaves no dirty data ---
+    report.Succeeded         : False
+    report.FailureKind       : AnalysisFailed
+    report.FailureReason     : 解析存档时发生错误：UnauthorizedAccessException: Access to the path 'D:\Config.Msi' is denied.
+    report.SlotCount         : 0
+    report.Elapsed           : 3 ms
+    node count before/after  : 12/12 (must be equal)
+    reason is user-facing text and non-empty: true
+  
+  --- A10.7b a game id that is not in the library is refused too ---
+    Succeeded     : False
+    FailureKind   : GameNotFound
+    FailureReason : 库中不存在 ID 为 999999 的游戏，未执行扫描。
+  
+  --- A10.7c an existing but empty game folder ---
+    folder                   : C:\Users\Jiang\AppData\Local\Temp\galbox-a10-empty-c88f28a3f5964cf3923ad5a346adbe2a (created, holds 0 entries)
+    report.Succeeded         : False
+    report.FailureKind       : SaveDirectoryNotFound
+    report.FailureReason     : No '.save' files were found in any candidate save directory.（安装路径：'C:\Users\Jiang\AppData\Local\Temp\galbox-a10-empty-c88f28a3f5964cf3923ad5a346adbe2a'）。未写入任何节点。
+    node count before/after  : 12/12 (must be equal)
+  
+  --- A10.8 the timeline the page renders (real SaveManagerViewModel) ---
+    builder entries          : 12
+    builder status           : 已扫描 12 个存档节点（自动档 10 / 手动档 2）
+    builder hint             : (none)
+    builder cg               : 6 / 27 (22.2%) (21 remaining)
+    builder scene progress   : 122 / 345 (35.4%)
+    builder route groups     : 1
+        疑似路线 1（推测，非确证） — 4 个存档
+    entries with a blank DisplayName    : 0 (must be 0)
+    entries with a blank SceneLabelText : 0 (must be 0)
+    --- rendered timeline (oldest first) ---
+    [4/8 23:57] 昔もこういう話してたよね | 自动档 | slot=auto-10-LT1 | route=(none) | parse=解析正常
+    [4/8 23:59] 念の為お掃除しておく | 自动档 | slot=auto-9-LT1 | route=(none) | parse=解析正常
+    [4/9 00:01] 絶妙なトロッコ問題 | 自动档 | slot=auto-8-LT1 | route=(none) | parse=解析正常
+    [4/9 00:04] 合鍵 | 自动档 | slot=auto-7-LT1 | route=(none) | parse=解析正常
+    [4/9 00:07] 俺結婚した？？ | 自动档 | slot=auto-6-LT1 | route=(none) | parse=解析正常
+    [4/9 00:10] たまにからかわれるんだ | 自动档 | slot=auto-5-LT1 | route=(none) | parse=解析正常
+    [4/9 00:15] 七瀬邸へ | 自动档 | slot=auto-4-LT1 | route=(none) | parse=解析正常
+    [4/9 00:18] 孤独感 | 自动档 | slot=auto-3-LT1 | route=(none) | parse=解析正常
+    [4/9 00:18] だーれだ | 手动档 | slot=1-1-LT1 | route=疑似路线 1（推测，非确证） | parse=解析正常
+    [4/9 00:19] だーれだ | 手动档 | slot=1-5-LT1 | route=疑似路线 1（推测，非确证） | parse=解析正常
+    [4/9 00:19] だーれだ | 自动档 | slot=auto-2-LT1 | route=疑似路线 1（推测，非确证） | parse=解析正常
+    [6/21 11:08] 進路希望について | 自动档 | slot=auto-1-LT1 | route=疑似路线 1（推测，非确证） | parse=解析正常
+    auto-3 entry             : 孤独感 / kind=自动档 / isAuto=True
+    auto slots / manual slots: 10 / 2
+    manual slots render as   : 手动档, 手动档
+  
+  --- A10.8 red line 1: 分支名只能标「疑似」 ---
+    entries with a route text      : 4
+    of which speculative (疑似)    : 4
+    entries without a route (honest): 8
+        1-1-LT1          -> 疑似路线 1（推测，非确证）
+        1-5-LT1          -> 疑似路线 1（推测，非确证）
+        auto-2-LT1       -> 疑似路线 1（推测，非确证）
+        auto-1-LT1       -> 疑似路线 1（推测，非确证）
+  
+  --- A10.8 red line 2: 进度用「已解锁场景/总场景」，不是剧本行号 ---
+    scene progress           : 122 / 345 (35.4%)
+    method note              : 已解锁场景数 / 剧本总场景数（不是剧本行号百分比；该游戏没有章节概念，所以不显示章节数）
+  
+  --- A10.8 red line 3: 解析失败/部分解析必须在界面上可见 ---
+    entries with a parse problem : 0 of 12
+  
+  --- A10.8 CG 图鉴数字与「还差哪几张」 ---
+    rendered headline        : 6 / 27 (22.2%)
+    rendered remaining       : 21
+    unlocked ids             : {0101,0301,0401,0501,0801,2401}
+    locked ids (21)    : {0201,0601,0701,0901,1001,1101,1201,1301,1401,1501,1601,1701,1801,1901,2001,2101,2201,2301,2501,2601,2701}
+  
+  --- A10.8 空态：尚未扫描过 ---
+    fresh VM status          : 尚未扫描存档（点击「扫描存档」）
+    fresh VM IsTimelineEmpty : True
+    fresh VM HasTimeline     : False
+  
+  --- A10.8 the real ViewModel after LoadSaveNodesAsync ---
+    TimelineItems.Count      : 12
+    HasTimeline              : True
+    IsTimelineEmpty          : False
+    SaveNodeStatusText       : 已扫描 12 个存档节点（自动档 10 / 手动档 2）
+    SaveNodeHintText         : (none)
+    CgHeadlineText           : 6 / 27 (22.2%)
+    CgRemainingText          : 还差 21 张
+    CgProgressValue          : 22.222
+    CgUnlockedIds / CgLockedIds : 6 / 21
+    SceneProgressText        : 122 / 345 (35.4%)
+    HasRouteGroups           : True
+    RouteGroupsText          : 疑似路线 1（推测，非确证） — 4 个存档
+    ParseProblemCount        : 0
+    HasSaveNodeError         : False
+    first 3 labels           : 昔もこういう話してたよね / 念の為お掃除しておく / 絶妙なトロッコ問題
+  
+  --- A10.8 失败态：界面必须显示具体原因 ---
+    StatusText               : 扫描失败
+    ErrorText                : 解析存档时发生错误：UnauthorizedAccessException: Access to the path 'D:\Config.Msi' is denied.（扫描的安装路径：'D:\GAME\__galbox_a10_missing_game__'）
+    HasSaveNodeError         : True
+    IsUnsupportedEngine      : False
+    timeline items kept      : 12
+  
+  --- A10.8 不支持的引擎：不能显示假数据 ---
+    probe game               : id=2 engine=Krkr
+    report.FailureKind       : UnsupportedEngine
+    report.FailureReason     : 暂不支持 KiriKiri 引擎的存档解析（当前已实现 Ren'Py），未写入任何节点。
+    model status             : 暂不支持该引擎的存档解析
+    model error              : 暂不支持 KiriKiri 引擎的存档解析（当前已实现 Ren'Py），未写入任何节点。（扫描的安装路径：'D:\GAME\Dreamin'_Her'）
+    model has data           : False
+    VM status                : 暂不支持该引擎的存档解析
+    VM error                 : 暂不支持 KiriKiri 引擎的存档解析（当前已实现 Ren'Py），未写入任何节点。（扫描的安装路径：'D:\GAME\Dreamin'_Her'）
+    VM IsUnsupportedEngine   : True
+    VM timeline items        : 0
+    rows written for that game: 0 (must be 0)
+  
+  --- A10.8 快照：标记 + 描述 + 时间线上的不同样式 ---
+    SelectedNodeSummary      : 孤独感 · 4/9 00:18 · 自动档
+    CanMarkSnapshot (empty description) : False (must be false)
+    CanMarkSnapshot (typed description): True (must be true)
+    MarkSelectedNodeAsSnapshotAsync : True
+    timeline entry IsSnapshot       : True
+    timeline entry DisplayName      : A10 验收快照：第一次到孤独感
+    timeline entry SnapshotDescription : A10 验收快照：第一次到孤独感
+    model SnapshotCount             : 1
+    ClearSelectedSnapshotAsync      : True
+    entry after clearing            : 孤独感 (IsSnapshot=False)
+  
+  Assertion failures : 0
+RESULT   : PASS  (3418 ms)
+
+####################################################################################################
+# [A11] Quick switch aborts (and reports failure) when the current save cannot be backed up
+####################################################################################################
+EXPECTED : when the pre-switch backup of the current save cannot be created, QuickSwitchSaveAsync returns Success=false with a readable reason AND the live save file on disk is byte-identical to what it was before the call
+ACTUAL   : Success=False, liveSaveUnchanged=True, error="已中止快速切换：未能为当前存档创建安全备份（未检测到存档位置或存档文件），为避免覆盖后无法回退，目标备份未被应用，当前存档保持原样。"
+DETAILS  :
+  Scratch folder       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208
+  Live save folder     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\live-save
+  Live save file       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\live-save\slot1.save (ORIGINAL-SAVE-CONTENT-A11)
+  Target backup zip    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\backups\target.zip (1 entry)
+  Game install path    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\game-folder-that-does-not-exist (exists: False)
+  Inserted game Id     : 3
+  Inserted backup Id   : 1 (OriginalSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\live-save)
+  --- precondition: CreateBackupAsync for this game ---
+    result             : null (backup could NOT be created)
+    save file before   : "ORIGINAL-SAVE-CONTENT-A11"
+    save file sha256   : 5592D32B7E161FC324578D4A1C40F52D356B1A6092495117C457883FB21EFBE9
+  --- QuickSwitchSaveAsync result ---
+    Success            : False
+    ErrorMessage       : 已中止快速切换：未能为当前存档创建安全备份（未检测到存档位置或存档文件），为避免覆盖后无法回退，目标备份未被应用，当前存档保持原样。
+    CurrentBackup      : (null)
+    RestoredBackup     : (null)
+  --- live save file after the call ---
+    content            : "ORIGINAL-SAVE-CONTENT-A11"
+    sha256             : 5592D32B7E161FC324578D4A1C40F52D356B1A6092495117C457883FB21EFBE9
+    hash before        : 5592D32B7E161FC324578D4A1C40F52D356B1A6092495117C457883FB21EFBE9
+    byte-identical     : True
+    target content was : "TARGET-BACKUP-CONTENT-A11" (must NOT have been written)
+  --- interpretation ---
+    reports failure                 : True
+    failure explains the reason     : True
+    live save byte-identical        : True
+SERVICE LOG (5 record(s), WARNING and above):
+  [Error] Galbox.App.Services.SaveManagementService: Error detecting save location for game: A11 quick-switch probe
+      System.IO.DirectoryNotFoundException: Could not find a part of the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\game-folder-that-does-not-exist'.
+         at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
+         at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+         at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
+         at System.IO.Enumeration.FileSystemEnumerableFactory.UserDirectories(String directory, String expression, EnumerationOptions options)
+         at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions options)
+         at System.IO.Directory.GetDirectories(String path, String searchPattern, EnumerationOptions enumerationOptions)
+         at Galbox.App.Services.EngineSaveDetector.IsUnityGame(String installPath, String executable) in E:\tmp\Galbox_final\src\Galbox.App\Services\EngineSaveDetector.cs:line 376
+         at Galbox.App.Services.EngineSaveDetector.DetectEngineType(GameInfo game) in E:\tmp\Galbox_final\src\Galbox.App\Services\EngineSaveDetector.cs:line 68
+         at Galbox.App.Services.SaveManagementService.DetectSaveLocationAsync(GameInfo game, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\SaveManagementService.cs:line 100
+  [Warning] Galbox.App.Services.SaveManagementService: No save location found for game: A11 quick-switch probe
+  [Error] Galbox.App.Services.SaveManagementService: Error detecting save location for game: A11 quick-switch probe
+      System.IO.DirectoryNotFoundException: Could not find a part of the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a11-9208\game-folder-that-does-not-exist'.
+         at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
+         at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+         at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
+         at System.IO.Enumeration.FileSystemEnumerableFactory.UserDirectories(String directory, String expression, EnumerationOptions options)
+         at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions options)
+         at System.IO.Directory.GetDirectories(String path, String searchPattern, EnumerationOptions enumerationOptions)
+         at Galbox.App.Services.EngineSaveDetector.IsUnityGame(String installPath, String executable) in E:\tmp\Galbox_final\src\Galbox.App\Services\EngineSaveDetector.cs:line 376
+         at Galbox.App.Services.EngineSaveDetector.DetectEngineType(GameInfo game) in E:\tmp\Galbox_final\src\Galbox.App\Services\EngineSaveDetector.cs:line 68
+         at Galbox.App.Services.SaveManagementService.DetectSaveLocationAsync(GameInfo game, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\SaveManagementService.cs:line 100
+  [Warning] Galbox.App.Services.SaveManagementService: No save location found for game: A11 quick-switch probe
+  [Error] Galbox.App.Services.SaveManagementService: Quick switch aborted for game 3: the safety backup of the current save could not be created (no save location detected or no save file found). The target backup 1 was NOT applied.
+RESULT   : PASS  (85 ms)
+
+####################################################################################################
+# [A12] A failed restore rolls the save folder back to its pre-restore state and records it
+####################################################################################################
+EXPECTED : RestoreBackupAsync returns false, every live save file is byte-identical to its pre-restore content, and a durable pre-restore backup (file + database row) exists
+ACTUAL   : restoreReturned=False, slot1Restored=True, slot2Restored=True, durableSafetyCopy=True
+DETAILS  :
+  Scratch folder       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-9208
+  Live save folder     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-9208\live-save
+    slot1.save         : "ORIGINAL-SLOT1-A12" sha256 3A299A86470DE1F546435AA7142D23195EA8DE3776AB32557159F2C9A8BF49D7
+    slot2.save         : "ORIGINAL-SLOT2-A12" sha256 44FECE49C42D7D1A8C6AF40626F7BB092FA4F7B933E4583BE6445F481A29041C
+    blocker\           : directory (makes the second archive entry fail to extract)
+  Broken target backup : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-9208\backups\broken-target.zip entries=[slot1.save, blocker]
+  Partial content it would write into slot1.save: "NEW-FROM-BACKUP-A12"
+  Inserted game Id     : 4
+  Inserted backup Id   : 2
+  --- RestoreBackupAsync result ---
+    return value       : False  (expected False: the archive cannot be extracted)
+  --- live save folder after the failed restore ---
+    files              : [slot1.save, slot2.save]
+    slot1.save         : "ORIGINAL-SLOT1-A12"
+      sha256 after     : 3A299A86470DE1F546435AA7142D23195EA8DE3776AB32557159F2C9A8BF49D7
+      sha256 before    : 3A299A86470DE1F546435AA7142D23195EA8DE3776AB32557159F2C9A8BF49D7
+    slot2.save         : "ORIGINAL-SLOT2-A12"
+      sha256 after     : 44FECE49C42D7D1A8C6AF40626F7BB092FA4F7B933E4583BE6445F481A29041C
+      sha256 before    : 44FECE49C42D7D1A8C6AF40626F7BB092FA4F7B933E4583BE6445F481A29041C
+  --- pre-restore safety backup row(s) in the database ---
+    恢复前自动备份 - 2026-09-11 17:08:52
+      description      : Safety copy of the current save, taken automatically before restoring backup #2
+      zip path         : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\SaveBackups\Game_4_A12 rollback probe\prerestore_20260911_170852.zip
+      zip exists       : True (254 bytes)
+  --- interpretation ---
+    slot1.save byte-identical to pre-restore state : True
+    slot2.save byte-identical to pre-restore state : True
+    durable pre-restore backup recorded            : True
+SERVICE LOG (1 record(s), WARNING and above):
+  [Error] Galbox.App.Services.SaveManagementService: Error restoring backup with ID: 2
+      System.UnauthorizedAccessException: Access to the path 'C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a12-9208\live-save\blocker' is denied.
+         at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+         at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+         at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+         at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+         at System.IO.File.Create(String path)
+         at Galbox.App.Services.SaveManagementService.ExtractZipBackupAsync(String zipPath, String extractPath, IProgress`1 progress, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\SaveManagementService.cs:line 1938
+         at Galbox.App.Services.SaveManagementService.RestoreBackupAsync(Int32 saveId, IProgress`1 progress, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\SaveManagementService.cs:line 556
+RESULT   : PASS  (160 ms)
+
+####################################################################################################
+# [A13] Save detection refuses the game installation folder as a save folder
+####################################################################################################
+EXPECTED : for save files living directly in the installation root, PrimarySavePath is rejected with Success=false and an explanatory message, CreateBackupAsync produces no archive of the game, while a save file in a real subfolder is still accepted
+ACTUAL   : rpgRefused=True, krkrRefused=True, controlAccepted=True, backupRefused=True, serviceRefused=True
+DETAILS  :
+  === case 1: RPG Maker VX Ace, saves (*.rvdata2) directly in the installation root ===
+    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\RpgMakerGame
+    root-level files     : Save01.rvdata2, game-data.bin (250 KB decoy), Game.exe
+    DetectEngineType     : RpgMaker (expected RpgMaker)
+    PrimarySavePath      : (null - refused)
+    Success              : False
+    SaveFiles            : 1
+    ErrorMessage         : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+    ExtendedInfo         : RootLevelSaveFileCount=1, RejectedSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\RpgMakerGame, RejectedSavePathReason=save-files-only-in-install-root
+  
+  === case 2: KiriKiri, saves (*.ksd) directly in the installation root ===
+    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\KrkrGame
+    DetectEngineType     : Krkr (expected Krkr)
+    PrimarySavePath      : (null - refused)
+    Success              : False
+    SaveFiles            : 1
+    ErrorMessage         : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\KrkrGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+    ExtendedInfo         : RootLevelSaveFileCount=1, RejectedSavePath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\KrkrGame, RejectedSavePathReason=save-files-only-in-install-root
+  
+  === case 3: control - the save file lives in a real subfolder and must still be detected ===
+    installation folder  : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\KrkrGameWithSavedataFolder
+    PrimarySavePath      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\KrkrGameWithSavedataFolder\savedata
+    expected             : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\KrkrGameWithSavedataFolder\savedata
+    Success              : True
+    SaveFiles            : 1
+    ErrorMessage         : (null)
+  
+  === case 4: CreateBackupAsync for that game ===
+    backup result        : null (no backup was produced)
+    archive entries      : []
+    game files would be in the archive: False
+    service DetectSaveLocationAsync: Success=False, PrimarySavePath=(null)
+      engine type        : RpgMaker
+      error message      : 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+  
+  --- interpretation ---
+    RPG Maker root saves refused : True
+    KiriKiri root saves refused  : True
+    subfolder saves still accepted: True
+    CreateBackupAsync refuses    : True
+    service-level refusal        : True
+SERVICE LOG (3 record(s), WARNING and above):
+  [Warning] Galbox.App.Services.SaveManagementService: Save location detection failed for game: A13 RPG Maker probe. Reason: 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+  [Warning] Galbox.App.Services.SaveManagementService: No save location found for game: A13 RPG Maker probe
+  [Warning] Galbox.App.Services.SaveManagementService: Save location detection failed for game: A13 RPG Maker probe. Reason: 在游戏安装目录根下找到 1 个存档文件，但未找到可安全使用的存档子目录（C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a13-9208\RpgMakerGame）。把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；请手动指定存档目录，或把存档移入安装目录下的子文件夹。
+RESULT   : PASS  (54 ms)
+
+####################################################################################################
+# [A14] Restore verification rejects same-size/different-content and missing-file restores
+####################################################################################################
+EXPECTED : a restored file with the right size but the wrong content is rejected, a restore that lost one file of ten is rejected, and a byte-identical restore is still accepted
+ACTUAL   : contentMismatchRejected=True, missingFileRejected=True, controlAccepted=True, happyPathRestore=True
+DETAILS  :
+  === scenario 1: same file count, same size, different content ===
+    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-9208\scenario1\archive.zip (1 entry, 4096 bytes)
+    restored file      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-9208\scenario1\slot1.save (4096 bytes, all 0x42 instead of 0x41)
+    archive sha256     : 49CA8B78EA3EB548472EF25F0E947FD1D887E31E2FAF0F2F73F72E088D3B33AF
+    restored sha256    : 725BCD6C66D02ACF6EBEAB9C92410E010EA22E336876256AAF05A211F4CE1902
+    verifier invoked   : True
+    Success            : False
+    ErrorMessage       : Content hash mismatch for 'slot1.save': archive 6896D9EA3F73A4434F5832BC65714E7D066F177373F36F34DC8A6F735DAA41B1, restored file 725BCD6C66D02ACF6EBEAB9C92410E010EA22E336876256AAF05A211F4CE1902.
+  
+  === scenario 2: 9 of 10 files restored (inside the old 20% count / 10% size tolerance) ===
+    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-9208\scenario2\archive.zip (10 entries x 1000 bytes = 10000 bytes)
+    restored folder    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-9208\scenario2\restored (9 files, 9000 bytes)
+    missing file       : slot10.save
+    verifier invoked   : True
+    Success            : False
+    ErrorMessage       : Restored file is missing: 'slot10.save'.
+  
+  === scenario 3: control - identical content must still verify ===
+    archive            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a14-9208\scenario3\archive.zip (2 entries: slot1.save, nested/persistent)
+    restored folder    : [nested\persistent, slot1.save]
+    verifier invoked   : True
+    Success            : True
+    ErrorMessage       : (null)
+  
+  === scenario 4: a valid restore through the public API (regression guard) ===
+    RestoreBackupAsync : True (expected True)
+    live folder now    : [old.save, slot1.save, slot2.save]
+    slot1.save         : "GOOD-RESTORE-1"
+    slot2.save         : "GOOD-RESTORE-2"
+  
+  --- interpretation ---
+    same size / wrong content rejected : True
+    missing file rejected              : True
+    correct content accepted           : True
+    full restore happy path            : True
+RESULT   : PASS  (84 ms)
+
+####################################################################################################
+# [A15] Scraped cover and character images are downloaded as real image files
+####################################################################################################
+EXPECTED : after metadata is applied the game has a CoverImagePath pointing at an existing file whose leading bytes are a valid image signature, the database agrees, and a character portrait is written to ImagePath as well
+ACTUAL   : coverPath=C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\images-9208\Covers\1.jpg, size=219348, signature=JPEG (FF D8 FF), portrait=True, serviceValidation=True
+DETAILS  :
+  Query                : "Dreamin' Her"
+  Sources with results : Bangumi, Vndb, Ymgal
+  Live cover URL       : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+  Target game          : Id=1, Dreamin' Her
+  GameMetadata type    : Galbox.App.Services.GameMetadata
+  ApplyMetadataAsync   : ok=True, error=(none)
+  
+  --- database after ApplyMetadataAsync ---
+    CoverImageUrl        : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+    CoverImagePath       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\images-9208\Covers\1.jpg
+  --- measured file on disk ---
+    exists               : True
+    size                 : 219348 bytes
+    leading bytes        : FFD8FFE000104A4649460001
+    signature            : JPEG (FF D8 FF)
+  
+  --- IGameImageService (the downloader) ---
+    resolved             : Galbox.App.Services.GameImageService
+    shipping app folder  : C:\Users\Jiang\AppData\Local\Galbox\Covers (this run uses an isolated folder so a test
+                           game id can never overwrite the user's real cover images)
+    run folder           : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\images-9208\Covers
+    TryValidateImageFile : True
+  
+  --- character portrait ---
+    DownloadForGameAsync : ok=True, error=(none)
+    ImageUrl             : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+    ImagePath            : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\images-9208\Characters\1_1.jpg
+    size                 : 219348 bytes
+    leading bytes        : FFD8FFE000104A4649460001
+    signature            : JPEG (FF D8 FF)
+  
+  --- recorded HTTP exchanges on the ImageDownload pipeline: 3 ---
+    GET https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg -> HTTP 200 (208220 response bytes captured)
+    GET https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg -> HTTP 200 (208220 response bytes captured)
+    GET https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg -> HTTP 200 (208220 response bytes captured)
+  
+  --- interpretation ---
+    cover file is a real image (JPEG (FF D8 FF), 219348 bytes) : True
+    database CoverImagePath matches the file            : True
+    character portrait written                          : True
+    service validator accepts the cover                 : True
+RESULT   : PASS  (2052 ms)
+
+####################################################################################################
+# [A16] Deleting a game removes its records and keeps the game files on disk
+####################################################################################################
+EXPECTED : after DeleteGameAsync the game row and every related row are gone, the game folder and its executable still exist, backup files survive by default and are removed only when requested, and the UI exposes the delete command with an explicit confirmation
+ACTUAL   : rowsGone=True, filesKept=True, backupKeptByDefault=True, explicitBackupDeletion=True, uiWiring=True
+DETAILS  :
+  === IGameDeletionService ===
+    resolved           : Galbox.App.Services.GameDeletionService
+  
+  === fixture 1: game with a row in every child table ===
+    game Id            : 7
+    install path       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-9208\ProbeGame (exists: True)
+    main executable    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-9208\ProbeGame\probe.exe (exists: True)
+    save in game folder: C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-9208\ProbeGame\save\slot1.save (exists: True)
+    backup zip         : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a16-9208\backups\game-backup.zip (exists: True)
+    rows BEFORE        : Characters=1, Documents=1, MediaFiles=1, Screenshots=1, SaveBackups=1, ErrorRecords=1, Patches=1
+  
+  --- DeleteGameAsync(gameId, options: null) ---
+    call ok            : True
+    Success            : True
+    GameName           : A16 delete probe
+    GameFilesKept      : True
+    CharactersDeleted  : 1
+    DocumentsDeleted   : 1
+    MediaFilesDeleted  : 1
+    ScreenshotsDeleted : 1
+    BackupsDeleted     : 1
+    ErrorRecordsDeleted: 1
+    PatchesDeleted     : 1
+    RelatedRowsDeleted : 7
+    BackupFilesDeleted : 0
+    ErrorMessage       : (null)
+  
+  --- database after the deletion ---
+    game row exists    : False (expected False)
+    related rows       : Characters=0, Documents=0, MediaFiles=0, Screenshots=0, SaveBackups=0, ErrorRecords=0, Patches=0
+  --- file system after the deletion ---
+    game folder exists : True (expected True)
+    probe.exe exists   : True (expected True)
+    in-game save exists: True (expected True)
+    backup zip exists  : True (expected True: option defaults to keeping it)
+  
+  === fixture 2: DeleteBackupFiles = true ===
+    call ok            : True
+    Success            : True
+    BackupFilesDeleted : 1 (expected 1)
+    backup zip exists  : False (expected False)
+    game folder exists : True (expected True)
+  
+  === UI wiring (source level) ===
+    [OK  ] LibraryPage.xaml: delete button click handler: "OnDeleteGameClick"
+    [OK  ] LibraryPage.xaml: grid-card delete button: "DeleteGameOverlayButton"
+    [OK  ] LibraryPage.xaml: table-row delete button: "TableDeleteGameButton"
+    [OK  ] LibraryPage.xaml.cs: confirmation dialog: "ContentDialog"
+    [OK  ] LibraryPage.xaml.cs: dialog states game files are not deleted: "不会删除游戏文件夹"
+    [OK  ] LibraryPage.xaml.cs: optional backup-file deletion: "CheckBox"
+    [OK  ] LibraryPage.xaml.cs: invokes the delete command: "DeleteGameCommand.ExecuteAsync"
+    [OK  ] LibraryViewModel: delete method: "DeleteGameAsync"
+    [OK  ] LibraryViewModel: exposed as a command: "RelayCommand"
+  
+  --- interpretation ---
+    game + related rows gone : True
+    game files kept on disk  : True
+    backup kept by default   : True
+    explicit backup deletion : True
+    UI offers the command    : True
+RESULT   : PASS  (201 ms)
+
+####################################################################################################
+# [A17] A missing game folder is detected, surfaced in the UI and blocks the launch with a reason
+####################################################################################################
+EXPECTED : a game whose folder or executable is missing reports IsMissing=true with a specific status text, a readable explanation naming the path and a repair hint, a healthy game reports IsMissing=false, the launch guard returns a message only for the broken cases, and both pages render the marker
+ACTUAL   : folderGone=True, exeGone=True, noPath=True, healthyFlagged=False, guardMessage=True, uiWiring=True
+DETAILS  :
+  === GameInstallationStatus ===
+    resolved           : Galbox.App.Services.GameInstallationStatus
+  
+  --- per-state evaluation ---
+    [folder deleted] IsMissing=True, StatusText="文件夹丢失"
+        FolderExists=False, ExecutableExists=False
+        DetailText  : 游戏文件夹不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-9208\game-folder-that-was-deleted
+        RepairHint  : 游戏文件没有被 Galbox 删掉——可能是被移动、重命名，或所在磁盘（移动硬盘/U 盘）未接入。把文件夹放回原位置即可恢复；若路径已改变，请重新添加游戏，再删除这条记录。
+    [healthy] IsMissing=False, StatusText="正常"
+        FolderExists=True, ExecutableExists=True
+        DetailText  : 游戏文件齐全：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-9208\PresentGame
+        RepairHint  : 
+    [executable deleted] IsMissing=True, StatusText="可执行文件丢失"
+        FolderExists=True, ExecutableExists=False
+        DetailText  : 启动程序不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-9208\PresentGame\deleted.exe
+        RepairHint  : 游戏文件夹仍在，但主程序文件不见了（可能被杀软隔离或被手动删除）。请确认文件存在，或重新添加游戏文件夹以重新识别主程序。
+    [no install path] IsMissing=True, StatusText="文件夹丢失"
+        FolderExists=False, ExecutableExists=False
+        DetailText  : 这条记录没有保存游戏文件夹路径。
+        RepairHint  : 请用「添加游戏」重新指向游戏文件夹，然后删除这条旧记录。
+  
+  --- launch guard (BuildLaunchBlockMessage) ---
+    folder deleted -> 无法启动「A17 gone folder」：文件夹丢失。 / 游戏文件夹不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a17-9208\game-folder-that-was-deleted / 游戏文件没有被 Galbox 删掉——可能是被移动、重命名，或所在磁盘（移动硬盘/U 盘）未接入。把文件夹放回原位置即可恢复；若路径已改变，请重新添加游戏，再删除这条记录。
+    healthy        -> (null - launch proceeds, correct)
+  
+  === UI wiring (source level) ===
+    [OK  ] LibraryPage.xaml: badge on the grid card: "MissingFolderBadge"
+    [OK  ] LibraryPage.xaml: badge visibility: "MissingInstallationToVisibilityConverter"
+    [OK  ] LibraryPage.xaml: badge text: "MissingInstallationBadgeConverter"
+    [OK  ] LibraryPage.xaml: badge in the table view: "MissingFolderPill"
+    [OK  ] GameDetailPage.xaml: notice on the detail page: "IsInstallationMissing"
+    [OK  ] GameDetailPage.xaml: notice text: "InstallationNotice"
+    [OK  ] LibraryViewModel: launch guard: "GameInstallationStatus.BuildLaunchBlockMessage"
+    [OK  ] GameDetailViewModel: launch guard: "GameInstallationStatus.BuildLaunchBlockMessage"
+  
+  --- interpretation ---
+    deleted folder detected            : True
+    deleted executable detected        : True
+    record without a path detected     : True
+    healthy game is NOT flagged        : True
+    launch guard message is specific   : True
+    UI renders the marker on both pages: True
+RESULT   : PASS  (12 ms)
+
+####################################################################################################
+# [A18] The application window title is the product name, not "WinUI Desktop"
+####################################################################################################
+EXPECTED : the window the shipping executable creates has a MainWindowTitle that starts with "Galbox" and is not the host default "WinUI Desktop"
+ACTUAL   : title="Galbox 1.0.0", startsWithGalbox=True, hostDefault=False
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_final
+  Application          : E:\tmp\Galbox_final\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Application built    : 2026-09-11 17:08:40Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 17:08:12Z
+  Launched             : pid 33620 (attempt 1/3)
+  MainWindowHandle     : 0x92088A
+  Window title (Win32) : "Galbox 1.0.0"
+  Elapsed              : 2365 ms (launch attempts: 1)
+  
+  --- interpretation ---
+    window was created          : True
+    title starts with "Galbox"  : True
+    title is the host default   : False
+RESULT   : PASS  (2567 ms)
+
+####################################################################################################
+# [A19] Every navigation destination loads inside the running application
+####################################################################################################
+EXPECTED : with GALBOX_NAVIGATION_SMOKE set to every navigation key, the shipping executable reports "=OK" for each of them in the result file it was given
+ACTUAL   : pagesLoaded=8/8, window=True, alive=True, attempts=1
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_final
+  Application          : E:\tmp\Galbox_final\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Application built    : 2026-09-11 17:08:40Z
+  Navigation keys      : Home, Library, SaveManager, PatchCenter, Settings, GameDetail:1, ScrapingProgress, ErrorReport
+  Result file          : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a19-9208\navigation-smoke.txt
+  
+  --- attempt 1/3: pid 20840 ---
+  The application exited before a window appeared: False
+  MainWindowHandle     : 0x160AFE after 2560 ms
+  Alive when measured  : True
+  --- result lines (8/8) ---
+      Navigation smoke: Home=OK (page=MainPage)
+      Navigation smoke: Library=OK (page=LibraryPage)
+      Navigation smoke: SaveManager=OK (page=SaveManagerPage)
+      Navigation smoke: PatchCenter=OK (page=PatchCenterPage)
+      Navigation smoke: Settings=OK (page=SettingsPage)
+      Navigation smoke: GameDetail=OK (page=GameDetailPage)
+      Navigation smoke: ScrapingProgress=OK (page=ScrapingProgressPage)
+      Navigation smoke: ErrorReport=OK (page=ErrorReportPage)
+    [OK]   Home               OK (page=MainPage)
+    [OK]   Library            OK (page=LibraryPage)
+    [OK]   SaveManager        OK (page=SaveManagerPage)
+    [OK]   PatchCenter        OK (page=PatchCenterPage)
+    [OK]   Settings           OK (page=SettingsPage)
+    [OK]   GameDetail:1       OK (page=GameDetailPage)
+    [OK]   ScrapingProgress   OK (page=ScrapingProgressPage)
+    [OK]   ErrorReport        OK (page=ErrorReportPage)
+  
+  --- interpretation ---
+    pages loaded        : 8/8
+    window created      : True
+    process still alive : True
+    launch attempts     : 1
+RESULT   : PASS  (2698 ms)
+
+####################################################################################################
+# [A30] Patch centre wiring: DI resolves IPatchEngine / ILocalPatchService and the ViewModel is bound to it
+####################################################################################################
+EXPECTED : IPatchEngine resolves from the root container to a real PatchInstaller; ILocalPatchService resolves from the root container; both are singletons (identical instance inside a scope); PatchCenterViewModel's constructor takes ILocalPatchService; the file-picker extension list only contains formats the engine can extract
+ACTUAL   : IPatchEngine=PatchInstaller, ILocalPatchService=LocalPatchService, ViewModel bound=True, failure(s)=0
+DETAILS  :
+  --- A30.1 IPatchEngine from the root container ---
+    [OK]   IPatchEngine -> Galbox.Core.Patches.PatchInstaller
+  
+  --- A30.2 ILocalPatchService from the root container ---
+    [OK]   ILocalPatchService -> Galbox.App.Services.LocalPatchService
+  
+  --- A30.3 lifetime: a scope must not produce a second engine ---
+    root == scopeA == scopeB : True
+    [OK]   singleton, so the ledger scan state is shared as intended
+  
+  --- A30.4 PatchCenterViewModel constructor dependencies ---
+    ctor(IDbContextFactory`1, INavigationService, ILogger`1, ILocalPatchService)
+    [OK]   the ViewModel takes ILocalPatchService
+  
+  --- A30.5 file-picker extensions vs extractable container kinds ---
+    engine extractable kinds : Zip, Rar, SevenZip, Tar, Gzip
+    picker extensions        : .zip, .7z, .rar, .tar, .gz, .tgz
+    [OK]   .zip offered
+    [OK]   .7z offered
+    [OK]   .rar offered
+RESULT   : PASS  (5 ms)
+
+####################################################################################################
+# [A31] Local patch round trip through the patch centre: preview -> install -> bytes change -> rollback -> byte identical
+####################################################################################################
+EXPECTED : the patch package is inspected and previewed with the overwrite/new/rejected sets kept apart; an unconfirmed conflict blocks the install and changes nothing; a confirmed install succeeds with every per-file operation reported as Ok and the target bytes really replaced; the rollback reports ByteIdenticalToPreInstall and the game tree matches the pre-install snapshot file for file
+ACTUAL   : preview/install/rollback all behaved: bytes really replaced, rollback byte identical, ViewModel path identical
+DETAILS  :
+  Scratch root      : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-088ce7f17f9b44d1a8f99f9417f37dc3
+  Game root         : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-088ce7f17f9b44d1a8f99f9417f37dc3\game
+  Patch package     : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-088ce7f17f9b44d1a8f99f9417f37dc3\patch.zip (288 bytes)
+  Game id (ledger)  : acceptance-a31-bef993ed
+  Pre-install files : 3
+      data\keep.dat = 99015d7108d15b80...
+      data\original.txt = 603cd45e07b0af40...
+      game.exe = 187314d0d3bdfdcc...
+  
+  === Phase 1: through ILocalPatchService (the UI's door) ===
+  Inspect           : kind=Zip, format=zip, entries=2, files=2, encoding=Utf8 (auto=True), sha256=295fe9a37e5831a8..., extractable=True
+  Preview id        : 20260911T170900494Z-e58d385c
+  Summary           : create=1, overwrite=0, conflict=1, unchanged=0, rejected=0, bytesToWrite=44, bytesToBackup=27
+      [Conflict ] data\original.txt  (provenance=UnknownOrigin) The target exists with different content and neither the ledger nor the caller can explain where it came from (often a hand-installed patch).
+      [Create   ] data\newfile.txt  (provenance=NotPresent) Target does not exist yet.
+  
+  Install (unconfirmed) : success=False, blockingConflicts=1, errors=1
+      blocked: data\original.txt
+      game tree changed by the blocked install: no
+  
+  Install (confirmed)   : success=True, installId=20260911T170900571Z-0be97cb2, created=1, overwritten=1, bytesWritten=44, bytesBackedUp=27, rollbackAvailable=True
+      operations (2):
+        [Ok    ] Conflict  data\original.txt (backup: files\data\original.txt)
+        [Ok    ] Create    data\newfile.txt
+      progress reports  : 4
+        phase backup   completed=0/1 fraction=0.00
+        phase write    completed=1/2 fraction=0.50
+        phase verify   completed=2/2 fraction=1.00
+      ledger manifest   : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patchdata\patchbak\acceptance-a31-bef993ed\20260911T170900571Z-0be97cb2\manifest.json
+      in-game manifest  : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-088ce7f17f9b44d1a8f99f9417f37dc3\game\.galbox\patch-manifest.json
+  
+  data/original.txt now: "patched script v2 - 汉化"
+  data/newfile.txt now : exists=True
+  
+  Status after install  : Installed / evidence=Fact / scope=GalboxLedger
+      explanation       : Installed by Galbox on 2026-09-11 17:09:00Z: all 2 recorded file(s) still match the hashes written at install time.
+      verified files    : 2 (changed: 0)
+  Rollback candidates   : 1
+      20260911T170900571Z-0be97cb2 status=Committed files=2 name=A31 合成补丁
+  
+  Rollback              : success=True, nothingToDo=False, restored=1, deleted=1, skipped=0, byteIdentical=True
+        [Restored              ] data\original.txt byteIdentical=True
+        [Deleted               ] data\newfile.txt byteIdentical=False
+      game tree identical to the pre-install snapshot: YES
+  Status after rollback : RolledBack / evidence=Fact
+  
+  === Phase 2: through the real PatchCenterViewModel ===
+    ViewModel         : Galbox.App.ViewModels.PatchCenterViewModel (resolved with ILocalPatchService from the container)
+    SelectPatchArchive: returned=True
+      ArchiveInfo     : zip, 2 file(s), encoding=Utf8
+      Preview         : 2 entry/entries, rejected=0
+      display sets    : overwrite=0, create=1, conflict=1, unchanged=0, rejected=0
+    Install (unconfirmed): returned=False, game tree changed=no
+    ConfirmAllConflicts : confirmed=1
+    Install (confirmed) : returned=True, success=True, operations=2, failed=0
+      progress        : 1 (已完成)
+      data/original.txt now: "patched script v2 - 汉化"
+      game tree diffs : 2
+        CHANGED     : data\original.txt (603cd45e07b0 -> a992832e1da3)
+        NEW         : data\newfile.txt
+    Rollback            : returned=True, success=True, byteIdentical=True, restored=1, deleted=1
+      game tree identical to the pre-install snapshot: YES
+    Status ledger       : RolledBack / evidence=Fact / headline=已回滚：patch。
+  
+  Scratch kept for inspection: C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-088ce7f17f9b44d1a8f99f9417f37dc3
+RESULT   : PASS  (612 ms)
+
+####################################################################################################
+# [A32] Refused patch content stays visible: Zip Slip entries and save-type packages are refused, reported and written nowhere
+####################################################################################################
+EXPECTED : the Zip Slip entry is listed in the preview's rejected set with PatchSecurityCode.ParentTraversal and a human readable reason, never counted as an overwrite/create, and the file it targets is never created outside the game root; a package declared as save data is refused with PatchPreviewAttempt.Succeeded=false and a non-empty message plus remedy that the ViewModel surfaces instead of reporting success
+ACTUAL   : every refused entry/package was reported with a reason and nothing was written outside the game root
+DETAILS  :
+  Scratch root      : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-c7dbf538ec3f469e8e38485828e7bfc1
+  Game root         : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-c7dbf538ec3f469e8e38485828e7bfc1\game
+  Hostile package   : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-c7dbf538ec3f469e8e38485828e7bfc1\evil.zip
+  Escape target     : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-c7dbf538ec3f469e8e38485828e7bfc1\escaped.txt (exists before: False)
+  
+  === 1. Zip Slip entry in the patch package ===
+  Inspect           : kind=Zip, fileEntries=2
+  Preview           : entries=1, rejected=1
+  Summary           : create=1, overwrite=0, conflict=0, rejected=1
+    entries that would be written:
+      [Create   ] data\newfile.txt
+    entries that will never be written:
+      [rejected] raw='..\escaped.txt' code=ParentTraversal reason='..' segment escapes the destination root (Zip Slip). Raw name: '..\escaped.txt'.
+  
+  Install           : success=True, created=1, operations=1
+      [Ok    ] data\newfile.txt
+  Escape target exists after install: False
+  Files written directly into the scratch root: none
+  
+  === 2. Package declared as save data ===
+  Preview           : succeeded=False, code=SaveTypePatch
+      message       : This resource is declared as a save-data patch (type 'save'), so it must not be laid over the game directory. Full-CG / clear saves belong to save management, where they are copied into a save folder and backed up.
+      remedy        : Open the save manager and import the archive there instead.
+  
+  === 3. The same refusals as the patch centre page shows them ===
+    SelectPatchArchive: returned=True
+      display sets    : overwrite=0, create=1, conflict=0, unchanged=0, rejected=1
+      rejection message: 
+    save-like package  : returned=False, rejection="The archive looks like save data rather than an overlay patch. 3/3 entries look like save data (e.g. save\save01.sav, save\save02.sav, save\global.sav). Overlaying save files onto the game directory would overwrite the user's own progress, so the install is refused.", preview=null
+SERVICE LOG (3 record(s), WARNING and above):
+  [Warning] Galbox.App.Services.LocalPatchService: Patch package refused: SaveTypePatch - This resource is declared as a save-data patch (type 'save'), so it must not be laid over the game directory. Full-CG / clear saves belong to save management, where they are copied into a save folder and backed up.
+  [Warning] Galbox.App.Services.LocalPatchService: Patch package refused: SaveLikeContent - The archive looks like save data rather than an overlay patch. 3/3 entries look like save data (e.g. save\save01.sav, save\save02.sav, save\global.sav). Overlaying save files onto the game directory would overwrite the user's own progress, so the install is refused.
+  [Warning] Galbox.App.ViewModels.PatchCenterViewModel: Patch preview refused: SaveLikeContent - The archive looks like save data rather than an overlay patch. 3/3 entries look like save data (e.g. save\save01.sav, save\save02.sav, save\global.sav). Overlaying save files onto the game directory would overwrite the user's own progress, so the install is refused.
+RESULT   : PASS  (99 ms)
+
+####################################################################################################
+# [A40] ymgal source performs a real search and returns the real game
+####################################################################################################
+EXPECTED : YmgalApi.SearchAsync("サノバウィッチ") issues a real request to /open/archive/search-game, returns Success=true with >= 1 item whose title matches the query, and GetGameAsync(id) returns that game's detail
+ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=True, items=1, detailOk=True, appDetailOk=True
+DETAILS  :
+  --- [1] HttpClient configuration built by the container ---
+    YmgalHttpClient     BaseAddress=https://www.ymgal.games/
+                        Timeout=30s
+                        UserAgent=Galbox/1.0
+  
+  --- [2] live search through the DI-resolved YmgalApi ---
+    query                : "サノバウィッチ"
+    credential source    : ymgal's documented public client (ymgal)
+    base URL             : https://www.ymgal.games
+    ymgal is a community service and was observed intermittently answering a bare HTTP 302
+    with an empty body under concurrent load. That is the upstream refusing to answer, not a
+    statement about this client, so the search is retried a bounded number of times with every
+    attempt reported. If ymgal never answers, the check FAILS - the assertion is unchanged.
+    attempt 1/3: 187 ms, requests=1, response=Success=False, Items=0, lastError="ymgal request failed: API error: 302 Found"
+        GET https://www.ymgal.games/open/archive/search-game?mode=list&keyword=サノバウィッチ&pageNum=1&pageSize=10  ->  HTTP 302
+          response body : 
+        inconclusive: ymgal did not answer this query; retrying.
+    attempt 2/3: 218 ms, requests=1, response=Success=True, Items=1, lastError="(null)"
+        GET https://www.ymgal.games/open/archive/search-game?mode=list&keyword=サノバウィッチ&pageNum=1&pageSize=10  ->  HTTP 200
+          response body : {"success":true,"code":0,"data":{"result":[{"id":23682,"name":"サノバウィッチ","chineseName":"魔女的夜宴","state":"PUBLIC_PUBLISHED","weights":0,"mainImg":"https://cdn.ymgal.games/archive/main/a0/a057bbc19b9f41a2868ee415721b84e1.webp","publishVersion":4,"publishTime":"2022-02-15 01:12:29","publisher":3412,"score":"0","orgId":10126,"orgName":"ゆずソフト","releaseDate":"2015-02-27","haveChinese":true}],"total":1,"hasNext":false,"pageNum":1,"pageSize":10}}
+    total elapsed        : 3411 ms over 2 attempt(s)
+    ApiClient.LastError  : (null)
+    response             : Success=True, Items=1, Message=""
+        hit: id=23682 title="サノバウィッチ" titleCn="魔女的夜宴" cover=yes
+  
+  --- [3] detail endpoint through the DI-resolved YmgalApi ---
+    GetGameAsync("23682") requests : 1
+        GET https://www.ymgal.games/open/archive?gid=23682  ->  HTTP 200
+    result               : id=23682, title="サノバウィッチ", titleCn="魔女的夜宴", developer="", releaseDate="2015-02-27", tags=0, characters=12
+    ApiClient.LastError  : (null)
+  
+  --- [4] GameScrapingService.GetGameDetailsAsync (the path the UI uses) ---
+    result               : source=Ymgal, id=23682, titleOriginal="サノバウィッチ", titleCn="魔女的夜宴", releaseDate=2015-02-27, titles=7, characters=12
+    titles               : サノバウィッチ | 魔女的夜宴 | サノバウィッチ Sabbat of the Witch | Son of a Witch: Sabbat of the Witch | Sonova Witch | Sonovawitch | Sabbath of the Witch
+  
+  --- verdict inputs ---
+    BaseAddress configured by DI : True
+    User-Agent configured by DI  : True
+    HTTP request issued          : True (1 observed)
+    documented path requested    : True (/open/archive/search-game)
+    search Success + title match : True (success=True, items=1, titleMatched=True, lastError="(null)")
+    API detail lookup usable     : True (id=23682)
+    service detail lookup usable : True
+RESULT   : PASS  (5899 ms)
+
+####################################################################################################
+# [A41] cngal source performs a real search and returns the real game
+####################################################################################################
+EXPECTED : CngalApi.SearchAsync("三色绘恋") issues a real request to /api/home/Search, returns Success=true with >= 1 item whose title contains "三色", and GetGameAsync(id) returns that entry's detail
+ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=True, items=10, detailOk=True, appDetailOk=True
+DETAILS  :
+  --- [1] HttpClient configuration built by the container ---
+    CngalHttpClient     BaseAddress=https://api.cngal.org/
+                        Timeout=30s
+                        UserAgent=Galbox/1.0
+  
+  --- [2] live search through the DI-resolved CngalApi ---
+    query                : "三色绘恋"
+    elapsed              : 190 ms
+    HTTP requests issued : 1
+        GET https://api.cngal.org/api/home/Search?Types=Game&Text=三色绘恋&Page=1  ->  HTTP 200
+          response body : {"pagedResultDto":{"totalCount":84,"totalPages":9,"data":[{"entry":{"id":80,"type":"Game","name":"三色△绘恋","mainImage":"https://tucang.cngal.top/api/image/show/1dd5c5356cc0db8f4de850ba5eac9e72?https://media.st.dl.eccdnx.com/steam/apps/668630/header.jpg","briefIntroduction":"2005年，江城的暖秋。  童年有如被铁笼囚住一般，早已自觉为灰色浸染的男孩  第一次走进名为「艺术班」的教室之中。     恰巧在同桌的位置上出现的，  宛若冰山，却又似轻风薄雾的朝霞一般，  紫水晶色的她......     被「他们」焚毁象征着同那女孩回忆的画卷时，  在炽热的火光下啜泣的，  那一抹橘色的她......     两个色彩截然不同的少女，  同时伸出双手","lastEditTime":"2026-01-12T14:42:59.9233180Z","publishTime":"2017-09-21T00:00:00.0000000Z","readerCount":79735,"commentCount":10,"addInfors":[],"audio":[]},"article":null,"user":null,"tag":null,"periphery":null,"video":null},{"entry":{" ... [TRUNCATED, total 5822 chars]
+    ApiClient.LastError  : (null)
+    response             : Success=True, Items=10, Message=""
+        hit: id=80 title="三色△绘恋" titleCn="三色△绘恋" cover=yes
+        hit: id=81 title="三色绘恋S" titleCn="三色绘恋S" cover=yes
+        hit: id=5408 title="橘色绘卷" titleCn="橘色绘卷" cover=yes
+        hit: id=82 title="假若恋色嫣红" titleCn="假若恋色嫣红" cover=yes
+        hit: id=3022 title="恋战不休~武斗少女浪漫谭~" titleCn="恋战不休~武斗少女浪漫谭~" cover=yes
+  
+  --- [3] detail endpoint through the DI-resolved CngalApi ---
+    GetGameAsync("80") requests : 1
+        GET https://api.cngal.org/api/entries/GetEntryView/80?renderMarkdown=false  ->  HTTP 200
+    result               : id=80, title="三色△绘恋", titleCn="三色△绘恋", developer="绘恋制作组", releaseDate="2017-09-21", tags=1, characters=9
+    ApiClient.LastError  : (null)
+  
+  --- [4] GameScrapingService.GetGameDetailsAsync (the path the UI uses) ---
+    result               : source=Cngal, id=80, titleOriginal="三色△绘恋", titleCn="三色△绘恋", developer="绘恋制作组", releaseDate=2017-09-21, tags=1, characters=9
+    titles               : 三色△绘恋 | 三色绘恋 | Tricolour Lovestory
+  
+  --- verdict inputs ---
+    BaseAddress configured by DI : True
+    User-Agent configured by DI  : True
+    HTTP request issued          : True (1 observed)
+    documented path requested    : True (/api/home/Search)
+    search Success + title match : True (success=True, items=10, titleMatched=True, lastError="(null)")
+    API detail lookup usable     : True (id=80)
+    service detail lookup usable : True
+RESULT   : PASS  (2244 ms)
+
+####################################################################################################
+# [A42] metadata sources distinguish 'not configured' / 'unreachable' / 'no results'
+####################################################################################################
+EXPECTED : both clients have a BaseAddress + identifying User-Agent + bounded timeout; an unconfigured ymgal credential fails fast with a message naming the missing variable and issues 0 requests; an unreachable cngal endpoint reports a transport failure instead of an empty result; and a legitimate empty result reports Success=true with 0 items and no LastError
+ACTUAL   : config=True, ymgalNotConfigured=True(requests=0), cngalUnreachable=True, ymgalEmpty=True, cngalEmpty=True
+DETAILS  :
+  --- [1] HttpClient configuration contract ---
+    YmgalHttpClient   BaseAddress=https://www.ymgal.games/  Timeout=30s  UserAgent="Galbox/1.0"
+    CngalHttpClient   BaseAddress=https://api.cngal.org/  Timeout=30s  UserAgent="Galbox/1.0"
+    contract (BaseAddress != null && User-Agent contains "Galbox" && 1s <= Timeout <= 30s) : True
+  
+  --- [2] ymgal with an incomplete credential (client id present, secret missing) ---
+    setting GALBOX_YMGAL_CLIENT_ID=a-partial-configuration and REMOVING GALBOX_YMGAL_CLIENT_SECRET
+    (on Windows an empty environment variable is deleted, so "not configured" is
+     expressed as a half-filled credential pair - which is also the realistic mistake)
+    elapsed              : 0 ms
+    Success              : False
+    Items.Count          : 0
+    Message              : "ymgal credentials are not configured: GALBOX_YMGAL_CLIENT_SECRET is empty. Either provide both GALBOX_YMGAL_CLIENT_ID and GALBOX_YMGAL_CLIENT_SECRET for a dedicated client, or leave both unset to use ymgal's documented public client (ymgal)."
+    ApiClient.LastError  : "ymgal credentials are not configured: GALBOX_YMGAL_CLIENT_SECRET is empty. Either provide both GALBOX_YMGAL_CLIENT_ID and GALBOX_YMGAL_CLIENT_SECRET for a dedicated client, or leave both unset to use ymgal's documented public client (ymgal)."
+    HTTP requests issued : 0 (a configuration failure must not call the community site)
+    verdict              : Explained=True (failed=True, 0 requests=True, names GALBOX_YMGAL_CLIENT_SECRET, LastError set)
+  
+  --- [3] cngal pointed at a closed port (real transport failure) ---
+    setting GALBOX_CNGAL_BASE_URL=http://127.0.0.1:9/
+    elapsed              : 9740 ms (includes the client's own retry backoff)
+    threw                : no (reported through the result object)
+    Success              : False
+    Items.Count          : 0
+    Message              : "cngal is unreachable: 由于目标计算机积极拒绝，无法连接。 (127.0.0.1:9)"
+    ApiClient.LastError  : "cngal is unreachable: 由于目标计算机积极拒绝，无法连接。 (127.0.0.1:9)"
+    HTTP attempts made   : 3
+        GET http://127.0.0.1:9/api/home/Search?Types=Game&Text=Dreamin%27 Her&Page=1  ->  transport failure  (HttpRequestException: 由于目标计算机积极拒绝，无法连接。 (127.0.0.1:9))
+        GET http://127.0.0.1:9/api/home/Search?Types=Game&Text=Dreamin%27 Her&Page=1  ->  transport failure  (HttpRequestException: 由于目标计算机积极拒绝，无法连接。 (127.0.0.1:9))
+        GET http://127.0.0.1:9/api/home/Search?Types=Game&Text=Dreamin%27 Her&Page=1  ->  transport failure  (HttpRequestException: 由于目标计算机积极拒绝，无法连接。 (127.0.0.1:9))
+    verdict              : Explained=True (failed=True, requests attempted=True, LastError set)
+  
+  --- [4] negative control: a query that cannot exist upstream ---
+    query                : "qwrtplkjhgfd_9182736"
+    This is the state that must NOT look like a failure: reached the server, zero hits.
+  
+    --- [4] ymgal ---
+        attempt 1/3:
+          Success              : False
+          Items.Count          : 0
+          Message              : "ymgal request failed: API error: 302 Found"
+          ApiClient.LastError  : "ymgal request failed: API error: 302 Found"
+          HTTP requests issued : 1
+          inconclusive: the source did not deliver a zero-hit answer at all, so this
+          attempt says nothing about the client's classification. Retrying after the
+          request interval has elapsed.
+        attempt 2/3:
+          Success              : True
+          Items.Count          : 0
+          Message              : "(null)"
+          ApiClient.LastError  : "(null)"
+          HTTP requests issued : 1
+          verdict              : Distinguishable=True (Success=true, 0 items, LastError empty, a real request was made)
+  
+    --- [4] cngal ---
+        attempt 1/3:
+          Success              : True
+          Items.Count          : 0
+          Message              : "(null)"
+          ApiClient.LastError  : "(null)"
+          HTTP requests issued : 1
+          verdict              : Distinguishable=True (Success=true, 0 items, LastError empty, a real request was made)
+  
+  --- verdict inputs ---
+    [1] HttpClient configuration contract              : True
+    [2] unconfigured ymgal credential explained        : True
+    [3] unreachable cngal endpoint explained           : True
+    [4a] ymgal genuine empty result distinguishable    : True
+    [4b] cngal genuine empty result distinguishable    : True
+RESULT   : PASS  (13716 ms)
+
+####################################################################################################
+# [A60] MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
+####################################################################################################
+EXPECTED : MoyuApi + IMoyuKeyStore + MoyuOptions + MoyuDownloadWatcher + MoyuBrowserLauncher resolve; BaseAddress=https://api.nextmoe.dev/, UA identifies Galbox and carries a project URL, Timeout in (0, 60]s, and MoyuApi shares the container's rate limiter
+ACTUAL   : all 7 registrations resolve; BaseAddress=https://api.nextmoe.dev/, UA="Galbox/2.0 (+https://github.com/VinceJan/Galbox_v2)", Timeout=30s, pacing=1.0s/30 per minute on a shared limiter
+DETAILS  :
+  Resolved from the container:
+     [OK]      MoyuHttpClient         MoyuHttpClient
+     [OK]      MoyuApi                MoyuApi
+     [OK]      IMoyuKeyStore          MoyuDpapiKeyStore
+     [OK]      MoyuOptions            MoyuOptions
+     [OK]      IMoyuRateLimiter       MoyuRateLimiter
+     [OK]      MoyuDownloadWatcher    MoyuDownloadWatcher
+     [OK]      MoyuBrowserLauncher    MoyuBrowserLauncher
+  
+  HttpClient.BaseAddress : https://api.nextmoe.dev/
+  HttpClient.User-Agent  : Galbox/2.0 (+https://github.com/VinceJan/Galbox_v2)
+  HttpClient.Timeout     : 30s
+  Key store              : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Galbox\secrets\moyu-api-key.bin, Configured = no }
+  Key                    : not configured (source=none)
+  Pacing                 : 1.0s between requests, 30 per rolling minute
+  Download folder        : C:\Users\Jiang\Downloads
+  MoyuApi shares the container's limiter instance : yes
+RESULT   : PASS  (3 ms)
+
+####################################################################################################
+# [A61] No configured nmk_ key is reported as a distinct failure, never as an empty result
+####################################################################################################
+EXPECTED : with no key configured, the call reports Failure.Code == NotConfigured with a message naming the missing key, and sends ZERO HTTP requests
+ACTUAL   : Failed=true, Code=NotConfigured, 0 HTTP request(s) sent, 6 ms
+DETAILS  :
+  Container MoyuOptions.ApiKey   : not configured
+  Container ApiKeySource         : none
+  Key store                      : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Galbox\secrets\moyu-api-key.bin, Configured = no }
+  
+  Key-less options.HasApiKey     : False
+  Key-less options.DescribeKey() : not configured
+  
+  Result.Failed              : True
+  Result.Failure.Code        : NotConfigured
+  Result.Failure.Message     : 尚未配置 moyu 的 nmk_ API 密钥，因此没有发起任何请求。请在 https://developer.nextmoe.dev 免费自助铸造一把密钥并填入 Galbox。
+  Result.Failure.HttpStatus  : (none)
+  Result.Value               : (null)
+  HTTP requests actually sent: 0
+  Elapsed                    : 6 ms
+  Container moyu requests    : 0
+RESULT   : PASS  (11 ms)
+
+####################################################################################################
+# [A62] The nmk_ key is DPAPI-encrypted on disk and never stored in plaintext
+####################################################################################################
+EXPECTED : Set writes an opaque blob containing no plaintext, DPAPI(CurrentUser) with the app's entropy decrypts it, a foreign entropy does not, Get() round-trips through a fresh instance, Set(null) clears it, and no printable surface reveals the key
+ACTUAL   : 278-byte DPAPI blob, 0 plaintext occurrences, CurrentUser decrypt under the app's entropy succeeds and a foreign entropy fails, round-trip and clear OK, no secret in any diagnostic
+DETAILS  :
+  Store type           : Galbox.Core.Api.MoyuDpapiKeyStore
+  Kind                 : windows-dpapi
+  Store path           : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-9208-a450974df37f4adca1d525b490ccd387\secrets\moyu-api-key.bin
+  IsConfigured (empty) : False
+  
+  File size            : 278 bytes
+  Header (hex)         : 47414C424F582D4D4F59552D4B455901
+  Plaintext in file    : False
+  DPAPI(CurrentUser) decrypt with the app's entropy : True
+  Decryptable with foreign entropy                  : False
+  
+  IsConfigured (after) : True
+  Get() after reload   : (equals the key that was set)
+  Damaged file: IsConfigured=False, Get()=(null)
+  
+  Fingerprint                      : 912E967BA5DF
+  MoyuOptions.ToString()           : MoyuOptions { ApiKey = configured (source=memory, fingerprint=912E967BA5DF), BaseAddress = https://api.nextmoe.dev/, Pacing = 1.0s / 30 per minute }
+  MoyuOptions.DescribeKey()        : configured (source=memory, fingerprint=912E967BA5DF)
+  MoyuDpapiKeyStore.ToString()     : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-9208-a450974df37f4adca1d525b490ccd387\secrets\moyu-api-key.bin, Configured = yes }
+  MoyuMemoryKeyStore.ToString()    : MoyuMemoryKeyStore { Configured = True }
+  Fingerprint differs for a different key : yes (it is a digest, not a constant)
+  
+  After Set(null): file exists = False, IsConfigured = False
+RESULT   : PASS  (17 ms)
+
+####################################################################################################
+# [A63] No request path under /api is reachable (robots.txt Disallow: /api)
+####################################################################################################
+EXPECTED : every /api path is refused and every /v2/moyu path accepted; a driven client issues only /v2/moyu requests; no recorded moyu request targets /api
+ACTUAL   : 9/9 forbidden paths refused, 4/4 legitimate paths accepted, 4/4 driven requests inside the allow-list, 0 recorded pipeline request(s) inside the allow-list
+DETAILS  :
+  URL guard matrix:
+     rejected         https://www.moyu.moe/api/v1/search?keywords=CLANNAD&type=resource&page=1&limit=3
+     rejected         https://www.moyu.moe/api/v1/patch/86/resource
+     rejected         https://www.moyu.moe/api/v1/patch/resource/223/link
+     rejected         https://www.moyu.moe/api/v1/galgame?page=1
+     rejected         https://www.moyu.moe/API/V1/search
+     rejected         https://api.nextmoe.dev/api/v1/moyu/patches
+     rejected         https://api.nextmoe.dev/v1/moyu/patches
+     rejected         http://api.nextmoe.dev/v2/moyu/patches
+     rejected         https://evil.example/v2/moyu/patches
+     accepted         https://api.nextmoe.dev/v2/moyu/patches?refs=vndb%3Av4
+     accepted         https://api.nextmoe.dev/v2/moyu/patches/86?include=resources
+     accepted         https://api.nextmoe.dev/v2/moyu/patches/86/resources?limit=50
+     accepted         https://api.nextmoe.dev/v2/moyu/resources/6262
+  
+  EnsureApiUri('/api/v1/…') threw instead of returning a URI: True
+  
+  Requests a driven client produced (4):
+     GET  /v2/moyu/patches?refs=vndb%3Av4&include=resources
+          host=api.nextmoe.dev  -> allowed
+     GET  /v2/moyu/patches/86?include=resources
+          host=api.nextmoe.dev  -> allowed
+     GET  /v2/moyu/patches/86/resources?limit=50
+          host=api.nextmoe.dev  -> allowed
+     GET  /v2/moyu/resources/6262
+          host=api.nextmoe.dev  -> allowed
+  
+  Moyu/nextmoe requests recorded on the application's own pipelines: 0
+RESULT   : PASS  (32 ms)
+
+####################################################################################################
+# [A64] size strings parse as binary units and game anchors accept only vndb:/catalog:
+####################################################################################################
+EXPECTED : the calibrated sample "17.953 MB" parses to 18825520 within 0.001 MB display-rounding slack; exact samples are bit-exact; junk returns 0 without throwing; anchors accept vndb:/catalog: and refuse a bare number, a Bangumi id and whitespace-padded forms
+ACTUAL   : 7 exact samples bit-exact, the calibrated sample within 525 bytes of the known size, 21 malformed inputs returned 0, 6 anchors accepted and 12 refused
+DETAILS  :
+  Exact expectations (values the binary units represent bit-exactly):
+     size "1.5 GB" -> 1610612736 (want 1610612736) OK
+     size "512 B" -> 512 (want 512) OK
+     size "2 KB" -> 2048 (want 2048) OK
+     size "0.5 MB" -> 524288 (want 524288) OK
+     size "1 TB" -> 1099511627776 (want 1099511627776) OK
+     size "3 GB" -> 3221225472 (want 3221225472) OK
+     size "1.5 MB" -> 1572864 (want 1572864) OK
+  
+  Calibrated sample (the only one with an independently known byte count):
+     size "17.953 MB" -> 18825085 bytes
+     true byte count  -> 18825520 (report section 4.2, content-range total)
+     delta            -> 435 bytes
+     18825520 / 1048576 = 17.953415
+     within the 525-byte display-rounding slack: OK
+  
+  Conclusion this check encodes: the upstream `size` string is a display value with millisecond-of-a-megabyte precision, so the download matcher must use a tolerance (MoyuDownloadWatchOptions.SizeTolerance) rather than an equality test. A65 asserts the tolerance refuses a genuinely wrong-sized file.
+  
+  Whitespace-padded input (accepted and trimmed - the value is complete, only padded):
+     size " 17.953 MB" -> 18825085 (want 18825085) OK
+     size "17.953 MB " -> 18825085 (want 18825085) OK
+     size "<NBSP>17.953 MB" -> 18825085 (want 18825085) OK
+     size "\t1.5 GB\n" -> 1610612736 (want 1610612736) OK
+     size "  512 B  " -> 512 (want 512) OK
+  
+  Unparseable or malformed input (must return 0 and must not throw):
+     size "" -> 0 OK
+     size " " -> 0 OK
+     size "\t" -> 0 OK
+     size "abc" -> 0 OK
+     size "17.953 MB extra" -> 0 OK
+     size "MB 17.953" -> 0 OK
+     size "-5 MB" -> 0 OK
+     size "-0.5 MB" -> 0 OK
+     size "1e3 MB" -> 0 OK
+     size "MB" -> 0 OK
+     size "17.953" -> 0 OK
+     size "17.953 MiB" -> 0 OK
+     size "17.953 Mi" -> 0 OK
+     size "1,5 MB" -> 0 OK
+     size "999999 TB" -> 0 OK
+     size "17.953MBx" -> 0 OK
+     size "+5 MB" -> 0 OK
+     size "1..5 MB" -> 0 OK
+     size ".5 MB" -> 0 OK
+     size "5. MB" -> 0 OK
+     size "0x10 MB" -> 0 OK
+  
+  Format() round-trip (the string the UI shows, re-parsed):
+     18825520 bytes -> "17.953 MB" -> 18825085 bytes
+     863819448 bytes -> "823.802 MB" -> 863819006 bytes
+     512 bytes -> "512 B" -> 512 bytes
+     0 bytes -> "未知" -> 0 bytes
+     1024 bytes -> "1 KB" -> 1024 bytes
+  
+  Anchor accept/refuse matrix (Parse trims, like the size parser, so padding is accepted):
+     accepted as vndb:v4                      "vndb:v4 " (padded)
+     accepted as vndb:v4                      " vndb:v4" (padded)
+     accepted as vndb:v4                      "\tvndb:v4\n" (padded)
+     accepted (vndb:v4)                       "vndb:v4"
+     accepted (vndb:v65869)                   "vndb:v65869"
+     accepted (vndb:V4)                       "VNDB:V4"
+     accepted (catalog:86)                    "catalog:86"
+     accepted (catalog:61311)                 "catalog:61311"
+     accepted (vndb:v4)                       "vndb%3Av4"
+     rejected (correct)                       "1"
+     rejected (correct)                       "86"
+     rejected (correct)                       "bangumi:1234"
+     rejected (correct)                       "vndb:"
+     rejected (correct)                       "vndb:abc"
+     rejected (correct)                       "catalog:"
+     rejected (correct)                       ""
+     rejected (correct)                       " "
+     rejected (correct)                       "v4"
+     rejected (correct)                       "catalog:86x"
+     rejected (correct)                       "vndb:v4 mid"
+     rejected (correct)                       "vndb:v4:catalog:5"
+  
+  The Bangumi-anchor dependency (report section 6.3):
+     PickAnchor(null, null)          -> null (no anchor, no request possible)
+     PickAnchor(null, "61311")      -> catalog:61311
+     PickAnchor("v4", "61311")     -> vndb:v4 (VNDB is moyu's own dedupe key, so it wins)
+     FromVndbId("1234")             -> vndb:v1234
+     FromVndbId("bangumi:1234")    -> (null)
+     FromVndbId("v65869")          -> vndb:v65869
+  
+  The `save` type discriminator:
+     IsSaveType([save]) -> True (want True) OK
+     IsSaveType([manual]) -> False (want False) OK
+     IsSaveType([manual,save]) -> True (want True) OK
+     IsSaveType([SAVE]) -> True (want True) OK
+     IsSaveType([(empty)]) -> False (want False) OK
+  
+  Upstream type vocabulary (12 values, spec line 508) -> Chinese labels:
+     manual               -> 人工翻译补丁
+     ai                   -> AI 翻译补丁
+     machine_polishing    -> 机翻润色
+     machine              -> 机翻补丁
+     save                 -> 全 CG 存档
+     crack                -> 破解补丁
+     fix                  -> 修正补丁
+     mod                  -> 魔改补丁
+     r18                  -> 18+
+     decensor             -> 去马赛克补丁
+     image                -> 修图补丁
+     other                -> 其它
+     something_new        -> something_new (unknown values pass through unchanged, so a contract change stays visible instead of being relabelled `其它`)
+RESULT   : PASS  (6 ms)
+
+####################################################################################################
+# [A65] The downloads-folder watcher adopts the new file and times out cleanly
+####################################################################################################
+EXPECTED : a file appearing in the watched folder is adopted (Found) once its size is stable; a watch that sees nothing returns TimedOut; an oversized mismatch is not adopted
+ACTUAL   : adopted "A65-synthetic-patch.rar" after 974 ms by size match; a 64 KB file was refused against a declared 170 MB; the empty watch reported TimedOut; cancellation and a missing folder are reported states
+DETAILS  :
+  Watched folder    : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-9208-09990ee28a774415914f5862ac15c25e
+  Expected size     : 4096 bytes
+  Stability window  : 300 ms
+  The file is written 600 ms AFTER the watch starts, on purpose: a watch that adopted a pre-existing file would grab last week's download.
+  
+  Positive watch    : State=Found, File=C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-9208-09990ee28a774415914f5862ac15c25e\A65-synthetic-patch.rar, Size=4096, Elapsed=974 ms
+    Reason          : 已接管 A65-synthetic-patch.rar（4 KB，与来源声明的 4 KB 匹配）。该文件将交给本机补丁引擎做预览与安装，Galbox 不会自行解压或覆盖游戏目录。
+    Considered      : A65-synthetic-patch.rar：4 KB，期望 4 KB
+  
+  IPatchEngine from DI : PatchInstaller
+    InspectAsync("A65-synthetic-patch.rar") -> kind=Unknown, formatId=unknown, entries=0, encrypted=False, requiresManualRun=False
+  
+  Size-mismatch watch: State=TimedOut, File=(none)
+  
+  Empty watch       : State=TimedOut, elapsed=731 ms (timeout was 700 ms)
+    Reason          : 等待 0 分钟后仍未在 C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-timeout-9208-d8538e615f074667b755eba7694c33f1 中发现匹配的文件。如果浏览器还在下载，或者你把它存到了别处，可以从下载文件夹手动选择补丁包安装。
+  
+  Cancelled watch   : State=Cancelled
+  
+  Missing folder    : State=Failed, Reason=下载文件夹不存在：C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\does-not-exist-a0909fd7376442158dc898112df8b4dc
+RESULT   : PASS  (2687 ms)
+
+####################################################################################################
+# [A66] The browser hop accepts only HTTPS moyu pages and refuses API URLs
+####################################################################################################
+EXPECTED : ValidateWebUrl accepts https://www.moyu.moe/patch/… and refuses http, /api, the API/CDN hosts, other schemes and other hosts; a dry run reports success without starting a process, and a refused URL is reported as a failure
+ACTUAL   : 3 legitimate page URL(s) accepted, 12 dangerous URL(s) refused, dry run started no process, a refused URL reported failure
+DETAILS  :
+  URL validation:
+     accepted         https://www.moyu.moe/patch/86/introduction
+     accepted         https://www.moyu.moe/patch/223/resources
+     accepted         https://moyu.moe/patch/86/introduction
+     rejected         http://www.moyu.moe/patch/86/introduction
+     rejected         https://www.moyu.moe/api/v1/patch/resource/223/link
+     rejected         https://www.moyu.moe/api/v1/search?keywords=CLANNAD
+     rejected         https://api.nextmoe.dev/v2/moyu/patches
+     rejected         https://dl.imoe.uk/moyu/ec3ecb28-2e7e-51fa-bb03-c0df69bc9ac7.rar
+     rejected         https://oss.moyu.moe/patch/243/690eac.rar
+     rejected         https://evil.example/patch/86
+     rejected         file:///C:/Windows/System32/calc.exe
+     rejected         javascript:alert(1)
+     rejected         not a url
+     rejected         (empty string)
+     rejected         https://www.moyu.moe
+  
+  Dry-run Launch    : Succeeded=True, DryRun=True, ProcessId=(none), Url=https://www.moyu.moe/patch/86/introduction
+    Message         : dry run：地址通过校验，未启动浏览器。
+  
+  Refused launch    : Succeeded=False, Message=拒绝打开这个地址：只允许在浏览器中打开 https://www.moyu.moe/ 下的补丁页面，不接受该站点 API 路径、其它主机或非 HTTPS 地址。收到：https://www.moyu.moe/api/v1/patch/resource/223/link
+  
+  MoyuApi.BuildWebUrl(resource) -> https://www.moyu.moe/patch/86/resources/6262
+  Launch(BuildWebUrl(resource without web_url)) -> Succeeded=False, Message=没有可打开的补丁页面地址。
+RESULT   : PASS  (2 ms)
+
+####################################################################################################
+# [A67] 429 Retry-After is honoured and a 304 reuses the cached document
+####################################################################################################
+EXPECTED : a 429 carrying Retry-After=2 is not retried immediately; a second call sends If-None-Match and a 304 returns the cached rows; Retry-After beyond the cap is reported instead of waited out
+ACTUAL   : If-None-Match sent on the second call and the 304 reused the cache; Retry-After: 2 honoured (2016 ms); Retry-After: 3600 reported as RateLimited without waiting; the key is absent from every error surface; pacing and the minute budget both hold
+DETAILS  :
+  Call 1            : Failed=False, rows=1, If-None-Match=(absent)
+  Call 2            : Failed=False, rows=1, If-None-Match="etag-a67"
+  
+  429 then 200     : attempts=2, elapsed=2016 ms, Failed=False, rows=1
+  
+  Retry-After: 3600 (cap 5s): attempts=1, elapsed=0 ms, Failed=True, Code=RateLimited, RetryAfter=3600s
+  
+  Key present in any failure/LastError surface: False
+  lastRateLimitNotice: (none)
+  
+  Pacing            : 3 acquisitions at 250 ms spacing took 502 ms (2 required a wait)
+  Minute budget     : 2/minute limiter allowed 2 of 5 immediate requests
+RESULT   : PASS  (2525 ms)
+
+####################################################################################################
+# [A70] 健康诊断：按触发条件准确报出 8 项、严重度符合规格、且不误报
+####################################################################################################
+EXPECTED : 8 个诊断项各自在触发条件成立时报出、条件不成立时保持沉默，严重度与规格一致（中文路径 Major / 区域设置 Critical / DirectX Major / 解码器 Minor / Windows 兼容性 Critical / 运行库 Critical / 权限 Major / 杀软 Info）
+ACTUAL   : 全部诊断项按触发条件准确报出（codecPack=False, dx9=True, vc=True）
+DETAILS  :
+  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a70-9208
+  工作目录纯 ASCII : True（中文路径用例需要 ASCII 的上层目录）
+  
+  === 本机前置条件（实测，用于推导期望值） ===
+    K-Lite 类解码器已安装 : False
+    SysWOW64/System32 有 d3dx9_43.dll : True
+    SysWOW64/System32 有 msvcp140.dll : True
+  
+  === 逐项触发条件与判定 ===
+    [OK  ] 中文路径 fixture（目录名含中文）
+           类别=ChineseDirectory 期望=Major 实测=Major
+           Title="游戏路径包含中文字符" SolutionType=AutoFix AutoFix=True
+    [OK  ] 中文路径 fixture（同一游戏不应误报区域设置）
+           类别=LocaleRequirement 期望=无 实测=无
+    [OK  ] 区域设置 fixture（含 locale.jp）
+           类别=LocaleRequirement 期望=Critical 实测=Critical
+           Title="需要日文区域设置" SolutionType=ExternalTool AutoFix=False
+    [OK  ] Windows 兼容性 fixture（readme 提到 Windows XP）
+           类别=WindowsCompatibility 期望=Critical 实测=Critical
+           Title="需要 Windows 兼容模式" SolutionType=AutoFix AutoFix=True
+    [OK  ] 误报 fixture（游戏名 Expansion，readme 无 OS 要求）
+           类别=WindowsCompatibility 期望=无 实测=无
+    [OK  ] 解码器 fixture（含 mp4，本机已装解码器=False）
+           类别=KLiteCodecMissing 期望=Minor 实测=Minor
+           Title="缺少视频解码器" SolutionType=ExternalTool AutoFix=False
+    [OK  ] DirectX fixture（含 d3dx9_43.dll，本机已装=True）
+           类别=DirectXMissing 期望=无 实测=无
+    [OK  ] 运行库 fixture（含 msvcp140.dll，本机已装=True）
+           类别=RuntimeMissing 期望=无 实测=无
+    [OK  ] 杀软 fixture（日文原名 + 可执行文件存在）
+           类别=AntivirusBlocking 期望=Info 实测=Info
+           Title="可能被安全软件拦截" SolutionType=ManualFix AutoFix=False
+    [OK  ] 权限 fixture（非 Program Files，不应误报）
+           类别=PermissionIssue 期望=无 实测=无
+  
+  === 干净 fixture：8 项全部保持沉默 ===
+    ChineseDirectory      : 无（OK）
+    LocaleRequirement     : 无（OK）
+    DirectXMissing        : 无（OK）
+    KLiteCodecMissing     : 无（OK）
+    WindowsCompatibility  : 无（OK）
+    RuntimeMissing        : 无（OK）
+    GameDependency        : 跳过（规格 §4.4 明确只有分类、没有实现）
+    PermissionIssue       : 无（OK）
+    AntivirusBlocking     : 无（OK）
+  
+  --- 判读 ---
+    未通过项 : 0
+RESULT   : PASS  (51 ms)
+
+####################################################################################################
+# [A71] 中文路径一键重命名：目录真的改名、数据库三个路径字段同步、失败可回滚
+####################################################################################################
+EXPECTED : FixChineseInstallPathAsync 把游戏目录改成纯 ASCII 名，同步更新 Games.InstallPath / MainExecutable / AlternativeExecutables（以及目录下的文档路径），目标冲突时不动任何东西，数据库提交失败时把目录改回原名，游戏进程在运行时拒绝执行
+ACTUAL   : 目录已改名 + 数据库三字段同步 + 冲突与运行中拒绝 + 提交失败回滚，全部实测通过
+DETAILS  :
+  IGameHealthFixService : Galbox.App.Services.GameHealthFixService
+  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208
+  
+  === 用例 1：一键重命名（走 AttemptAutoFixAsync，即界面「尝试自动修复」按钮的调用） ===
+    游戏行 Id        : 9
+    改名前目录       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录  (存在=True)
+    改名前 InstallPath        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录
+    改名前 MainExecutable     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录\probe.exe
+    改名前 AlternativeExe     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录\probe64.exe|C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录\probe.exe
+    改名前 文档路径           : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录\readme.txt
+    改名前 CoverImagePath     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\中文游戏目录\cover.png
+    诊断结论         : "游戏路径包含中文字符" 严重度=Major AutoFix=True 方案=AutoFix
+    AttemptAutoFixAsync ok=True Success=True
+    Message          : 已把游戏目录改名为「Chinese-Game-Directory」，数据库路径已同步。
+  
+    --- 改名后实测 ---
+    目录             : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory  (存在=True)
+    旧目录是否仍在   : False（期望 False）
+    新目录名         : Chinese-Game-Directory  纯 ASCII=True
+    新 InstallPath        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory
+    新 MainExecutable     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory\probe.exe
+    新 AlternativeExe     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory\probe64.exe|C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory\probe.exe
+    新 文档路径           : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory\readme.txt
+    新 CoverImagePath     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case1\Chinese-Game-Directory\cover.png
+    主程序文件存在   : True
+    备选程序文件存在 : True
+    复诊仍报中文路径 : False（期望 False）
+  
+  === 用例 2：提交数据库失败 → 目录必须改回原名（回滚） ===
+    游戏行 Id        : 10（被修复者）, 11（占位行，已声明目标路径）
+    原目录           : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case2\中文游戏目录  (存在=True)
+    占位行声明的路径 : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case2\Chinese-Game-Directory  (磁盘上存在=False）
+    调用 ok          : True
+    Success          : False（期望 False）
+    RolledBack       : True（期望 True）
+    Message          : 数据库更新失败（另一个游戏记录（Id=11「A71 占位行」）已经声明了目标路径 C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case2\Chinese-Game-Directory，提交会制造两条指向同一目录的记录。），目录已回滚到原状，未做任何修改。
+    回滚后原目录存在 : True（期望 True）
+    回滚后新目录存在 : False（期望 False）
+    回滚后 InstallPath    : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case2\中文游戏目录
+    回滚后 MainExecutable : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case2\中文游戏目录\probe.exe
+  
+  === 用例 3：目标目录已存在 → 拒绝执行且不改动任何东西 ===
+    调用 ok          : True
+    Success          : False（期望 False）
+    Message          : 目标目录已存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case3\Chinese-Game-Directory。为避免覆盖另一个游戏，本工具不会动它；请先把那个目录改名或移走，再重新修复。
+    原目录仍在       : True（期望 True）
+    目标目录里的无关文件仍在 : True（期望 True）
+    InstallPath 未变 : True
+  
+  === 用例 4：游戏进程正在运行 → 拒绝重命名 ===
+    正在运行的进程名 : Galbox.Acceptance（监控服务 IsProcessRunning=True）
+    诊断报出中文路径 : True
+    调用 ok          : True
+    Success          : False（期望 False）
+    Message          : 检测到游戏进程 Galbox.Acceptance 正在运行，已取消重命名。请先退出游戏再修复，中途改名会让存档路径失效。
+    目录是否仍在原处 : True（期望 True）
+  
+  === 用例 5：撤销（改回中文目录名，数据库同步还原） ===
+    修复 ok=True Success=True
+    修复后 InstallPath : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case5\Chinese-Game-Directory
+    撤销 ok=True Success=True
+    撤销 Message       : 已把游戏目录改回「中文游戏目录」。
+    撤销后 InstallPath : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case5\中文游戏目录（期望原中文路径）
+    撤销后目录存在     : True
+    撤销后复诊报中文路径 : True（期望 True）
+  
+  --- 判读 ---
+    未通过项 : 0
+SERVICE LOG (1 record(s), WARNING and above):
+  [Error] Galbox.App.Services.GameHealthFixService: Committing the rename of game 10 failed; rolling the folder back
+      System.InvalidOperationException: 另一个游戏记录（Id=11「A71 占位行」）已经声明了目标路径 C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a71-9208\case2\Chinese-Game-Directory，提交会制造两条指向同一目录的记录。
+         at Galbox.App.Services.GameHealthFixService.CommitRelocationAsync(Int32 gameId, String oldRoot, String newRoot, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\GameHealthFixService.cs:line 557
+         at Galbox.App.Services.GameHealthFixService.CommitRelocationAsync(Int32 gameId, String oldRoot, String newRoot, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\GameHealthFixService.cs:line 667
+         at Galbox.App.Services.GameHealthFixService.FixChineseInstallPathAsync(Int32 gameId, CancellationToken cancellationToken) in E:\tmp\Galbox_final\src\Galbox.App\Services\GameHealthFixService.cs:line 180
+RESULT   : PASS  (245 ms)
+
+####################################################################################################
+# [A72] Windows 兼容性一键写入：HKCU 兼容性层真的写入、且撤销后真的删除
+####################################################################################################
+EXPECTED : ApplyWindowsCompatibilityModeAsync 在 HKCU\...\AppCompatFlags\Layers 下以可执行文件全路径为名写入兼容性层（~ WIN7RTM），已有旧值时报告旧值，RevertWindowsCompatibilityModeAsync 还原旧值（无旧值时删除该值），重命名游戏目录时已有的层设置跟着可执行文件的新路径迁移，且全程只写 HKCU、不删除其他应用的兼容性设置
+ACTUAL   : 注册表值实测写入 / 撤销 / 还原旧值，全部通过，且只涉及 HKCU
+DETAILS  :
+  IGameHealthFixService : Galbox.App.Services.GameHealthFixService
+  工作目录        : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-9208
+  Layers 键原本存在 : True（本用例结束时值一定会被删掉）
+  
+  === 用例 1：写入 → 读回 → 撤销 → 读回 ===
+    可执行文件       : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-9208\case1\legacy-probe.exe
+    写入前注册表值   : (不存在)
+    调用 ok          : True
+    Success          : True
+    Message          : 已为「legacy-probe.exe」设置兼容模式 ~ WIN7RTM。
+    AppliedValue     : ~ WIN7RTM
+    写入后注册表值   : ~ WIN7RTM（期望 ~ WIN7RTM）
+  
+    撤销 ok          : True
+    Success          : True
+    Message          : 已撤销兼容模式设置。
+    撤销后注册表值   : (不存在)（期望不存在）
+    Layers 键仍存在  : True（期望 True，不能删掉其他应用的设置）
+  
+  === 用例 2：用户已手工设置过兼容模式 → 撤销必须还原为原值，而不是一删了之 ===
+    用户原有值       : ~ WINXPSP3（模拟用户自己设置过 XP SP3 兼容模式）
+    写入 ok=True Success=True
+    PreviousValue    : ~ WINXPSP3（期望 ~ WINXPSP3）
+    写入后注册表值   : ~ WIN7RTM（期望 ~ WIN7RTM）
+    撤销 ok=True Success=True
+    撤销后注册表值   : ~ WINXPSP3（期望 ~ WINXPSP3，即用户原值）
+  
+  === 用例 3：可执行文件不存在 → 拒绝写入（避免在注册表里留下一堆死路径） ===
+    调用 ok          : True
+    Success          : False（期望 False）
+    Message          : 主程序不存在：C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-9208\case3\does-not-exist.exe，无法设置兼容模式。
+    注册表是否被写   : False（期望 False）
+  
+  === 用例 5：目录改名时，已有的兼容性层设置必须跟着走（否则一次修复会悄悄废掉上一次修复） ===
+    改名前的层设置   : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-9208\case5\中文游戏目录\probe.exe = ~ WINXPSP3
+    重命名 ok=True Success=True
+    改名后的主程序   : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a72-9208\case5\Chinese-Game-Directory\probe.exe
+    旧路径上的值     : (已删除)（期望已删除）
+    新路径上的值     : ~ WINXPSP3（期望 ~ WINXPSP3）
+  
+  === 用例 4：只写 HKCU（源码级反证，无法用运行时枚举证明「没有写别处」） ===
+    [OK  ] 源码不含 "Registry.LocalMachine"
+    [OK  ] 源码不含 "Registry.ClassesRoot"
+    [OK  ] 源码不含 "Registry.Users"
+    [OK  ] 源码不含 "Registry.PerformanceData"
+    [OK  ] 源码不含 "HKLM:"
+    [OK  ] 源码使用 Registry.CurrentUser
+  
+  --- 判读 ---
+    未通过项 : 0
+RESULT   : PASS  (68 ms)
+
+####################################################################################################
+# [A73] 自动修复不虚标：标为可自动修复的项真的能修，其余项不得谎报成功
+####################################################################################################
+EXPECTED : 8 个诊断项的 SolutionType 与规格表一致；AutoFixAvailable 当且仅当 SolutionType=AutoFix；每个标为可自动修复的项调用 AttemptAutoFixAsync 必须真的成功；其余项必须返回失败而不是假装成功；非自动修复项各自带官方下载地址或可执行的手动步骤
+ACTUAL   : 分级与规格一致、可自动修复项实测被修好、其余项如实拒绝
+DETAILS  :
+  === 用例 1：解决方式分级与实际修复能力一致 ===
+    [OK  ] 路径含中文字符        规格=AutoFix      实测=AutoFix      AutoFixAvailable=True
+            FixAction="RenameInstallPath" Tool="(null)" Url=(null)
+    [OK  ] 区域设置要求         规格=ExternalTool 实测=ExternalTool AutoFixAvailable=False
+            FixAction="(null)" Tool="Locale Emulator" Url=https://github.com/xupefei/Locale-Emulator
+    [OK  ] DirectX 缺失     规格=ExternalTool 实测=ExternalTool AutoFixAvailable=False
+            FixAction="(null)" Tool="DirectX End-User Runtime" Url=https://www.microsoft.com/download/details.aspx?id=35
+    [OK  ] 视频解码器缺失        规格=ExternalTool 实测=ExternalTool AutoFixAvailable=False
+            FixAction="(null)" Tool="K-Lite Codec Pack" Url=https://codecguide.com/download_kl.htm
+    [OK  ] Windows 兼容性    规格=AutoFix      实测=AutoFix      AutoFixAvailable=True
+            FixAction="ApplyWindowsCompatibilityMode" Tool="(null)" Url=(null)
+    [OK  ] 运行库缺失          规格=ExternalTool 实测=ExternalTool AutoFixAvailable=False
+            FixAction="(null)" Tool="Visual C++" Url=https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist
+    [OK  ] 权限问题           规格=ManualFix    实测=ManualFix    AutoFixAvailable=False
+            FixAction="(null)" Tool="(null)" Url=(null)
+    [OK  ] 杀软拦截           规格=ManualFix    实测=ManualFix    AutoFixAvailable=False
+            FixAction="(null)" Tool="(null)" Url=(null)
+  
+  === 用例 2：非自动修复项调用修复接口必须如实返回失败 ===
+    [OK  ] 区域设置要求         Success=False Message="「区域设置要求」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    [OK  ] DirectX 缺失     Success=False Message="「缺 DirectX」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    [OK  ] 视频解码器缺失        Success=False Message="「缺 K-Lite 解码器」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    [OK  ] 运行库缺失          Success=False Message="「缺运行时」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    [OK  ] 权限问题           Success=False Message="「权限问题」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    [OK  ] 杀软拦截           Success=False Message="「杀软拦截」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    [OK  ] 被错误标记为可自动修复的 DirectX 项 Success=False Message="「缺 DirectX」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+  
+  === 用例 3：标为可自动修复的项，真的能被修好（界面上那个按钮真的有门） ===
+    诊断结果 : ChineseDirectory(AutoFix), WindowsCompatibility(AutoFix), AntivirusBlocking(ManualFix)
+    [OK  ] ChineseDirectory       宣称可自动修复=True 尝试结果 Success=True Message="已把游戏目录改名为「Chinese-Game-Directory」，数据库路径已同步。"
+    [OK  ] WindowsCompatibility   宣称可自动修复=True 尝试结果 Success=True Message="已为「probe.exe」设置兼容模式 ~ WIN7RTM。"
+    [OK  ] AntivirusBlocking      宣称可自动修复=False 尝试结果 Success=False Message="「杀软拦截」没有自动修复方案。请按“解决步骤”里的说明手动处理，或点“下载所需组件”打开官方下载页。"
+    修复后仍报出的可自动修复项 : 无（OK）
+  收尾：清理了 1 条本用例写入的兼容性层设置。
+  
+  === 用例 4：报告页的「一键修复所有可自动修复的问题」（真实 ViewModel + 真实服务） ===
+    CheckGameErrorsAsync ok=True
+    按钮文案         : "一键修复所有可自动修复的问题（2 项）"
+    批量调用 ok=True
+    FixableCount     : 2
+    FixedCount       : 2
+    FixedItems       : 游戏路径包含中文字符 / 需要 Windows 兼容模式
+    ManualItems      : 可能被安全软件拦截
+    FailedItems      : 
+    Message          : 已修复 2 项。另有 1 项需要手动处理或用外部工具解决。
+    原名目录仍在     : False（期望 False）
+    改名后主程序     : C:\Users\Jiang\AppData\Local\Galbox\acceptance\work\a73-9208\batch\Chinese-Game-Directory\probe.exe  存在=True
+    注册表兼容性层   : ~ WIN7RTM（期望 ~ WIN7RTM）
+    批量后仍可自动修复 : 0（期望 0）
+  收尾：清理了 1 条本用例写入的兼容性层设置。
+  
+  --- 判读 ---
+    未通过项 : 0
+RESULT   : PASS  (99 ms)
+
+####################################################################################################
+# [A74] 诊断文案中文化：标题、说明、方案、分级与持久化记录均无英文残留
+####################################################################################################
+EXPECTED : 8 个诊断项的 Title/Description/SolutionInstructions、严重度与分类显示名、解决方式显示名、报告页筛选标签、以及写入 ErrorRecords 的记录都含中文且不含未本地化的英文片段
+ACTUAL   : 全部用户可见文案均为中文且无英文残留
+DETAILS  :
+  === 用例 1：8 个诊断项的正文 ===
+    --- 路径含中文字符 ---
+        Title       : 游戏路径包含中文字符
+        Description : 游戏路径中含中文字符：游戏, 戏。部分日文游戏在中文路径下无法运行，或无法读写存档。
+        Solution    : 点「一键修复」把游戏目录改成英文或拼音名（例如 游戏 → Game），程序会同时更新库里的安装路径、主程序路径和备选程序路径。重命名前会自动确认游戏没有在运行，失败会回滚。
+    --- 区域设置要求 ---
+        Title       : 需要日文区域设置
+        Description : 该游戏需要 Japanese (Shift-JIS) 区域设置才能正常运行，区域不对会出现文字乱码、字体缺失或启动即崩溃。
+        Solution    : 用 Locale Emulator 或 NTLEA 以日文区域启动游戏。这两个工具可以只对单个进程临时改区域，不影响系统全局设置。Galbox 不代你安装它们：它们需要挂钩进程加载，属于系统级工具，安装必须由你确认。
+    --- DirectX 缺失 ---
+        Title       : 缺少 DirectX 组件
+        Description : 游戏需要的 d3dx9_43.dll 在本机没有找到（游戏要求 DirectX 9.0c），缺少它可能表现为启动失败、黑屏或过场动画不播放。
+        Solution    : 安装微软官方的 DirectX End-User Runtime，它会一次性补齐 DirectX 9.0c 的全部组件。Galbox 不代你安装运行时：那是系统级改动，需要你自己确认。
+    --- 视频解码器缺失 ---
+        Title       : 缺少视频解码器
+        Description : 游戏目录里有视频文件，但本机没有检测到常见的解码器包。游戏本体可以玩，过场动画可能黑屏或没有声音。
+        Solution    : 安装 K-Lite Codec Pack（推荐 Basic 或 Standard 版）即可播放游戏内的视频。这是可选的：如果不介意过场动画，可以不管这一项。
+    --- Windows 兼容性 ---
+        Title       : 需要 Windows 兼容模式
+        Description : 该游戏面向 Windows XP/Vista 时代，在当前 Windows 上可能启动失败、花屏或无法切换全屏。
+        Solution    : 点「一键修复」为游戏主程序写入 Windows 兼容模式（Windows 7）。设置只写入当前用户（HKCU），随时可以点「撤销」还原；如果兼容模式仍然无效，XP/Vista 时代的游戏建议放进虚拟机运行。
+    --- 运行库缺失 ---
+        Title       : 缺少运行库 Visual C++
+        Description : 游戏依赖 Visual C++ 2015-2022，本机没有检测到它。缺少运行库时游戏通常在启动瞬间报错退出。
+        Solution    : 从微软官网下载并安装 Visual C++ Redistributable（x86 与 x64 都装一遍最稳妥），对应版本 2015-2022。
+    --- 权限问题 ---
+        Title       : 游戏目录权限不足
+        Description : 游戏目录 C:\Program Files\Probe 可能没有写入权限，游戏可能无法保存设置、无法存档，或因读取配置失败而启动异常。
+        Solution    : 两种处理方式：① 右键游戏主程序 →「以管理员身份运行」；② 把游戏移到 Program Files 之外（例如 D:\Games\）后重新扫描。Galbox 不代你移动游戏目录、也不会改 ACL：那属于系统级改动，必须由你确认。
+    --- 杀软拦截 ---
+        Title       : 可能被安全软件拦截
+        Description : 日文游戏常见的加壳/自解压打包方式容易被杀毒软件误报，game.exe 有可能被隔离或删除。如果游戏启动后立刻闪退、或者文件莫名消失，先排查这一类问题。
+        Solution    : 把游戏目录加入杀毒软件的排除列表（Windows 安全中心：病毒和威胁防护 → 管理设置 → 排除项 → 添加文件夹）。Galbox 不会代你修改安全软件设置，那需要你自己判断风险。
+  
+  === 用例 2：分级与分类的显示名 ===
+    ChineseDirectory       -> CategoryDisplay="路径含中文"
+    LocaleRequirement      -> CategoryDisplay="区域设置要求"
+    DirectXMissing         -> CategoryDisplay="缺 DirectX"
+    KLiteCodecMissing      -> CategoryDisplay="缺 K-Lite 解码器"
+    WindowsCompatibility   -> CategoryDisplay="Windows 兼容性"
+    RuntimeMissing         -> CategoryDisplay="缺运行时"
+    GameDependency         -> CategoryDisplay="缺游戏专属依赖"
+    PermissionIssue        -> CategoryDisplay="权限问题"
+    AntivirusBlocking      -> CategoryDisplay="杀软拦截"
+    Critical               -> SeverityDisplay="严重"
+    Major                  -> SeverityDisplay="重要"
+    Minor                  -> SeverityDisplay="轻微"
+    Info                   -> SeverityDisplay="提示"
+    AutoFix                -> SolutionTypeDisplay="自动修复"
+    ManualFix              -> SolutionTypeDisplay="手动修复"
+    ExternalTool           -> SolutionTypeDisplay="需外部工具"
+    None                   -> SolutionTypeDisplay="无可用方案"
+  
+  === 用例 3：数据库中的字符串（严重度/分类）也有中文显示名 ===
+    DiagnosisText 类型 : Galbox.App.Models.DiagnosisText
+    StoredSeverityLabel("Critical") = "严重"
+    StoredSeverityLabel("Major") = "重要"
+    StoredSeverityLabel("Minor") = "轻微"
+    StoredSeverityLabel("Info") = "提示"
+    StoredCategoryLabel("ChineseDirectory") = "路径含中文"
+    StoredCategoryLabel("LocaleRequirement") = "区域设置要求"
+    StoredCategoryLabel("DirectXMissing") = "缺 DirectX"
+    StoredCategoryLabel("KLiteCodecMissing") = "缺 K-Lite 解码器"
+    StoredCategoryLabel("WindowsCompatibility") = "Windows 兼容性"
+    StoredCategoryLabel("RuntimeMissing") = "缺运行时"
+    StoredCategoryLabel("GameDependency") = "缺游戏专属依赖"
+    StoredCategoryLabel("PermissionIssue") = "权限问题"
+    StoredCategoryLabel("AntivirusBlocking") = "杀软拦截"
+    [OK  ] 转换器 ErrorSeverityDisplayConverter / ErrorCategoryDisplayConverter 复用 DiagnosisText（严重度=True, 分类=True）
+  
+  === 用例 4：错误报告页自身的文案（真实 ViewModel 实例） ===
+    严重程度筛选 [1] = "全部严重程度"
+    严重程度筛选 [2] = "只看严重"
+    严重程度筛选 [3] = "严重 + 重要"
+    严重程度筛选 [4] = "含轻微问题"
+    类别筛选 [1] = "全部类别"
+    类别筛选 [2] = "路径含中文"
+    类别筛选 [3] = "区域设置要求"
+    类别筛选 [4] = "缺 DirectX"
+    类别筛选 [5] = "缺 K-Lite 解码器"
+    类别筛选 [6] = "Windows 兼容性"
+    类别筛选 [7] = "缺运行时"
+    类别筛选 [8] = "权限问题"
+    类别筛选 [9] = "杀软拦截"
+    CheckGameErrorsAsync(null) ok=True StatusMessage="请先在左侧选择一个游戏。"
+    LoadGameErrorHistoryAsync(null) ok=True StatusMessage="请先在左侧选择一个游戏。"
+  
+  === 用例 5：写进数据库的诊断记录同样是中文 ===
+    持久化记录数 : 2
+    --- 记录 17 [ChineseDirectory/Major/AutoFix] ---
+        Title       : 游戏路径包含中文字符
+        Description : 游戏路径中含中文字符：中, 文, 游, 戏, 目, 录。部分日文游戏在中文路径下无法运行，或无法读写存档。
+        Solution    : 点「一键修复」把游戏目录改成英文或拼音名（例如 游戏 → Game），程序会同时更新库里的安装路径、主程序路径和备选程序路径。重命名前会自动确认游戏没有在运行，失败会回滚。
+    --- 记录 18 [AntivirusBlocking/Info/ManualFix] ---
+        Title       : 可能被安全软件拦截
+        Description : 日文游戏常见的加壳/自解压打包方式容易被杀毒软件误报，probe.exe 有可能被隔离或删除。如果游戏启动后立刻闪退、或者文件莫名消失，先排查这一类问题。
+        Solution    : 把游戏目录加入杀毒软件的排除列表（Windows 安全中心：病毒和威胁防护 → 管理设置 → 排除项 → 添加文件夹）。Galbox 不会代你修改安全软件设置，那需要你自己判断风险。
+  
+  --- 判读 ---
+    未通过项 : 0
+RESULT   : PASS  (29 ms)
+
+####################################################################################################
+# [A90] reserved interface layer exists with the documented shape (flowchart + achievements)
+####################################################################################################
+EXPECTED : Galbox.Core.Community defines the feature gate, the flowchart model (5 node types, nodes/edges/routes/endings, per-choice unlock condition, per-route achievement id), the achievement model (5 types, icon + locked icon, points, optional progress, rarity, hidden flag, 成就解锁！ notification, 存档解析推断 + 进程内存监控 evidence kinds) and the provider interfaces matching the documented endpoints; the story-position sample that the flowchart sync consumes is not the EF entity, and Galbox.Services.Community projects a stored SaveNode onto it
+ACTUAL   : feature gate + flowchart model + achievement model + provider interfaces + save-node seam all present with the documented shape
+DETAILS  :
+  Expectation source : _product/Galbox-产品知识总纲.md lines 173-174, §6.1, §6.2
+  Assembly under test: Galbox.Core (feature gate + models + interfaces)
+                        Galbox.Services (save-node -> story-position adapter)
+  
+  --- A90.1 feature gate ---
+    [OK]      Galbox.Core.Community.ReservedFeature  (enum, Galbox.Core)
+    [OK]      Galbox.Core.Community.ReservedFeatureState  (enum, Galbox.Core)
+    [OK]      Galbox.Core.Community.ReservedFeatureInfo  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.IReservedFeatureCatalog  (interface, Galbox.Core)
+    [OK]      Galbox.Core.Community.ReservedFeatureCatalog  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.GalboxFeatureFlags  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.IReservedFeatureService  (interface, Galbox.Core)
+    [OK]      Galbox.Core.Community.CommunityServiceFailureKind  (enum, Galbox.Core)
+        members   : {FlowchartTracking, CommunityAchievements}
+        documented: {FlowchartTracking, CommunityAchievements}
+        members   : {InterfaceOnly}
+        documented: {InterfaceOnly}
+        properties: Feature, DisplayName, State, IsImplemented, IsEnabled, UnavailableReason, RequiredServerCapabilities, SpecReferences
+        properties: All
+        [OK]   Get(ReservedFeature) : ReservedFeatureInfo
+        [OK]   IsEnabled(ReservedFeature) : Boolean
+        [OK]   public parameterless constructor
+        [OK]   FlowchartTrackingEnabled = False
+        [OK]   CommunityAchievementsEnabled = False
+        [OK]   IsEnabled(ReservedFeature) : Boolean
+        properties: Feature, IsAvailable, UnavailableReason
+        members   : {None, NotConfigured, InvalidRequest, Unauthorized, RateLimited, TooFrequent, NetworkError, HttpError, MalformedResponse, UpstreamError, NotFound, GameNotSupported, InvalidProgress, AlreadyUnlocked}
+        documented: {None, NotConfigured, InvalidRequest, Unauthorized, RateLimited, NetworkError, HttpError, MalformedResponse, UpstreamError, NotFound, GameNotSupported, InvalidProgress, AlreadyUnlocked, TooFrequent}
+  
+  --- A90.2 flowchart model (spec §6.1) ---
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartNodeType  (enum, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartPoint  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartChoiceCondition  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartChoice  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartNode  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartEdge  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartEdgeStyle  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartRoute  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartMetadata  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.GameFlowchart  (class, Galbox.Core)
+        members   : {Start, Route, Branch, Ending, Event}
+        documented: {Start, Route, Branch, Ending, Event}
+        properties: X, Y
+        properties: Flag, Value
+        properties: Id, Text, NextNodeId, Condition
+        properties: Id, Label, Type, Position, Chapter, Description, Character, RouteType, EndingKind, CgIds, Choices
+        properties: Id, From, To, Label, Style
+        properties: Color, Dashed
+        properties: Id, Name, Color, NodeIds, AchievementId
+        properties: TotalRoutes, TotalEndings, EstimatedCompletionTime, Version, LastUpdated
+        properties: GameId, Version, LastUpdated, Metadata, Nodes, Edges, Routes
+  
+  --- A90.3 achievement model (spec §6.2) ---
+    [OK]      Galbox.Core.Community.Achievements.AchievementType  (enum, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementEvidenceKind  (enum, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementDefinition  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementProgress  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementView  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementSummary  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementEvidence  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementReportRequest  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.AchievementUnlockNotification  (class, Galbox.Core)
+        members   : {Story, Normal, Hidden, Rare, Community}
+        documented: {Story, Normal, Hidden, Rare, Community}
+        members   : {Unknown, SaveAnalysis, ProcessMemory}
+        documented: {Unknown, SaveAnalysis, ProcessMemory}
+        [OK]   no manual-declaration evidence kind (rejected by the product owner)
+        properties: Id, GameId, Name, Description, IconUrl, LockedIconUrl, Type, Points, IsHidden, Rarity, ProgressTotal
+        properties: Current, Total, Percent
+        properties: Definition, IsUnlocked, UnlockedAt, Progress, IsMasked, DisplayName, DisplayDescription
+        properties: TotalCount, UnlockedCount, TotalPoints, UnlockedPoints, CompletionPercent, RemainingCount
+        properties: Kind, GameInfoId, ObservedAtUtc, SceneLabels, CgIds, Note
+        properties: GameId, UnlockedCgIds, LastUnlockedAtUtc, Evidence
+        properties: AchievementId, AchievementName, IconUrl, Points, Title
+  
+  --- A90.4 provider interfaces -> documented endpoints ---
+    [OK]      Galbox.Core.Community.Flowcharts.IFlowchartProvider  (interface, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.IAchievementProvider  (interface, Galbox.Core)
+    [OK]      Galbox.Core.Community.Achievements.IAchievementEvidenceSource  (interface, Galbox.Core)
+        [OK]   GetFlowchartAsync(FlowchartQuery, CancellationToken) : Task`1
+        [OK]   SyncSavePositionsAsync(FlowchartSyncRequest, CancellationToken) : Task`1
+        [OK]   GetAchievementsAsync(String, Boolean, CancellationToken) : Task`1
+        [OK]   ReportProgressAsync(AchievementReportRequest, CancellationToken) : Task`1
+        [OK]   CreateShareCardAsync(String, CancellationToken) : Task`1
+        properties: Kind, IsEnabled, DisabledReason
+        [OK]   CollectAsync(Int32, CancellationToken) : ValueTask`1
+        [OK]   IFlowchartProvider : IReservedFeatureService
+        [OK]   IAchievementProvider : IReservedFeatureService
+  
+  --- A90.5 the documented save-node seam (the whole point of the sync endpoint) ---
+    [OK]      Galbox.Core.Community.Flowcharts.StoryPositionSample  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartSyncRequest  (class, Galbox.Core)
+    [OK]      Galbox.Core.Community.Flowcharts.FlowchartPositionMatch  (class, Galbox.Core)
+    [OK]      Galbox.Services.Community.SaveNodePositionProjector  (class, Galbox.Services)
+        properties: GameInfoId, SaveNodeId, SlotName, SceneLabel, RouteName, ChapterName, ChapterProgressPercent, CgUnlockedIds, PlayTimeSeconds, SavedAtUtc
+        [OK]   StoryPositionSample is defined in Galbox.Core, not in the data assembly (the remote model stays free of EF)
+        properties: GameId, Positions
+        properties: Position, NodeId, Confidence, Reason
+        [OK]   Project(IEnumerable`1) : IReadOnlyList`1
+        [OK]   ProjectOne(SaveNode) : StoryPositionSample
+  
+  Shape failures : 0
+RESULT   : PASS  (9 ms)
+
+####################################################################################################
+# [A91] reserved features are off and have no navigation door (前端隐藏)
+####################################################################################################
+EXPECTED : GalboxFeatureFlags.FlowchartTrackingEnabled and .CommunityAchievementsEnabled are compile-time false; the reserved feature catalog resolves from the app-shaped container and reports both features as not implemented / not enabled with a reason and a list of missing server capabilities; NavigationService has no key and no page for either feature; no page of either name exists; and no file under Views/, no ViewModel and no MainWindow markup mentions either feature at all
+ACTUAL   : both flags const false, catalog resolves and reports both features off with a reason, 8 navigation key(s) none reserved, 64 page(s) none reserved, 30 UI file(s) with 0 mentions
+DETAILS  :
+  Repository root : E:\tmp\Galbox_final
+  Reserved tokens : {Flowchart, Achievement, 流程图, 成就} (case-insensitive)
+  
+  --- A91.1 feature flags are off ---
+    [OK]      Galbox.Core.Community.GalboxFeatureFlags
+    [OK]      FlowchartTrackingEnabled = False (const - requires a code change to enable)
+    [OK]      CommunityAchievementsEnabled = False (const - requires a code change to enable)
+    [OK]      IsEnabled(FlowchartTracking) = False
+    [OK]      IsEnabled(CommunityAchievements) = False
+  
+  --- A91.2 the reserved feature catalog, resolved from the app-shaped container ---
+    resolved type : Galbox.Core.Community.ReservedFeatureCatalog
+  
+    --- FlowchartTracking ---
+        DisplayName        : 流程图追踪
+        State              : InterfaceOnly
+        IsImplemented      : False
+        IsEnabled          : False
+        UnavailableReason  : 本机没有流程图服务端：接口与数据模型已按产品共识定稿，但第一版不实现任何需要服务端的能力（结构拉取、存档位置同步、社区共建数据的分发），前端因此不出现任何入口。
+        Required server    : 6 item(s)
+            - 按游戏条目标识（Bangumi 条目 ID，形如 bgm-12345）提供流程图结构的只读接口：GET /api/v1/flowcharts/{game_id}，支持是否包含隐藏路线与语言两个查询维度
+            - 接收存档位置并回传所属节点的同步接口：POST /api/v1/flowcharts/{game_id}/sync —— 这是「存档节点标记」与「流程图」的咬合点，也是存档位置能落到图上的唯一途径
+            - 版本化的图数据存储与分发：流程图是可演进的社区维护数据，必须带版本号与最后更新时间，而不是一次写死的静态资源
+            - 数据来源与审核流程：谁生产流程图（社区众包还是运营方）、以什么格式提交、谁来校对
+            - 统一的认证（API Key / JWT）：所有自定义 API 均需认证，与补丁服务共用同一套后端
+            - 按游戏判定「是否存在流程图」的能力，不存在时必须能明确回答「游戏不支持流程图」
+        SpecReferences     : 6 item(s)
+            - _product/Galbox-产品知识总纲.md 第 173 行（P2 流程图追踪：第一版只预留接口，前端隐藏）
+            - _product/Galbox-产品知识总纲.md 判断 3（第 69-72 行：流程图以远程 API 服务为主，要定下一套确定的 API 标准）
+            - _product/Galbox-产品知识总纲.md §6.1（第 696-716 行：节点/连线/路线模型与两个接口共识）
+            - _product/Galbox-产品知识总纲.md §6.3（第 736-741 行：以远程 API 服务为主、以 Bangumi 条目 ID 为主键、所有 API 需认证）
+            - docs/API_DOCUMENTATION.md「流程图 API」一节（响应模型与 FLOWCHART_NOT_FOUND / GAME_NOT_SUPPORTED 错误码）
+            - _product/Galbox-初衷复原.md 阶段二「流程图上云」
+  
+    --- CommunityAchievements ---
+        DisplayName        : 社区成就系统
+        State              : InterfaceOnly
+        IsImplemented      : False
+        IsEnabled          : False
+        UnavailableReason  : 本机没有成就服务端：接口与数据模型已按产品共识定稿，但第一版不实现上报、解锁通知与分享卡片；本地两条判定路径（存档解析推断、进程内存监控）也还没有接上，前端因此不出现任何入口。
+        Required server    : 6 item(s)
+            - 按游戏条目标识提供成就定义的只读接口：GET /api/v1/achievements/{game_id}，含图标与未解锁图标两套资源地址
+            - 接收进度与元数据上报并回传解锁结果的接口：POST /api/v1/achievements/{game_id}/unlock，回传体需携带「成就解锁！」通知所需的成就名、图标与点数
+            - 账号体系与跨设备进度存储：未登录、进度数据无效、成就已解锁、上报过于频繁四种情况必须能被服务端区分并回传，客户端才能给出准确的说明
+            - 服务端侧客观判定：成就以存档解析推断与进程内存监控为判定依据，产品明确不接受玩家手动申报，因此判定与稀有度统计必须在服务端完成
+            - 分享卡片生成接口：GET /api/v1/achievements/share/{id}（P3「成就分享卡片」，随成就服务一并规划）
+            - 统一的认证（API Key / JWT）：与补丁服务、流程图共用同一套后端
+        SpecReferences     : 6 item(s)
+            - _product/Galbox-产品知识总纲.md 第 174 行（P2 社区成就系统：第一版只预留接口，前端隐藏）
+            - _product/Galbox-产品知识总纲.md 判断 2（第 62-67 行：不让玩家自己手动申报，以存档解析推断和进程内存监控两个为主）
+            - _product/Galbox-产品知识总纲.md §6.2（第 718-734 行：五种类型、单条成就属性、隐藏成就的社交保护、汇总、上报机制与四条错误语义）
+            - _product/Galbox-产品知识总纲.md §6.3（第 736-741 行：以远程 API 服务为主、以 Bangumi 条目 ID 为主键、所有 API 需认证）
+            - _product/Galbox-产品知识总纲.md §4.5 第 637 行（设置项「内存行为监控（用于成就追踪）」默认关闭，是这个功能的伏笔）
+            - docs/API_DOCUMENTATION.md「成就 API」一节（成就类型说明与 ACHIEVEMENT_* 错误码）
+  
+  --- A91.3 NavigationService exposes no door for either feature ---
+    [OK]   Home -> MainPage
+    [OK]   Library -> LibraryPage
+    [OK]   SaveManager -> SaveManagerPage
+    [OK]   PatchCenter -> PatchCenterPage
+    [OK]   Settings -> SettingsPage
+    [OK]   GameDetail -> GameDetailPage
+    [OK]   ScrapingProgress -> ScrapingProgressPage
+    [OK]   ErrorReport -> ErrorReportPage
+    keys exposed by the shipping app: 8 {ErrorReport, GameDetail, Home, Library, PatchCenter, SaveManager, ScrapingProgress, Settings}
+  
+  --- A91.4 no page class named after either feature exists ---
+    pages in Galbox.App.Views (64): <>c, <OnAddGameClick>d__8, <OnBangumiApiKeyClick>d__8, <OnBangumiLoginClick>d__7, <OnClearSnapshotClick>d__15, <OnCreateBackupClick>d__8, <OnDeleteBackupClick>d__10, <OnDeleteGameClick>d__10, <OnGameItemClick>d__7, <OnGameSelectionChanged>d__6, <OnMarkSnapshotClick>d__14, <OnNavigatedTo>d__13, <OnNavigatedTo>d__4, <OnNavigatedTo>d__4, <OnNavigatedTo>d__4, <OnNavigatedTo>d__4, <OnNavigatedTo>d__4, <OnPageLoaded>d__4, <OnPageLoaded>d__6, <OnPickPatchArchiveClick>d__10, <OnQuickLaunchClick>d__11, <OnQuickSwitchClick>d__11, <OnRecoverInterruptedClick>d__12, <OnRefreshClick>d__5, <OnRefreshClick>d__6, <OnRequestFolderPicker>d__10, <OnRequestFolderPicker>d__7, <OnRestoreBackupClick>d__9, <OnRollbackClick>d__11, <OnScanFolderClick>d__9, <OnScanSaveNodesClick>d__12, <OnSelectBackupPathClick>d__9, ErrorReportPage, ErrorReportPage_obj1_Bindings, ErrorReportPage_obj1_BindingsTracking, GameDetailPage, GameDetailPage_obj1_Bindings, GameDetailPage_obj1_BindingsTracking, LibraryPage, LibraryPage_obj1_Bindings, LibraryPage_obj1_BindingsTracking, MainPage, MainPage_obj1_Bindings, MainPage_obj1_BindingsTracking, PatchCenterPage, PatchCenterPage_obj1_Bindings, PatchCenterPage_obj1_BindingsTracking, SaveManagerPage, SaveManagerPage_obj1_Bindings, SaveManagerPage_obj1_BindingsTracking, ScrapingProgressPage, ScrapingProgressPage_obj1_Bindings, ScrapingProgressPage_obj1_BindingsTracking, SettingsPage, SettingsPage_obj1_Bindings, SettingsPage_obj1_BindingsTracking, XamlBindingSetters, XamlBindingSetters, XamlBindingSetters, XamlBindingSetters, XamlBindingSetters, XamlBindingSetters, XamlBindingSetters, XamlBindingSetters
+    [OK]    Galbox.App.Views.FlowchartPage exists: False
+    [OK]    Galbox.App.Views.AchievementPage exists: False
+    [OK]    Galbox.App.Views.FlowchartTrackingPage exists: False
+    [OK]    Galbox.App.Views.AchievementsPage exists: False
+  
+  --- A91.5 no view, ViewModel or MainWindow markup mentions either feature ---
+    UI files scanned: 30 (Views/**, ViewModels/**, MainWindow.xaml[.cs])
+    [OK]   0 of 30 UI file(s) mention any of {Flowchart, Achievement, 流程图, 成就}
+  
+  --- A91.6 App.xaml.cs registers no service or ViewModel for either feature ---
+    registrations parsed: 33
+    registered types: BangumiApi, CngalApi, ErrorReportViewModel, GameDetailViewModel, IAutoScrapingService, IBangumiAuthService, IErrorCheckingService, IGameDeletionService, IGameHealthFixService, IGameImageService, IGameScrapingService, IGameUtilityService, ILocalPatchService, IMoyuKeyStore, IMoyuRateLimiter, INavigationService, IProcessMonitorService, IReservedFeatureCatalog, ISaveManagementService, ISaveNodeScanService, IScrapingCacheService, IScrapingSettingsProvider, LibraryViewModel, MainViewModel, MoyuApi, MoyuBrowserLauncher, MoyuDownloadWatcher, PatchCenterViewModel, SaveManagerViewModel, ScrapingProgressViewModel, SettingsViewModel, VndbApi, YmgalApi
+    [OK]   none of the 33 registered type name(s) is a reserved feature
+  
+  Hidden-ness failures : 0
+RESULT   : PASS  (30 ms)
+
+####################################################################################################
+# [A92] reserved features ship no implementation, no stub and no schema change
+####################################################################################################
+EXPECTED : no type in Galbox.Core/Data/Services/App implements IFlowchartProvider, IAchievementProvider or IAchievementEvidenceSource; the container resolves null for all three; the reserved source tree contains no NotImplementedException / TODO / FIXME and no HttpClient; the SaveNode -> story position projection carries every documented value and preserves story order; and the EF model gains no entity for either feature
+ACTUAL   : 0 implementations, 0 registrations, 0 placeholders, projection carries all 10 documented values, 0 new entities
+DETAILS  :
+  --- A92.1 nothing implements the three reserved provider interfaces ---
+    [OK]      Galbox.Core.Community.Flowcharts.IFlowchartProvider
+              implementations in Galbox.Core/Galbox.Data/Galbox.Services/Galbox.App: none
+    [OK]      Galbox.Core.Community.Achievements.IAchievementProvider
+              implementations in Galbox.Core/Galbox.Data/Galbox.Services/Galbox.App: none
+    [OK]      Galbox.Core.Community.Achievements.IAchievementEvidenceSource
+              implementations in Galbox.Core/Galbox.Data/Galbox.Services/Galbox.App: none
+  
+  --- A92.2 the container resolves nothing for the three contracts ---
+    [OK]    IFlowchartProvider           -> (null)
+    [OK]    IAchievementProvider         -> (null)
+    [OK]    IAchievementEvidenceSource   -> (null)
+    (the only registration the reserved layer adds is IReservedFeatureCatalog, which only reports that the features are unavailable - A91 asserts what it says)
+  
+  --- A92.3 reserved source tree: no placeholder body, no half-built HTTP client ---
+    [INFO] src\Galbox.App\Community does not exist
+    files in the reserved source tree: 6
+        src\Galbox.Core\Community\ReservedFeatures.cs
+        src\Galbox.Core\Community\Achievements\AchievementModels.cs
+        src\Galbox.Core\Community\Achievements\IAchievementProvider.cs
+        src\Galbox.Core\Community\Flowcharts\FlowchartModels.cs
+        src\Galbox.Core\Community\Flowcharts\IFlowchartProvider.cs
+        src\Galbox.Services\Community\SaveNodePositionProjector.cs
+    [OK]   0 of 6 file(s) contain {NotImplementedException, TODO, FIXME, HttpClient, System.Net.Http, HttpRequestMessage}
+  
+  --- A92.4 SaveNode -> StoryPositionSample: the one arrow that must really work ---
+    probe node (in memory, never persisted): Id=4242 GameInfoId=77 SceneLabel='孤独感' SlotName='auto-3-LT1'
+    [OK]    GameInfoId               expected=77 actual=77
+    [OK]    SaveNodeId               expected=4242 actual=4242
+    [OK]    SlotName                 expected='auto-3-LT1' actual='auto-3-LT1'
+    [OK]    SceneLabel               expected='孤独感' actual='孤独感'
+    [OK]    RouteName                expected='kakoroute' actual='kakoroute'
+    [OK]    ChapterName              expected='第二章 魔女的夜宴' actual='第二章 魔女的夜宴'
+    [OK]    ChapterProgressPercent   expected=42 actual=42
+    [OK]    PlayTimeSeconds          expected=7265 actual=7265
+    [OK]    SavedAtUtc               expected=2026-04-14 10:14:00 actual=2026-04-14 10:14:00
+    [OK]    CgUnlockedIds            expected={0101,0301,2401} actual={0101,0301,2401}
+    [OK]   malformed CgUnlockedIdsJson -> 0 id(s), no exception
+    [OK]   node with no SceneLabel -> SceneLabel=(null) (its DisplayName is '第三章'; that string must NOT be substituted)
+    [OK]   Project(given newer, undated, older) -> 3 sample(s): 序章 -> 终章 -> 无时间戳
+          story order: by save time ascending, undated nodes last
+  
+  --- A92.5 the EF model gains no entity for either feature ---
+    entities in the model (11): GameCharacter, GameDocument, GameErrorRecord, GameInfo, GameMediaFile, GameSaveBackup, GameScreenshot, PatchRecord, SaveGroup, SaveNode, UserSettings
+    [OK]   no entity name mentions Flowchart or Achievement
+  
+  Honesty failures : 0
+RESULT   : PASS  (13 ms)
+
+####################################################################################################
+# [A50] Rapid continuous navigation keeps the process alive
+####################################################################################################
+EXPECTED : 120-200 rapid navigation switches with no crash (no {x:Bind} inside a resource dictionary, and Galbox.App.exe still alive at the end)
+ACTUAL   : survived 200 rapid switch(es) over 14.3s, exit code never observed
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_final
+  --- A50.1 compiled bindings declared inside a resource dictionary ---
+    [OK]   no shipping XAML view declares {x:Bind} inside *.Resources
+  Application          : E:\tmp\Galbox_final\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Navigation menu items declared in MainWindow.xaml: 6 [主页, 游戏库, 存档管理, 补丁中心, 刮削进度, 错误报告]
+  Launched             : pid 36952
+  Window acquired      : after 2238 ms
+  Navigation items reachable through UI Automation: 6 [主页, 游戏库, 存档管理, 补丁中心, 刮削进度, 错误报告]
+  Pacing               : 40 ms between selections, target 200 switches
+  Switches completed   : 200 / 200 attempted (target 200, floor 120)
+  Elapsed              : 14.3 s
+  Last item selected   : 游戏库
+  Process alive        : True (no exit was observed during the whole loop)
+  Window handle        : 0xBC0338
+RESULT   : PASS  (16830 ms)
+
+====================================================================================================
+ ACCEPTANCE SUMMARY
+====================================================================================================
+ ID   STATUS        TIME  CHECK
+----------------------------------------------------------------------------------------------------
+ A0   PASS       1319 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   PASS         14 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS         99 ms  CalculateFolderSize reports the real folder size
+ A3   PASS          7 ms  DetectSaveLocationAsync finds the Ren'Py save folder
+ A4   PASS         22 ms  CheckGameAsync runs without internal failure
+ A5   PASS       1523 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       2298 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+ A8   PASS         68 ms  Navigation, page and XAML resource completeness (no feature without a door)
+ A9   PASS       2532 ms  The GUI application opens a window while scrape-cache data is present
+ A10  PASS       3418 ms  Save-node scan produces the real timeline data (12 nodes, labels, CG 6/27)
+ A11  PASS         85 ms  Quick switch aborts (and reports failure) when the current save cannot be backed up
+ A12  PASS        160 ms  A failed restore rolls the save folder back to its pre-restore state and records it
+ A13  PASS         54 ms  Save detection refuses the game installation folder as a save folder
+ A14  PASS         84 ms  Restore verification rejects same-size/different-content and missing-file restores
+ A15  PASS       2052 ms  Scraped cover and character images are downloaded as real image files
+ A16  PASS        201 ms  Deleting a game removes its records and keeps the game files on disk
+ A17  PASS         12 ms  A missing game folder is detected, surfaced in the UI and blocks the launch with a reason
+ A18  PASS       2567 ms  The application window title is the product name, not "WinUI Desktop"
+ A19  PASS       2698 ms  Every navigation destination loads inside the running application
+ A30  PASS          5 ms  Patch centre wiring: DI resolves IPatchEngine / ILocalPatchService and the ViewModel is bound to it
+ A31  PASS        612 ms  Local patch round trip through the patch centre: preview -> install -> bytes change -> rollback -> byte identical
+ A32  PASS         99 ms  Refused patch content stays visible: Zip Slip entries and save-type packages are refused, reported and written nowhere
+ A40  PASS       5899 ms  ymgal source performs a real search and returns the real game
+ A41  PASS       2244 ms  cngal source performs a real search and returns the real game
+ A42  PASS      13716 ms  metadata sources distinguish 'not configured' / 'unreachable' / 'no results'
+ A60  PASS          3 ms  MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
+ A61  PASS         11 ms  No configured nmk_ key is reported as a distinct failure, never as an empty result
+ A62  PASS         17 ms  The nmk_ key is DPAPI-encrypted on disk and never stored in plaintext
+ A63  PASS         32 ms  No request path under /api is reachable (robots.txt Disallow: /api)
+ A64  PASS          6 ms  size strings parse as binary units and game anchors accept only vndb:/catalog:
+ A65  PASS       2687 ms  The downloads-folder watcher adopts the new file and times out cleanly
+ A66  PASS          2 ms  The browser hop accepts only HTTPS moyu pages and refuses API URLs
+ A67  PASS       2525 ms  429 Retry-After is honoured and a 304 reuses the cached document
+ A70  PASS         51 ms  健康诊断：按触发条件准确报出 8 项、严重度符合规格、且不误报
+ A71  PASS        245 ms  中文路径一键重命名：目录真的改名、数据库三个路径字段同步、失败可回滚
+ A72  PASS         68 ms  Windows 兼容性一键写入：HKCU 兼容性层真的写入、且撤销后真的删除
+ A73  PASS         99 ms  自动修复不虚标：标为可自动修复的项真的能修，其余项不得谎报成功
+ A74  PASS         29 ms  诊断文案中文化：标题、说明、方案、分级与持久化记录均无英文残留
+ A90  PASS          9 ms  reserved interface layer exists with the documented shape (flowchart + achievements)
+ A91  PASS         30 ms  reserved features are off and have no navigation door (前端隐藏)
+ A92  PASS         13 ms  reserved features ship no implementation, no stub and no schema change
+ A50  PASS      16830 ms  Rapid continuous navigation keeps the process alive
+----------------------------------------------------------------------------------------------------
+ PASSED : 43
+ FAILED : 0
+ ERRORS : 0
+ SKIPPED: 0
+ TOTAL  : 43
+
+ EXIT CODE: 0  (all checks PASS)
+ DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-9208\acceptance.db
+ GAME     : D:\GAME\Dreamin'_Her
+====================================================================================================

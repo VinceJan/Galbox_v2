@@ -1,0 +1,156 @@
+================================================================
+ GAlBOX RAPID NAVIGATION PROBE
+================================================================
+ started            : 2026-09-12 00:13:54Z
+ exe                : E:\tmp\Galbox_crash\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+ target switches    : 200
+ pacing (StepMs)    : 40
+ first-chance trace : False
+ report file        : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-20260912-001354.txt
+ process            : pid=3856
+ window acquired after 2500 ms -> handle=10879962
+ nav item resolved : 主页
+ nav item resolved : 游戏库
+ nav item resolved : 存档管理
+ nav item resolved : 补丁中心
+ nav item NOT FOUND : Settings
+
+--- rapid navigation: 200 switches, 40 ms pacing ---
+  ... 25/200 switches at 13.9s
+  ... 50/200 switches at 20.5s
+
+--- RESULT ---
+ switches completed : 54 / 200
+ select calls failed: 50
+ elapsed            : 21.5844632 s
+ PROCESS DIED       : YES
+ exit code          : 0xC000027B (-1073741189)
+ died after switch  : 54
+ last item clicked  : 存档管理
+ next item would be : 主页
+
+--- APPLICATION LOG (app-YYYYMMDD.log, tail) ---
+ file: C:\Users\Jiang\AppData\Local\Galbox\logs\app-20260912.log
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin",
+    "E:\\Develop_tools\\vscode\\Microsoft VS Code\\bin",
+    "E:\\Develop_tools\\Antigravity\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Pandoc\\",
+    "C:\\Users\\Jiang\\.bun\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\nvm",
+    "C:\\nvm4w\\nodejs",
+    "C:\\Users\\Jiang\\AppData\\Local\\Microsoft\\WinGet\\Links",
+    "C:\\Users\\Jiang\\AppData\\Local\\GitHubDesktop\\bin",
+    "C:\\Users\\Jiang\\.dotnet\\tools",
+    "C:\\Users\\Jiang\\.claude\\bin",
+    "C:\\Users\\Jiang\\bin",
+    "D:\\Software\\Obsidian",
+    "C:\\Users\\Jiang\\.qoder\\bin\\qodercli",
+    "C:\\Users\\Jiang\\AppData\\Local\\OfficeCli",
+    "D:\\Software\\Warp\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\Cua\\cua-driver\\bin",
+    "C:\\Users\\Jiang\\AppData\\Local\\Zellij\\",
+    "C:\\Users\\Jiang\\AppData\\Local\\PowerToys\\DSCModules\\",
+    "C:\\Users\\Jiang\\AppData\\Local\\Programs\\Antigravity IDE\\bin"
+  ],
+  "unknownArgs": [],
+  "jsonWriteError": null
+}
+2026-09-12 00:14:26.855 [pid 21784] selftest 成功：handle=0x69090C title='Galbox' elapsedMs=52.0 json='E:\tmp\g0-manual\repeat\r8.json'
+
+--- NAVIGATION SMOKE RESULT FILE ---
+ (no smoke result file)
+
+--- STARTUP LOG (tail) ---
+ file: C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log
+2026-09-12 00:13:31.724 [tid:1] BangumiAuthService initialized
+2026-09-12 00:13:31.802 [tid:1] ScrapingCacheService initialized (entries: 2)
+2026-09-12 00:13:32.002 [tid:1] Database initialization: mode=LegacyBaselineStamped, applied=1
+2026-09-12 00:13:32.174 [tid:1] BangumiAuthService initialized
+2026-09-12 00:13:32.197 [tid:1] Main window created and activated: handle=0x3806EC
+2026-09-12 00:13:32.213 [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 00:13:32.213 [tid:1] OnLaunched: startup sequence completed
+2026-09-12 00:13:32.255 [tid:1] ScrapingCacheService initialized (entries: 2)
+2026-09-12 00:13:32.699 [tid:1] Main window created and activated: handle=0x4A0B34
+2026-09-12 00:13:32.754 [tid:1] Process monitor: started=True, registered=2/2
+2026-09-12 00:13:32.754 [tid:1] OnLaunched: startup sequence completed
+2026-09-12 00:13:55.785 [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+2026-09-12 00:13:55.875 [tid:1] OnLaunched: startup sequence begins
+2026-09-12 00:13:56.675 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+2026-09-12 00:13:56.770 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+2026-09-12 00:13:57.097 [tid:1] BangumiAuthService initialized
+2026-09-12 00:13:57.182 [tid:1] ScrapingCacheService initialized (entries: 2)
+2026-09-12 00:13:57.584 [tid:1] Main window created and activated: handle=0xA603DA
+2026-09-12 00:13:57.600 [tid:1] Process monitor: started=True, registered=1/1
+2026-09-12 00:13:57.601 [tid:1] OnLaunched: startup sequence completed
+
+--- FIRST-CHANCE LOG (tail) ---
+00:09:31.201 System.InvalidOperationException: Operation is not valid due to the current state of the object.
+   at WinRT.ExceptionHelpers.<ThrowExceptionForHR>g__Throw|38_0(Int32 hr)
+
+00:09:31.228 System.Reflection.TargetInvocationException: Exception has been thrown by the target of an invocation.
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+----- [2026/9/12 0:14:20] Windows Error Reporting (Id=1001, Level=信息) -----
+故障存储段 1608469888873659944，类型 4
+事件名称: APPCRASH
+响应: 不可用
+Cab ID: 0
+
+问题签名:
+P1: Galbox.App.exe
+P2: 1.0.0.0
+P3: 6a870000
+P4: combase.dll
+P5: 10.0.26100.9444
+P6: 8c05274d
+P7: 80004003
+P8: 00000000000579e4
+P9: 
+P10: 
+
+附加文件:
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.dbbea2dc-c352-4f50-adf6-0444cbc5cc7f.tmp.dmp
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.d2d1e732-3409-431a-adcd-00307feef71b.tmp.WERInternalMetadata.xml
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.9a3dff40-8a03-4b29-a46e-a128bb1c182d.tmp.csv
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.297e5943-3fe2-406c-ab14-ba8f06ece46e.tmp.txt
+\\?\C:\ProgramData\Microsoft\Windows\WER\Temp\WER.bba12888-ef58-442c-8ee6-a8174dc7956d.tmp.xml
+
+可在此处获取这些文件:
+\\?\C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_Galbox.App.exe_ff58e22486865b6d9f628318d8a72983841775_4de96f0b_f6837f94-7478-4b26-9ba6-c349c285d10d
+
+分析符号: 
+重新检查解决方案: 0
+报告 ID: 85d3acfc-3a31-4d5c-90d1-148b6589ec96
+报告状态: 268435456
+哈希存储段: 1c8962f5f94d5e7346526ed78639fe28
+Cab GUID: 0
+
+----- [2026/9/12 0:14:10] Application Error (Id=1000, Level=错误) -----
+出错应用程序名称： Galbox.App.exe，版本： 1.0.0.0，时间戳： 0x6a870000
+出错模块名称： Microsoft.UI.Xaml.dll， 版本： 3.1.6.0，时间戳： 0xa252a1e7
+异常代码： 0xc000027b
+错误偏移： 0x00000000003a3385
+出错进程 ID： 0xF10
+出错应用程序开始时间： 0x1DD42088AF5CE39
+Faulting 应用程序路径： E:\tmp\Galbox_crash\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+Faulting 模块路径： C:\Program Files\WindowsApps\Microsoft.WindowsAppRuntime.1.6_6000.519.329.0_x64__8wekyb3d8bbwe\Microsoft.UI.Xaml.dll
+Report ID： 85d3acfc-3a31-4d5c-90d1-148b6589ec96
+Faulting 包全名： 
+Faulting 程序包相对应用程序 ID：  个
+
+----- [2026/9/12 0:09:52] .NET Runtime (Id=1026, Level=错误) -----
+Application: Galbox.exe
+CoreCLR Version: 8.0.3126.42015
+.NET Version: 8.0.31
+Description: The process was terminated due to an unhandled exception.
+Exception Info: System.DllNotFoundException: Dll was not found.
+   at __std_type_info_destroy_list(__type_info_node*)
+   at __scrt_uninitialize_type_info()
+   at _app_exit_callback()
+   at <CrtImplementationDetails>.ModuleUninitializer.SingletonDomainUnload(Object source, EventArgs arguments)
+
+
+(no fresh WER report folders for Galbox)
+
+PROBE VERDICT: CRASHED
+ report saved to    : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-20260912-001354.txt

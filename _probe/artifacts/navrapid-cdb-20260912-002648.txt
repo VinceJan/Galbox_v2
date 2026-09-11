@@ -1,0 +1,13 @@
+================================================================
+ RAPID NAVIGATION PROBE + LIVE DEBUGGER (freeze / configure / resume)
+================================================================
+ started         : 2026-09-12 00:26:48Z
+ target switches : 200
+ pacing (StepMs) : 40
+ cdb log         : E:\tmp\Galbox_crash\_probe\artifacts\cdb-attached-20260912-002648.txt
+ report          : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-cdb-20260912-002648.txt
+ app pid         : 2508
+ window          : handle=8456644 after 2000 ms
+ cdb attached    : cdb pid=30800
+ cdb broken      : False (after 12000 ms)
+FATAL: cdb did not reach the freeze point
