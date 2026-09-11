@@ -183,6 +183,11 @@ public partial class App : Application
 
         services.AddSingleton<IScrapingCacheService, ScrapingCacheService>();
 
+        // Health repairs: the two diagnosis items that can genuinely be repaired without installing
+        // anything or asking for administrator rights (rename a Chinese game folder / write an HKCU
+        // compatibility layer). Everything else stays manual-by-design; see IGameHealthFixService.
+        services.AddSingleton<IGameHealthFixService, GameHealthFixService>();
+
         // Error Checking Service
         services.AddSingleton<IErrorCheckingService, ErrorCheckingService>();
 
