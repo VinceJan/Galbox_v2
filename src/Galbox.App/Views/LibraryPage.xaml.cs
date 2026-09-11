@@ -162,6 +162,75 @@ public sealed partial class LibraryPage : Page
     }
 
     /// <summary>
+    /// Handles the delete button of a game card or table row.
+    /// </summary>
+    /// <remarks>
+    /// W13: removing a game is irreversible from the user's point of view, so it is confirmed with a
+    /// dialog that states up front what is and is not deleted, and offers the (default: off) option
+    /// to remove the save-backup files as well. The dialog lives here because a ContentDialog needs
+    /// a XamlRoot, which a ViewModel does not have.
+    /// </remarks>
+    private async void OnDeleteGameClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is not Button button || button.Tag is not GameInfo game)
+            {
+                return;
+            }
+
+            var deleteBackupFiles = false;
+
+            if (XamlRoot is not null)
+            {
+                var backupCheckBox = new CheckBox
+                {
+                    Content = "同时删除该游戏的存档备份文件（此操作不可恢复）",
+                    IsChecked = false
+                };
+
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = XamlRoot,
+                    Title = $"从库中移除「{game.DisplayName}」？",
+                    Content = new StackPanel
+                    {
+                        Spacing = 12,
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = "只从游戏库中移除这条记录：不会删除游戏文件夹、游戏本体或磁盘上的存档。\n"
+                                     + "与它关联的角色、文档、媒体、截图、错误记录和备份记录会一并清理。",
+                                TextWrapping = TextWrapping.Wrap
+                            },
+                            backupCheckBox
+                        }
+                    },
+                    PrimaryButtonText = "移除",
+                    CloseButtonText = "取消",
+                    DefaultButton = ContentDialogButton.Close
+                };
+
+                var dialogResult = await dialog.ShowAsync();
+                if (dialogResult != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+
+                deleteBackupFiles = backupCheckBox.IsChecked == true;
+            }
+
+            await ViewModel.DeleteGameCommand.ExecuteAsync(
+                new DeleteGameRequest { Game = game, DeleteBackupFiles = deleteBackupFiles });
+        }
+        catch (System.Exception ex)
+        {
+            ViewModel.ErrorMessage = $"删除游戏失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>
     /// Handles quick launch button click.
     /// </summary>
     private async void OnQuickLaunchClick(object sender, RoutedEventArgs e)
@@ -186,12 +255,7 @@ public sealed partial class LibraryPage : Page
     {
         if (sender is Grid grid)
         {
-            // Find the quick launch button in the grid
-            var quickLaunchButton = FindQuickLaunchButton(grid);
-            if (quickLaunchButton != null)
-            {
-                quickLaunchButton.Visibility = Visibility.Visible;
-            }
+            SetOverlayButtonVisibility(grid, Visibility.Visible);
         }
     }
 
@@ -202,11 +266,21 @@ public sealed partial class LibraryPage : Page
     {
         if (sender is Grid grid)
         {
-            // Find the quick launch button in the grid
-            var quickLaunchButton = FindQuickLaunchButton(grid);
-            if (quickLaunchButton != null)
+            SetOverlayButtonVisibility(grid, Visibility.Collapsed);
+        }
+    }
+
+    /// <summary>
+    /// Shows or hides every hover-only overlay button of a game card.
+    /// </summary>
+    private static void SetOverlayButtonVisibility(Grid grid, Visibility visibility)
+    {
+        foreach (var child in grid.Children)
+        {
+            if (child is Button button
+                && (button.Name == "QuickLaunchOverlayButton" || button.Name == "DeleteGameOverlayButton"))
             {
-                quickLaunchButton.Visibility = Visibility.Collapsed;
+                button.Visibility = visibility;
             }
         }
     }

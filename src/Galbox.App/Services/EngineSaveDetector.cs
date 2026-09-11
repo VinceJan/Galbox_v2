@@ -139,7 +139,108 @@ public static class EngineSaveDetector
             result.Success = false;
         }
 
+        // Last gate before the result leaves the detector: the game installation folder must never
+        // be handed out as a "save folder".
+        RejectInstallRootAsSavePath(result, game);
+
         return result;
+    }
+
+    /// <summary>
+    /// True when <paramref name="candidatePath"/> is the game's installation folder itself
+    /// (after path normalisation, case-insensitively).
+    /// </summary>
+    /// <remarks>
+    /// This distinction is the difference between "back up the save files" and "back up (or, on a
+    /// restore, delete and rewrite) the entire game installation". The RPG Maker and KiriKiri
+    /// branches used to return the installation folder whenever they found save files directly
+    /// inside it, and the restore path deletes every file in the "save folder" before copying the
+    /// backup back - which could permanently destroy the game.
+    /// </remarks>
+    public static bool IsGameInstallRoot(string? candidatePath, GameInfo? game)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath) || game == null || string.IsNullOrWhiteSpace(game.InstallPath))
+        {
+            return false;
+        }
+
+        var candidate = NormalizeDirectoryPath(candidatePath);
+        var installRoot = NormalizeDirectoryPath(game.InstallPath);
+
+        return candidate.Length > 0
+            && installRoot.Length > 0
+            && string.Equals(candidate, installRoot, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Normalises a directory path to a fully-qualified form without a trailing separator.
+    /// Returns an empty string when the path cannot be normalised.
+    /// </summary>
+    private static string NormalizeDirectoryPath(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogDebug(ex, "Could not normalise path: {Path}", path);
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Clears a detection result that points at the game installation folder and explains why.
+    /// </summary>
+    private static void RejectInstallRootAsSavePath(SaveLocationResult result, GameInfo game)
+    {
+        var rootSaveFileCount = result.ExtendedInfo.TryGetValue("RootLevelSaveFileCount", out var raw)
+            && raw is int count
+                ? count
+                : 0;
+
+        if (IsGameInstallRoot(result.PrimarySavePath, game))
+        {
+            var rejected = result.PrimarySavePath!;
+
+            result.PrimarySavePath = null;
+            result.Success = false;
+            result.ErrorMessage =
+                $"已拒绝把游戏安装目录当作存档目录：{rejected}。" +
+                "对该目录执行备份或恢复会打包/覆盖整个游戏安装（恢复时的回滚会先清空该目录），可能永久损坏游戏本体。" +
+                "请把存档放到安装目录下的子文件夹（例如 save\\、savedata\\、game\\saves\\），或手动指定存档目录。";
+            result.ExtendedInfo["RejectedSavePath"] = rejected;
+            result.ExtendedInfo["RejectedSavePathReason"] = "install-root-not-a-save-folder";
+
+            Logger?.LogWarning(
+                "Refusing to use the game installation folder as a save folder for '{GameName}': {RejectedPath}",
+                game.DisplayName,
+                rejected);
+
+            return;
+        }
+
+        // The save files exist, but the only place they live is the installation folder itself.
+        // No directory in the result can be used for a destructive restore, so report a refusal
+        // rather than pretending the (missing) parent folder is a save folder.
+        if (string.IsNullOrEmpty(result.PrimarySavePath)
+            && result.AlternativePaths.Count == 0
+            && rootSaveFileCount > 0)
+        {
+            result.Success = false;
+            result.ErrorMessage =
+                $"在游戏安装目录根下找到 {rootSaveFileCount} 个存档文件，但未找到可安全使用的存档子目录" +
+                $"（{game.InstallPath}）。" +
+                "把安装目录本身当作存档目录会在恢复时清空整个游戏目录，因此已拒绝；" +
+                "请手动指定存档目录，或把存档移入安装目录下的子文件夹。";
+            result.ExtendedInfo["RejectedSavePath"] = game.InstallPath;
+            result.ExtendedInfo["RejectedSavePathReason"] = "save-files-only-in-install-root";
+
+            Logger?.LogWarning(
+                "Save files for '{GameName}' were found only in the installation root; refusing to derive a save folder from it",
+                game.DisplayName);
+        }
     }
 
     #region Engine Detection Methods
@@ -445,15 +546,21 @@ public static class EngineSaveDetector
             Logger?.LogWarning(ex, "Error searching AppData for Krkr saves");
         }
 
-        // Check for .ksd files in game folder directly
+        // Check for .ksd files in game folder directly.
+        //
+        // These files are reported so the user can see that saves exist, but the installation
+        // folder must NOT become the save folder: a destructive restore of "the save folder"
+        // would clear the whole game directory. DetectSaveLocation rejects such a result.
         var ksdFiles = SafeGetFiles(game.InstallPath, "*.ksd", SearchOption.TopDirectoryOnly);
         if (ksdFiles.Length > 0)
         {
-            if (string.IsNullOrEmpty(result.PrimarySavePath))
-            {
-                result.PrimarySavePath = game.InstallPath;
-            }
             result.SaveFiles.AddRange(ksdFiles);
+            result.ExtendedInfo["RootLevelSaveFileCount"] = ksdFiles.Length;
+
+            Logger?.LogWarning(
+                "KiriKiri save files (*.ksd) were found directly in the installation root of '{GameName}'; "
+                + "the installation folder itself is not used as a save folder",
+                game.DisplayName);
         }
 
         return result;
@@ -635,6 +742,10 @@ public static class EngineSaveDetector
 
         // RPG Maker VX Ace saves in game folder directly (.rvdata2)
         // RPG Maker VX saves (.rvdata), XP saves (.rxdata), 2000/2003 saves (.lsd)
+        //
+        // Same rule as KiriKiri above: report the files, never hand out the installation folder
+        // as the save folder (see RejectInstallRootAsSavePath).
+        var rootSaveFileCount = 0;
         foreach (var pattern in RpgMakerDetectPatterns)
         {
             try
@@ -642,10 +753,7 @@ public static class EngineSaveDetector
                 var files = SafeGetFiles(game.InstallPath, pattern, SearchOption.TopDirectoryOnly);
                 if (files.Length > 0)
                 {
-                    if (string.IsNullOrEmpty(result.PrimarySavePath))
-                    {
-                        result.PrimarySavePath = game.InstallPath;
-                    }
+                    rootSaveFileCount += files.Length;
                     result.SaveFiles.AddRange(files);
                 }
             }
@@ -653,6 +761,16 @@ public static class EngineSaveDetector
             {
                 Logger?.LogWarning(ex, "Error detecting RPG Maker saves with pattern: {Pattern}", pattern);
             }
+        }
+
+        if (rootSaveFileCount > 0)
+        {
+            result.ExtendedInfo["RootLevelSaveFileCount"] = rootSaveFileCount;
+
+            Logger?.LogWarning(
+                "RPG Maker save files were found directly in the installation root of '{GameName}'; "
+                + "the installation folder itself is not used as a save folder",
+                game.DisplayName);
         }
 
         return result;
@@ -681,9 +799,19 @@ public static class EngineSaveDetector
             }
         }
 
-        // Search for common save file patterns in game folder
+        // Search for common save file patterns in game folder.
+        //
+        // Root-level save files are reported (so the user learns that saves exist) but they never
+        // promote the installation folder to "the save folder" - see RejectInstallRootAsSavePath.
         var commonPatterns = new[] { "*.sav", "*.save", "*.dat", "*.bak" };
+        var rootLevelCount = commonPatterns
+            .Sum(pattern => SafeGetFiles(game.InstallPath, pattern, SearchOption.TopDirectoryOnly).Length);
         CollectSaveFiles(result, game.InstallPath, commonPatterns);
+
+        if (rootLevelCount > 0)
+        {
+            result.ExtendedInfo["RootLevelSaveFileCount"] = rootLevelCount;
+        }
 
         return result;
     }

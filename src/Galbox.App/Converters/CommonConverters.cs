@@ -411,6 +411,88 @@ public class EmptyStringToBooleanConverter : IValueConverter
 }
 
 /// <summary>
+/// Shows an element only when the bound game's installation is unusable (folder or executable
+/// missing). Accepts a <see cref="GameInfo"/> or a boolean.
+/// </summary>
+/// <remarks>
+/// The decision itself lives in <see cref="Galbox.App.Services.GameInstallationStatus"/>, so the
+/// badge, the detail page, the launch guard and the acceptance check all agree on what "missing"
+/// means.
+/// </remarks>
+public class MissingInstallationToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var isMissing = value switch
+        {
+            GameInfo game => Galbox.App.Services.GameInstallationStatus.Evaluate(game).IsMissing,
+            bool flag => flag,
+            _ => false
+        };
+
+        // An inverted parameter makes this converter usable for the "healthy" case too.
+        if (parameter is string text && text.Equals("Invert", StringComparison.OrdinalIgnoreCase))
+        {
+            isMissing = !isMissing;
+        }
+
+        return isMissing ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Produces the short badge text ("文件夹丢失" / "可执行文件丢失") for a game whose installation
+/// cannot be found.
+/// </summary>
+public class MissingInstallationBadgeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        if (value is GameInfo game)
+        {
+            return Galbox.App.Services.GameInstallationStatus.Evaluate(game).StatusText;
+        }
+
+        return string.Empty;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Produces the tooltip shown on a game whose installation cannot be found: which path is gone and
+/// what the user can do about it.
+/// </summary>
+public class MissingInstallationTooltipConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        if (value is GameInfo game)
+        {
+            var state = Galbox.App.Services.GameInstallationStatus.Evaluate(game);
+            return state.IsMissing
+                ? $"{state.StatusText}\n{state.DetailText}\n{state.RepairHint}"
+                : state.DetailText;
+        }
+
+        return string.Empty;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
 /// Converts GameStatusFilter enum to ComboBox SelectedIndex.
 /// </summary>
 public class StatusFilterConverter : IValueConverter

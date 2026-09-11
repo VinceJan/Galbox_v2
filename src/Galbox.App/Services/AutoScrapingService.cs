@@ -14,6 +14,7 @@ namespace Galbox.App.Services;
 public class AutoScrapingService : IAutoScrapingService
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly IGameImageService _gameImageService;
     private readonly ILogger<AutoScrapingService> _logger;
     private readonly ConcurrentQueue<int> _scrapingQueue = new();
     private readonly ConcurrentDictionary<int, GameScrapingResult> _results = new();
@@ -38,9 +39,11 @@ public class AutoScrapingService : IAutoScrapingService
     /// </summary>
     public AutoScrapingService(
         IServiceProvider serviceProvider,
+        IGameImageService gameImageService,
         ILogger<AutoScrapingService> logger)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _gameImageService = gameImageService ?? throw new ArgumentNullException(nameof(gameImageService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -310,6 +313,41 @@ public class AutoScrapingService : IAutoScrapingService
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Applied metadata to game {GameId} from source {Source}", gameId, metadata.Source);
+
+        // Metadata is committed; now make the images local. A failure here must not lose the
+        // metadata the user just accepted, so it is reported and swallowed.
+        await DownloadImagesSafelyAsync(gameId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs the image download for a game, converting every failure into a log entry.
+    /// </summary>
+    /// <remarks>
+    /// Without this call the scrape leaves the database full of image URLs and no image files,
+    /// and every cover in the UI stays blank (the UI binds the local paths).
+    /// </remarks>
+    private async Task DownloadImagesSafelyAsync(int gameId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var summary = await _gameImageService.DownloadForGameAsync(gameId, cancellationToken).ConfigureAwait(false);
+
+            if (summary.DownloadedCount == 0 && summary.Errors.Count > 0)
+            {
+                _logger.LogWarning(
+                    "No image could be downloaded for game {GameId}: {Errors}",
+                    gameId,
+                    string.Join(" | ", summary.Errors.Take(5)));
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Image download failed for game {GameId}", gameId);
+        }
     }
 
     /// <inheritdoc />
@@ -482,6 +520,10 @@ public class AutoScrapingService : IAutoScrapingService
                     _logger.LogInformation(
                         "Auto-accepted metadata for game {GameId}: {GameName} (match: {MatchScore}%)",
                         gameId, game.DisplayName, result.MatchScore);
+
+                    // The scrape only wrote image URLs; turn them into the local files every
+                    // <Image> binding actually needs. Never fatal: the metadata is already saved.
+                    await DownloadImagesSafelyAsync(gameId, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {

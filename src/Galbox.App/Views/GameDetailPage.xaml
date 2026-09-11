@@ -201,6 +201,17 @@
                             IsOpen="{x:Bind ViewModel.IsRunning, Mode=OneWay}"
                             Margin="0,8,0,0"/>
 
+                        <!-- W14: the folder this library entry points at no longer exists.
+                             Without this the page looked completely healthy and only the launch
+                             button failed, with no explanation of what was wrong. -->
+                        <InfoBar
+                            Title="{x:Bind ViewModel.InstallationStatusText, Mode=OneWay}"
+                            Message="{x:Bind ViewModel.InstallationNotice, Mode=OneWay}"
+                            Severity="Warning"
+                            IsClosable="False"
+                            IsOpen="{x:Bind ViewModel.IsInstallationMissing, Mode=OneWay}"
+                            Margin="0,8,0,0"/>
+
                         <!-- Scrape Button (D1: the metadata scraping entry point) -->
                         <Button
                             Margin="0,8,0,0"

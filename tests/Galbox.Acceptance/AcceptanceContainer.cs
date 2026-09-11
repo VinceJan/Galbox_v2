@@ -48,6 +48,13 @@ public static class AcceptanceContainer
         Directory.CreateDirectory(dbDirectory);
         DatabasePath = Path.Combine(dbDirectory, AcceptanceDatabaseName);
 
+        // Downloaded images are isolated the same way the database is: a test game with id 1 would
+        // otherwise overwrite the cover image of the user's real game 1. The process id is part of
+        // the folder name because every worktree runs its own copy of this harness against the same
+        // %LocalAppData%\Galbox.
+        var isolatedImageRoot = Path.Combine(dbDirectory, $"images-{Environment.ProcessId}");
+        Directory.CreateDirectory(isolatedImageRoot);
+
         var services = new ServiceCollection();
 
         // --- Logging (mirrors App.xaml.cs) ---------------------------------------------
@@ -120,6 +127,14 @@ public static class AcceptanceContainer
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        services.AddHttpClient("ImageDownload")
+            .AddHttpMessageHandler(sp => new RecordingHttpMessageHandler(sp.GetRequiredService<HttpTrafficRecorder>(), "ImageDownload"))
+            .ConfigureHttpClient(client =>
+            {
+                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
+
         // --- API clients (verbatim) ---------------------------------------------------
         services.AddTransient<BangumiApi>();
         services.AddTransient<VndbApi>();
@@ -146,6 +161,17 @@ public static class AcceptanceContainer
         services.AddSingleton<IErrorCheckingService, ErrorCheckingService>();
         services.AddSingleton<IGameUtilityService, GameUtilityService>();
 
+        // --- Features whose "before the fix" behaviour has to stay measurable ---------------
+        // These two services (image download / game deletion) are registered by reflection rather
+        // than by type name so this harness still COMPILES against a revision of the application
+        // that does not contain them yet. That is what makes it possible to run the checks for a
+        // new feature against the unmodified code and record them as FAIL, then re-run against the
+        // fixed code and record them as PASS - without maintaining two copies of the harness.
+        // When the types exist (i.e. in the shipping revision) the registrations are identical to
+        // the ones in App.xaml.cs.
+        RegisterIfPresent(services, "Galbox.App.Services.IGameDeletionService", "Galbox.App.Services.GameDeletionService");
+        RegisterIfPresent(services, "Galbox.App.Services.IGameImageService", "Galbox.App.Services.GameImageService", isolatedImageRoot);
+
         // Same validation switches as the shipping app. Without them the harness could happily
         // resolve a graph that the application itself refuses to start with - which is exactly
         // how five captive-dependency defects stayed hidden. A failure here is reported by the
@@ -154,6 +180,54 @@ public static class AcceptanceContainer
         {
             ValidateScopes = true,
             ValidateOnBuild = true
+        });
+    }
+
+    /// <summary>
+    /// Registers <paramref name="implementationTypeName"/> as <paramref name="serviceTypeName"/> when
+    /// both types are present in the application assembly.
+    /// </summary>
+    /// <remarks>
+    /// The optional <paramref name="extraConstructorArgument"/> lets the harness construct
+    /// <c>GameImageService</c> with an isolated image root, so a run cannot overwrite the images of
+    /// the user's real library.
+    /// </remarks>
+    private static void RegisterIfPresent(
+        IServiceCollection services,
+        string serviceTypeName,
+        string implementationTypeName,
+        string? extraConstructorArgument = null)
+    {
+        var assembly = typeof(Galbox.App.App).Assembly;
+        var serviceType = Type.GetType($"{serviceTypeName}, {assembly.GetName().Name}");
+        var implementationType = Type.GetType($"{implementationTypeName}, {assembly.GetName().Name}");
+
+        if (serviceType is null || implementationType is null)
+        {
+            return;
+        }
+
+        if (extraConstructorArgument is null)
+        {
+            services.AddSingleton(serviceType, implementationType);
+            return;
+        }
+
+        services.AddSingleton(serviceType, sp =>
+        {
+            var constructor = implementationType
+                .GetConstructors()
+                .OrderByDescending(c => c.GetParameters().Length)
+                .First();
+
+            var arguments = constructor
+                .GetParameters()
+                .Select(parameter => parameter.ParameterType == typeof(string)
+                    ? extraConstructorArgument
+                    : sp.GetRequiredService(parameter.ParameterType))
+                .ToArray();
+
+            return Activator.CreateInstance(implementationType, arguments)!;
         });
     }
 

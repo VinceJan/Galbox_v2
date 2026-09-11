@@ -141,6 +141,15 @@ public partial class App : Application
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        // Image traffic (covers, backgrounds, character portraits). Separate from the metadata
+        // clients so a slow image CDN cannot occupy the API pipelines.
+        services.AddHttpClient(GameImageService.HttpClientName)
+            .ConfigureHttpClient(client =>
+            {
+                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(60);
+            });
+
         // API Clients
         services.AddTransient<BangumiApi>();
         services.AddTransient<VndbApi>();
@@ -178,6 +187,15 @@ public partial class App : Application
 
         // Game Utility Service
         services.AddSingleton<IGameUtilityService, GameUtilityService>();
+
+        // Image download: turns the CoverImageUrl/BackgroundImageUrl/character ImageUrl written by
+        // scraping into the local files the UI binds (CoverImagePath, BackgroundImagePath,
+        // ImagePath). Without it every cover in the product stays blank.
+        services.AddSingleton<IGameImageService, GameImageService>();
+
+        // Game deletion: removes a game and everything that belongs to it from the library without
+        // ever touching the game files on disk.
+        services.AddSingleton<IGameDeletionService, GameDeletionService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();

@@ -49,11 +49,26 @@ public sealed partial class MainWindow : Window
     public IntPtr WindowHandle => WindowNative.GetWindowHandle(this);
 
     /// <summary>
+    /// The window caption, shown in the taskbar, Alt-Tab and the window switcher.
+    /// </summary>
+    /// <remarks>
+    /// The window draws its own title bar with a TextBlock, but that only paints inside the
+    /// client area: without an explicit <see cref="Window.Title"/> the shell falls back to the
+    /// host default and the taskbar entry reads "WinUI Desktop". The version is appended so a
+    /// bug report can identify the build from a screenshot.
+    /// </remarks>
+    public static string ApplicationTitle => BuildApplicationTitle();
+
+    /// <summary>
     /// Creates the MainWindow.
     /// </summary>
     public MainWindow()
     {
         InitializeComponent();
+
+        // Title is set before the window is activated so the taskbar never shows the host
+        // default ("WinUI Desktop") even for one frame.
+        Title = ApplicationTitle;
 
         // Set custom title bar
         ExtendsContentIntoTitleBar = true;
@@ -68,6 +83,23 @@ public sealed partial class MainWindow : Window
 
         // Setup window subclass for WM_HOTKEY handling
         SetupWindowSubclass();
+    }
+
+    /// <summary>
+    /// Composes the window caption from the product name and the assembly version.
+    /// </summary>
+    internal static string BuildApplicationTitle()
+    {
+        var version = typeof(MainWindow).Assembly.GetName().Version;
+
+        // A version of 0.0.0.0 means the build did not stamp one; showing "Galbox 0.0.0"
+        // would be worse than showing no version at all.
+        if (version is null || version.Major <= 0)
+        {
+            return "Galbox";
+        }
+
+        return $"Galbox {version.ToString(3)}";
     }
 
     /// <summary>
@@ -149,6 +181,108 @@ public sealed partial class MainWindow : Window
 
         // Select the Home navigation item
         _navigationService.SelectNavigationItem("Home");
+
+        RunRequestedNavigationSmokeTest();
+    }
+
+    /// <summary>
+    /// Environment variable that asks the application to load every listed page at startup.
+    /// </summary>
+    /// <remarks>
+    /// A page whose XAML cannot be loaded only fails when somebody navigates to it, and the startup
+    /// checks (A9/A18) never leave the home page. This diagnostic loads the listed navigation keys
+    /// one by one on the UI thread and writes the outcome to the startup log, so an unattended run
+    /// can prove that every page still parses and constructs - including pages the harness cannot
+    /// reach headlessly. Format: <c>Library,SaveManager,GameDetail:1</c> (a page may take its
+    /// navigation parameter after a colon). It is inert unless the variable is set.
+    /// </remarks>
+    public const string NavigationSmokeTestVariable = "GALBOX_NAVIGATION_SMOKE";
+
+    /// <summary>
+    /// Optional file that receives the smoke-test result lines.
+    /// </summary>
+    /// <remarks>
+    /// The startup log is a day-file shared by every running instance of the application (including
+    /// instances started from other checkouts on the same machine), so a caller that must attribute
+    /// the result to the process it started points this variable at a file of its own.
+    /// </remarks>
+    public const string NavigationSmokeResultFileVariable = "GALBOX_NAVIGATION_SMOKE_FILE";
+
+    /// <summary>Log marker written when a page loaded successfully during the smoke test.</summary>
+    public const string NavigationSmokeMarker = "Navigation smoke";
+
+    private void RunRequestedNavigationSmokeTest()
+    {
+        var requested = Environment.GetEnvironmentVariable(NavigationSmokeTestVariable);
+
+        if (string.IsNullOrWhiteSpace(requested) || _navigationService is null)
+        {
+            return;
+        }
+
+        var resultFile = Environment.GetEnvironmentVariable(NavigationSmokeResultFileVariable);
+
+        foreach (var entry in requested.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = entry.Split(':', 2);
+            var key = parts[0];
+            var parameter = parts.Length > 1 && int.TryParse(parts[1], out var id) ? (object)id : null;
+            string line;
+
+            try
+            {
+                _navigationService.NavigateTo(key, parameter);
+
+                var loaded = _navigationService.CurrentPageType?.Name ?? "(none)";
+                line = $"{NavigationSmokeMarker}: {key}=OK (page={loaded})";
+            }
+            catch (Exception ex)
+            {
+                // Never let the diagnostic take the application down; the line is the result.
+                line = $"{NavigationSmokeMarker}: {key}=FAILED ({ex.GetType().Name}: {ex.Message.Split('\n')[0]})";
+            }
+
+            StartupDiagnostics.Log(line);
+            AppendSmokeResult(resultFile, line);
+        }
+
+        // Leave the application on the page it was going to show anyway.
+        try
+        {
+            _navigationService.NavigateTo("Home");
+            _navigationService.SelectNavigationItem("Home");
+        }
+        catch (Exception ex)
+        {
+            var line = $"{NavigationSmokeMarker}: return-to-Home FAILED ({ex.GetType().Name}: {ex.Message.Split('\n')[0]})";
+            StartupDiagnostics.Log(line);
+            AppendSmokeResult(resultFile, line);
+        }
+    }
+
+    /// <summary>Appends one smoke line to the caller-provided result file, if any.</summary>
+    private static void AppendSmokeResult(string? resultFile, string line)
+    {
+        if (string.IsNullOrWhiteSpace(resultFile))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(resultFile);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            // One write per line, so the caller can watch the file grow while the application runs.
+            File.AppendAllText(resultFile, line + Environment.NewLine);
+        }
+        catch
+        {
+            // Diagnostics must never break the application.
+        }
     }
 
     /// <summary>

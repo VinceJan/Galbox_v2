@@ -25,6 +25,12 @@
         <converters:StatusFilterConverter x:Key="StatusFilterConverter"/>
         <converters:SortOptionConverter x:Key="SortOptionConverter"/>
         <converters:GameStatusConverter x:Key="GameStatusConverter"/>
+        <!-- W14: the "folder is gone" badge. The decision logic lives in
+             Services.GameInstallationStatus so the card, the detail page and the acceptance
+             check cannot disagree. -->
+        <converters:MissingInstallationToVisibilityConverter x:Key="MissingInstallationToVisibilityConverter"/>
+        <converters:MissingInstallationBadgeConverter x:Key="MissingInstallationBadgeConverter"/>
+        <converters:MissingInstallationTooltipConverter x:Key="MissingInstallationTooltipConverter"/>
 
         <!-- Styles - Local styles only, global styles defined in App.xaml -->
         <Style x:Key="LibraryCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
@@ -319,7 +325,8 @@
                         <DataTemplate>
                             <Grid
                                 PointerEntered="OnGameCardPointerEntered"
-                                PointerExited="OnGameCardPointerExited">
+                                PointerExited="OnGameCardPointerExited"
+                                ToolTipService.ToolTip="{Binding Converter={StaticResource MissingInstallationTooltipConverter}}">
                                 <!-- Main Card Button -->
                                 <Button
                                     Click="OnGameItemClick"
@@ -337,6 +344,30 @@
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 Margin="0,0,0,40"/>
+
+                                            <!-- W14: Missing installation badge - shown on top of the
+                                                 (blank) cover so a dead library entry can never look
+                                                 like a healthy one. -->
+                                            <Border
+                                                x:Name="MissingFolderBadge"
+                                                Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                                BorderBrush="{ThemeResource SystemFillColorCautionBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Padding="6,2"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                Margin="4"
+                                                Visibility="{Binding Converter={StaticResource MissingInstallationToVisibilityConverter}}">
+                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                    <FontIcon FontSize="12" Glyph="&#xE7BA;" Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                                                    <TextBlock
+                                                        Text="{Binding Converter={StaticResource MissingInstallationBadgeConverter}}"
+                                                        FontSize="11"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                                                </StackPanel>
+                                            </Border>
 
                                             <!-- Favorite Badge -->
                                             <Border
@@ -386,6 +417,25 @@
                                     Tag="{Binding}">
                                     <FontIcon FontSize="18" Glyph="&#xE768;" Foreground="White"/>
                                 </Button>
+
+                                <!-- W13: Delete button (shown on hover). Removing a game only touches
+                                     the library, never the game files. -->
+                                <Button
+                                    x:Name="DeleteGameOverlayButton"
+                                    Click="OnDeleteGameClick"
+                                    Background="{ThemeResource SystemFillColorCriticalBrush}"
+                                    CornerRadius="20"
+                                    Width="32"
+                                    Height="32"
+                                    Padding="0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Bottom"
+                                    Margin="6"
+                                    Visibility="Collapsed"
+                                    ToolTipService.ToolTip="从库中移除（不会删除游戏文件）"
+                                    Tag="{Binding}">
+                                    <FontIcon FontSize="14" Glyph="&#xE74D;" Foreground="White"/>
+                                </Button>
                             </Grid>
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
@@ -411,6 +461,7 @@
                             <ColumnDefinition Width="Auto" MinWidth="100"/>
                             <ColumnDefinition Width="Auto" MinWidth="100"/>
                             <ColumnDefinition Width="Auto" MinWidth="80"/>
+                            <ColumnDefinition Width="Auto" MinWidth="48"/>
                         </Grid.ColumnDefinitions>
 
                         <!-- Cover Header -->
@@ -481,6 +532,9 @@
                                 <FontIcon FontSize="12" Glyph="&#xE8CB;" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </Button>
+
+                        <!-- W13: actions column (delete) -->
+                        <TextBlock Grid.Column="7" Text="操作" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Table Content -->
@@ -492,7 +546,8 @@
                         Margin="0,40,0,0">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnSpacing="8" Padding="12,4" Height="56" VerticalAlignment="Center">
+                                <Grid ColumnSpacing="8" Padding="12,4" Height="56" VerticalAlignment="Center"
+                                      ToolTipService.ToolTip="{Binding Converter={StaticResource MissingInstallationTooltipConverter}}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" MinWidth="60"/>
                                         <ColumnDefinition Width="*" MinWidth="150"/>
@@ -501,6 +556,7 @@
                                         <ColumnDefinition Width="Auto" MinWidth="100"/>
                                         <ColumnDefinition Width="Auto" MinWidth="100"/>
                                         <ColumnDefinition Width="Auto" MinWidth="80"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="48"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Cover Thumbnail -->
@@ -538,12 +594,29 @@
                                         MaxLines="1"/>
 
                                     <!-- Status -->
-                                    <TextBlock
-                                        Grid.Column="3"
-                                        Text="{Binding Converter={StaticResource GameStatusConverter}}"
-                                        FontSize="12"
-                                        Foreground="{ThemeResource SystemAccentColor}"
-                                        VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock
+                                            Text="{Binding Converter={StaticResource GameStatusConverter}}"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource SystemAccentColor}"
+                                            VerticalAlignment="Center"/>
+                                        <!-- W14: missing installation marker -->
+                                        <Border
+                                            x:Name="MissingFolderPill"
+                                            Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                            BorderBrush="{ThemeResource SystemFillColorCautionBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="6,2"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding Converter={StaticResource MissingInstallationToVisibilityConverter}}">
+                                            <TextBlock
+                                                Text="{Binding Converter={StaticResource MissingInstallationBadgeConverter}}"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                                        </Border>
+                                    </StackPanel>
 
                                     <!-- Added Date -->
                                     <TextBlock
@@ -568,6 +641,20 @@
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         VerticalAlignment="Center"/>
+
+                                    <!-- W13: remove from library (game files are never touched) -->
+                                    <Button
+                                        x:Name="TableDeleteGameButton"
+                                        Grid.Column="7"
+                                        Click="OnDeleteGameClick"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="4"
+                                        Tag="{Binding}"
+                                        VerticalAlignment="Center"
+                                        ToolTipService.ToolTip="从库中移除（不会删除游戏文件）">
+                                        <FontIcon FontSize="14" Glyph="&#xE74D;" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                    </Button>
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
