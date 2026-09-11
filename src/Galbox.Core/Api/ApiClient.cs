@@ -71,18 +71,41 @@ public abstract class ApiClient
     /// </summary>
     protected async Task<T?> GetJsonAsync<T>(string url, CancellationToken cancellationToken = default)
     {
+        return await SendJsonAsync<T>(
+            () => new HttpRequestMessage(HttpMethod.Get, url),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends a request built by <paramref name="requestFactory"/> and deserializes its JSON body.
+    /// </summary>
+    /// <remarks>
+    /// Needed by the sources that carry headers the client cannot put on the shared
+    /// <see cref="HttpClient"/>: every ymgal call must send <c>version: 1</c> and a per-token
+    /// <c>Authorization</c> header. Going through this method keeps those calls on the same retry,
+    /// <see cref="LastError"/> and JSON-diagnostic path as the rest of the sources instead of
+    /// hand-rolling a second HTTP stack next to it.
+    ///
+    /// <paramref name="requestFactory"/> returns a <b>new</b> message per attempt because an
+    /// <see cref="HttpRequestMessage"/> cannot be sent twice.
+    /// </remarks>
+    protected async Task<T?> SendJsonAsync<T>(
+        Func<HttpRequestMessage> requestFactory,
+        CancellationToken cancellationToken = default)
+    {
         ResetErrorState();
 
         var content = await ExecuteWithRetryAsync(async () =>
         {
-            var response = await HttpClient.GetAsync(url, cancellationToken);
+            using var request = requestFactory();
+            using var response = await HttpClient.SendAsync(request, cancellationToken);
             await HandleResponseAsync(response);
             return await response.Content.ReadAsStringAsync(cancellationToken);
         }, cancellationToken);
 
         if (string.IsNullOrEmpty(content))
         {
-            LastError = $"Empty response body from {url}";
+            LastError = "Empty response body";
             return default;
         }
 
@@ -96,8 +119,41 @@ public abstract class ApiClient
             // degrading into "no results".
             LastError = $"JSON parse error: {ex.Message}";
             LastErrorBody = Truncate(content);
-            System.Diagnostics.Debug.WriteLine($"JSON parsing error for {url}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"JSON parsing error: {ex.Message}");
             return default;
+        }
+    }
+
+    /// <summary>
+    /// Maps a request failure onto the shared <see cref="MetadataSourceFailureKind"/> vocabulary.
+    /// </summary>
+    /// <remarks>
+    /// A caller that only has the exception must still be able to say which of "no credentials",
+    /// "server unreachable", "server said no" and "the JSON was not what we expect" happened.
+    /// </remarks>
+    protected static MetadataSourceFailureKind ClassifyFailure(Exception exception)
+    {
+        switch (exception)
+        {
+            // A timeout surfaces as TaskCanceledException when the caller's token is still alive.
+            case OperationCanceledException:
+                return MetadataSourceFailureKind.NetworkError;
+
+            case JsonException:
+                return MetadataSourceFailureKind.MalformedResponse;
+
+            case HttpRequestException { StatusCode: var status }:
+                return status switch
+                {
+                    null => MetadataSourceFailureKind.NetworkError,
+                    System.Net.HttpStatusCode.Unauthorized => MetadataSourceFailureKind.Unauthorized,
+                    System.Net.HttpStatusCode.Forbidden => MetadataSourceFailureKind.Forbidden,
+                    System.Net.HttpStatusCode.TooManyRequests => MetadataSourceFailureKind.RateLimited,
+                    _ => MetadataSourceFailureKind.HttpError
+                };
+
+            default:
+                return MetadataSourceFailureKind.HttpError;
         }
     }
 

@@ -82,8 +82,10 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
 
         // --- 2. Unconfigured credentials must fail fast and explain why ----------------
         details.Add(string.Empty);
-        details.Add("--- [2] ymgal with explicitly cleared credentials ---");
-        details.Add($"  setting {YmgalClientIdVariable}=\"\" and {YmgalClientSecretVariable}=\"\" (documented opt-out)");
+        details.Add("--- [2] ymgal with an incomplete credential (client id present, secret missing) ---");
+        details.Add($"  setting {YmgalClientIdVariable}=a-partial-configuration and REMOVING {YmgalClientSecretVariable}");
+        details.Add("  (on Windows an empty environment variable is deleted, so \"not configured\" is");
+        details.Add("   expressed as a half-filled credential pair - which is also the realistic mistake)");
 
         var unconfiguredSucceeded = false;
         var unconfiguredExplained = false;
@@ -95,8 +97,8 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
         var savedClientSecret = Environment.GetEnvironmentVariable(YmgalClientSecretVariable);
         try
         {
-            Environment.SetEnvironmentVariable(YmgalClientIdVariable, string.Empty);
-            Environment.SetEnvironmentVariable(YmgalClientSecretVariable, string.Empty);
+            Environment.SetEnvironmentVariable(YmgalClientIdVariable, "galbox-acceptance-partial");
+            Environment.SetEnvironmentVariable(YmgalClientSecretVariable, null);
 
             var api = context.Get<YmgalApi>();
             context.Traffic.Clear();
@@ -120,7 +122,7 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
 
             unconfiguredExplained = !unconfiguredSucceeded
                                  && items == 0
-                                 && unconfiguredMessage.Contains(YmgalClientIdVariable, StringComparison.OrdinalIgnoreCase)
+                                 && unconfiguredMessage.Contains(YmgalClientSecretVariable, StringComparison.OrdinalIgnoreCase)
                                  && !unconfiguredLastError.Equals("(null)", StringComparison.Ordinal);
         }
         finally
@@ -129,7 +131,9 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
             Environment.SetEnvironmentVariable(YmgalClientSecretVariable, savedClientSecret);
         }
 
-        details.Add($"  verdict              : Explained={unconfiguredExplained} (failed={!unconfiguredSucceeded}, 0 requests={unconfiguredRequests == 0}, names {YmgalClientIdVariable}, LastError set)");
+        details.Add($"  verdict              : Explained={unconfiguredExplained} "
+                  + $"(failed={!unconfiguredSucceeded}, 0 requests={unconfiguredRequests == 0}, "
+                  + $"names {YmgalClientSecretVariable}, LastError set)");
 
         // --- 3. Unreachable endpoint must not masquerade as "no results" ----------------
         details.Add(string.Empty);

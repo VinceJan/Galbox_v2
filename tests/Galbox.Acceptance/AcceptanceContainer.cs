@@ -115,23 +115,15 @@ public static class AcceptanceContainer
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        // Same shared configuration as App.xaml.cs - these two blocks used to be copies that both
+        // lacked a BaseAddress, which is exactly the drift the shared helper removes.
         services.AddHttpClient<YmgalHttpClient>()
             .AddHttpMessageHandler(sp => new RecordingHttpMessageHandler(sp.GetRequiredService<HttpTrafficRecorder>(), "YmgalHttpClient"))
-            .ConfigureHttpClient(client =>
-            {
-                // BaseAddress intentionally not configured - same as the shipping app.
-                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
-                client.Timeout = TimeSpan.FromSeconds(30);
-            });
+            .ConfigureHttpClient(MetadataHttpClientDefaults.ConfigureYmgal);
 
         services.AddHttpClient<CngalHttpClient>()
             .AddHttpMessageHandler(sp => new RecordingHttpMessageHandler(sp.GetRequiredService<HttpTrafficRecorder>(), "CngalHttpClient"))
-            .ConfigureHttpClient(client =>
-            {
-                // BaseAddress intentionally not configured - same as the shipping app.
-                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
-                client.Timeout = TimeSpan.FromSeconds(30);
-            });
+            .ConfigureHttpClient(MetadataHttpClientDefaults.ConfigureCngal);
 
         // --- API clients (verbatim) ---------------------------------------------------
         services.AddTransient<BangumiApi>();

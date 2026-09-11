@@ -46,6 +46,13 @@ public class VndbHttpClient
 /// Typed HttpClient wrapper for ymgal API.
 /// Provides type-safe dependency injection for the ymgal API client.
 /// </summary>
+/// <remarks>
+/// The wrapper is a plain container: it holds whatever <c>HttpClient</c> the DI container built
+/// and configures nothing itself. The base address, User-Agent and timeout belong to the
+/// <c>AddHttpClient&lt;YmgalHttpClient&gt;()</c> registration
+/// (see <see cref="MetadataHttpClientDefaults.ConfigureYmgal"/>), which is the single place both
+/// <c>App.xaml.cs</c> and the acceptance replica call so the two cannot drift apart.
+/// </remarks>
 public class YmgalHttpClient
 {
     /// <summary>
@@ -67,6 +74,10 @@ public class YmgalHttpClient
 /// Typed HttpClient wrapper for cngal API.
 /// Provides type-safe dependency injection for the cngal API client.
 /// </summary>
+/// <remarks>
+/// See the note on <see cref="YmgalHttpClient"/>: configuration lives with the registration, not
+/// here.
+/// </remarks>
 public class CngalHttpClient
 {
     /// <summary>
@@ -81,5 +92,56 @@ public class CngalHttpClient
     public CngalHttpClient(HttpClient httpClient)
     {
         HttpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    }
+}
+
+/// <summary>
+/// The HttpClient configuration shared by the ymgal and cngal metadata sources.
+/// </summary>
+/// <remarks>
+/// Both upstreams are community-run, free services. Both publish a base address that callers must
+/// hit, and ymgal's developer notes ask for an identifiable caller and a bounded request rate. The
+/// values therefore live in exactly one place, used by <c>App.xaml.cs</c> and by the acceptance
+/// replica, so a change cannot land in one and be forgotten in the other.
+/// </remarks>
+public static class MetadataHttpClientDefaults
+{
+    /// <summary>Base address of the ymgal open API (absolute URLs are built from the options instead).</summary>
+    public static readonly Uri YmgalBaseAddress = new(YmgalEndpointOptions.DefaultBaseUrl + "/");
+
+    /// <summary>Base address of the CnGal main-site API.</summary>
+    public static readonly Uri CngalBaseAddress = new(CngalEndpointOptions.DefaultBaseUrl + "/");
+
+    /// <summary>
+    /// Identifies this application to both sites, which matters for a site that rate limits and
+    /// may need to contact a misbehaving caller.
+    /// </summary>
+    public const string UserAgent = "Galbox/1.0";
+
+    /// <summary>Per-request timeout, matching the other metadata sources.</summary>
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>Configures a HttpClient for the ymgal API.</summary>
+    public static void ConfigureYmgal(HttpClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        client.BaseAddress ??= YmgalBaseAddress;
+        client.Timeout = Timeout;
+        if (!client.DefaultRequestHeaders.Contains("User-Agent"))
+        {
+            client.DefaultRequestHeaders.Add("User-Agent", UserAgent);
+        }
+    }
+
+    /// <summary>Configures a HttpClient for the CnGal API.</summary>
+    public static void ConfigureCngal(HttpClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        client.BaseAddress ??= CngalBaseAddress;
+        client.Timeout = Timeout;
+        if (!client.DefaultRequestHeaders.Contains("User-Agent"))
+        {
+            client.DefaultRequestHeaders.Add("User-Agent", UserAgent);
+        }
     }
 }
