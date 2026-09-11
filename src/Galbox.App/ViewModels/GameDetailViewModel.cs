@@ -75,6 +75,24 @@ public partial class GameDetailViewModel : ObservableObject
     private string? _backgroundImagePath;
 
     /// <summary>
+    /// Whether the game's installation folder or executable is gone (W14).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isInstallationMissing;
+
+    /// <summary>
+    /// Short badge text shown when the installation is missing ("文件夹丢失" / "可执行文件丢失").
+    /// </summary>
+    [ObservableProperty]
+    private string? _installationStatusText;
+
+    /// <summary>
+    /// Explanation and repair hint shown when the installation is missing.
+    /// </summary>
+    [ObservableProperty]
+    private string? _installationNotice;
+
+    /// <summary>
     /// Developer name.
     /// </summary>
     [ObservableProperty]
@@ -283,6 +301,15 @@ public partial class GameDetailViewModel : ObservableObject
             IsFavorite = game.IsFavorite;
             MainExecutable = game.MainExecutable;
 
+            // W14: the library entry can outlive the folder it points at. Surface that here instead
+            // of letting the launch button fail with a generic error.
+            var installation = GameInstallationStatus.Evaluate(game);
+            IsInstallationMissing = installation.IsMissing;
+            InstallationStatusText = installation.StatusText;
+            InstallationNotice = installation.IsMissing
+                ? $"{installation.DetailText}\n{installation.RepairHint}"
+                : null;
+
             // Load executables for multi-launch
             Executables.Clear();
             Executables.Add(new ExecutableItem
@@ -418,10 +445,33 @@ public partial class GameDetailViewModel : ObservableObject
             return;
         }
 
+        // W14: a missing folder (or a missing executable inside an existing folder) must produce a
+        // message that says which path is gone and how to fix it - never a silent failure.
+        if (Game != null)
+        {
+            var installation = GameInstallationStatus.Evaluate(Game);
+            IsInstallationMissing = installation.IsMissing;
+            InstallationStatusText = installation.StatusText;
+            InstallationNotice = installation.IsMissing
+                ? $"{installation.DetailText}\n{installation.RepairHint}"
+                : null;
+
+            if (installation.IsMissing)
+            {
+                ErrorMessage = GameInstallationStatus.BuildLaunchBlockMessage(Game);
+                _logger.LogWarning(
+                    "Refusing to launch game {GameId} ({GameName}): {Detail}",
+                    Game.Id,
+                    DisplayName,
+                    installation.DetailText);
+                return;
+            }
+        }
+
         if (!System.IO.File.Exists(executablePath))
         {
             Debug.WriteLine($"[GameDetailViewModel] Executable not found: {executablePath}");
-            ErrorMessage = "未找到可执行文件";
+            ErrorMessage = $"未找到可执行文件：{executablePath}\n请在库中确认游戏位置，或重新添加游戏文件夹。";
             return;
         }
 

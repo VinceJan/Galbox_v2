@@ -216,9 +216,19 @@ public class SaveManagementService : ISaveManagementService
                 TotalBytes = totalBytes
             });
 
-            // Create zip backup
+            // Create zip backup. Entry names are relative to the save folder(s) so a restore puts
+            // every file back where it came from.
+            var entryRoots = new List<string>();
+            if (!string.IsNullOrWhiteSpace(saveLocation.PrimarySavePath))
+            {
+                entryRoots.Add(saveLocation.PrimarySavePath);
+            }
+
+            entryRoots.AddRange(saveLocation.AlternativePaths.Where(p => !string.IsNullOrWhiteSpace(p)));
+
             await CreateZipBackupAsync(
                 filesToBackup,
+                entryRoots,
                 backupFilePath,
                 progress,
                 totalFiles,
@@ -332,6 +342,21 @@ public class SaveManagementService : ISaveManagementService
         string? tempBackupDir = null;
         string? tempRestoreDir = null;
 
+        // Rollback state, visible to the catch blocks.
+        //
+        //   * safetyBackup    - a real backup (zip + database row) of the live save folder, taken
+        //                       BEFORE the first byte is overwritten. This is the authoritative
+        //                       rollback source: it survives the finally block and the user can
+        //                       find it in the backup list.
+        //   * tempRestoreDir  - the copy of the live save folder inside the temporary directory,
+        //                       used as a second source when the zip cannot be created.
+        //
+        // Before this change the two catch blocks logged "Attempting rollback after ..." and did
+        // nothing else, while the finally block deleted the only copy of the previous save files.
+        GameSaveBackup? safetyBackup = null;
+        string? restorePathForRollback = null;
+        var liveFileCountBeforeRestore = 0;
+
         try
         {
             // Get backup record from database
@@ -389,6 +414,21 @@ public class SaveManagementService : ISaveManagementService
                 }
             }
 
+            restorePathForRollback = restorePath;
+
+            // Refuse to restore into the game installation folder: the rollback path deletes every
+            // file in the restore folder before copying the previous state back, so doing that to
+            // an installation root would destroy the game itself. (The detector refuses to produce
+            // such a path, but a backup row written by an older build can still carry one.)
+            if (backup.GameInfo != null && EngineSaveDetector.IsGameInstallRoot(restorePath, backup.GameInfo))
+            {
+                _logger.LogError(
+                    "Refusing to restore backup {SaveId}: its restore path {RestorePath} is the game installation folder",
+                    saveId,
+                    restorePath);
+                return false;
+            }
+
             // Check for locked files in restore path before proceeding
             if (Directory.Exists(restorePath))
             {
@@ -434,6 +474,7 @@ public class SaveManagementService : ISaveManagementService
             if (Directory.Exists(restorePath))
             {
                 var currentFiles = EngineSaveDetector.GetFilesWithSizes(restorePath);
+                liveFileCountBeforeRestore = currentFiles.Count;
                 if (currentFiles.Count > 0)
                 {
                     _logger.LogInformation(
@@ -460,6 +501,34 @@ public class SaveManagementService : ISaveManagementService
                         }
 
                         File.Copy(filePath, tempFilePath, true);
+                    }
+
+                    // The copy must be complete before a single live file is overwritten: an
+                    // incomplete copy is not a rollback source.
+                    var copiedFiles = Directory.Exists(tempRestoreDir)
+                        ? Directory.GetFiles(tempRestoreDir, "*", SearchOption.AllDirectories).Length
+                        : 0;
+
+                    if (copiedFiles < currentFiles.Count)
+                    {
+                        _logger.LogError(
+                            "Aborting restore of backup {SaveId}: the temporary copy of the current save is incomplete "
+                            + "({Copied} of {Expected} files). The live save files were not touched.",
+                            saveId,
+                            copiedFiles,
+                            currentFiles.Count);
+                        return false;
+                    }
+                    else
+                    {
+                        // Step 1b: durable safety backup (zip + database row) of the live save
+                        // folder. Restoring will overwrite these files, and the rollback below -
+                        // as well as the user, afterwards - needs a copy that outlives this call.
+                        safetyBackup = await CreatePreRestoreSafetyBackupAsync(
+                            backup,
+                            restorePath,
+                            saveId,
+                            cancellationToken).ConfigureAwait(false);
                     }
                 }
             }
@@ -499,16 +568,22 @@ public class SaveManagementService : ISaveManagementService
             if (!verificationResult.Success)
             {
                 _logger.LogError(
-                    "Restore verification failed: {ErrorMessage}. Attempting to rollback.",
+                    "Restore verification failed: {ErrorMessage}. Rolling back to the save state captured before this restore.",
                     verificationResult.ErrorMessage);
 
-                // Step 4: Rollback - restore from temporary backup
-                if (Directory.Exists(tempRestoreDir) && Directory.Exists(restorePath))
+                // Step 4: Rollback - restore the save folder to the state it had before this call
+                var rollback = await TryRollbackRestoreAsync(
+                    safetyBackup,
+                    tempRestoreDir,
+                    restorePath,
+                    $"verification failed ({verificationResult.ErrorMessage})",
+                    CancellationToken.None).ConfigureAwait(false);
+
+                if (!rollback.Success)
                 {
-                    await RollbackRestoreAsync(
-                        tempRestoreDir,
-                        restorePath,
-                        cancellationToken).ConfigureAwait(false);
+                    _logger.LogError(
+                        "Rollback after failed verification did NOT complete: {ErrorMessage}",
+                        rollback.ErrorMessage);
                 }
 
                 return false;
@@ -531,11 +606,14 @@ public class SaveManagementService : ISaveManagementService
         {
             _logger.LogInformation("Backup restoration cancelled for ID: {SaveId}", saveId);
 
-            // Attempt rollback on cancellation
-            if (tempRestoreDir != null && Directory.Exists(tempRestoreDir))
-            {
-                _logger.LogInformation("Attempting rollback after cancellation");
-            }
+            // Attempt rollback on cancellation. CancellationToken.None on purpose: the caller's
+            // token is already cancelled, and the user's save files must be put back anyway.
+            await TryRollbackRestoreAsync(
+                safetyBackup,
+                tempRestoreDir,
+                restorePathForRollback,
+                "the restore was cancelled",
+                CancellationToken.None).ConfigureAwait(false);
 
             throw;
         }
@@ -547,9 +625,18 @@ public class SaveManagementService : ISaveManagementService
                 saveId);
 
             // Attempt rollback on error
-            if (tempRestoreDir != null && Directory.Exists(tempRestoreDir))
+            var rollback = await TryRollbackRestoreAsync(
+                safetyBackup,
+                tempRestoreDir,
+                restorePathForRollback,
+                $"the restore threw {ex.GetType().Name}",
+                CancellationToken.None).ConfigureAwait(false);
+
+            if (!rollback.Success)
             {
-                _logger.LogInformation("Attempting rollback after error");
+                _logger.LogError(
+                    "Rollback after restore error did NOT complete: {ErrorMessage}",
+                    rollback.ErrorMessage);
             }
 
             return false;
@@ -576,9 +663,17 @@ public class SaveManagementService : ISaveManagementService
     }
 
     /// <summary>
-    /// Verifies the integrity of a restore operation by checking file count and sizes.
+    /// Verifies a restore by comparing the CONTENT of every archive entry with the file that was
+    /// written to disk (SHA-256, exact size, exact file count).
     /// </summary>
-    private Task<RestoreVerificationResult> VerifyRestoreIntegrityAsync(
+    /// <remarks>
+    /// The previous implementation compared only file counts and the sum of sizes, with a 20%
+    /// tolerance on the count and a 10% on the size - a restore that dropped a fifth of the save
+    /// files, or that wrote garbage of the right length, was reported as verified. Both sides of
+    /// this comparison are produced by this service (it wrote the archive and it extracted it),
+    /// so there is no reason for any tolerance: every entry must be present, byte for byte.
+    /// </remarks>
+    private async Task<RestoreVerificationResult> VerifyRestoreIntegrityAsync(
         string backupPath,
         string restorePath,
         CancellationToken cancellationToken)
@@ -588,39 +683,465 @@ public class SaveManagementService : ISaveManagementService
         try
         {
             using var zipArchive = ZipFile.OpenRead(backupPath);
-            var expectedFileCount = zipArchive.Entries.Count(e => !string.IsNullOrEmpty(e.Name));
-            var expectedTotalSize = zipArchive.Entries.Sum(e => e.Length);
 
-            var restoredFiles = EngineSaveDetector.GetFilesWithSizes(restorePath);
-            var actualFileCount = restoredFiles.Count;
-            var actualTotalSize = restoredFiles.Sum(f => f.Size);
+            // Entry names are unique per archive (CreateZipBackupAsync de-duplicates them). A
+            // duplicate name in a legacy archive is extracted last-wins, so it is compared the
+            // same way, but reported because it means the archive cannot represent both files.
+            var expected = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
+            var duplicateEntryNames = new List<string>();
 
-            // Allow some tolerance for file count (some entries might be directories)
-            if (actualFileCount < expectedFileCount * 0.8)
+            foreach (var entry in zipArchive.Entries)
             {
-                result.ErrorMessage = $"File count mismatch: expected ~{expectedFileCount}, got {actualFileCount}";
-                return Task.FromResult(result);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (string.IsNullOrEmpty(entry.Name))
+                {
+                    continue; // directory entry
+                }
+
+                var relativePath = NormalizeArchiveEntryPath(entry.FullName);
+                if (relativePath.Length == 0)
+                {
+                    result.ErrorMessage = $"Archive entry '{entry.FullName}' has an unusable name.";
+                    return result;
+                }
+
+                if (!expected.TryAdd(relativePath, entry))
+                {
+                    duplicateEntryNames.Add(relativePath);
+                    expected[relativePath] = entry;
+                }
             }
 
-            // Allow 10% tolerance for size (compression might affect estimates)
-            if (actualTotalSize < expectedTotalSize * 0.9)
+            if (expected.Count == 0)
             {
-                result.ErrorMessage = $"Size mismatch: expected ~{expectedTotalSize} bytes, got {actualTotalSize} bytes";
-                return Task.FromResult(result);
+                result.ErrorMessage = "Backup archive contains no file entries.";
+                return result;
+            }
+
+            result.ExpectedFileCount = expected.Count;
+            result.ExpectedTotalSize = expected.Values.Sum(e => e.Length);
+
+            foreach (var (relativePath, entry) in expected)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var restoredFile = Path.Combine(restorePath, relativePath);
+                if (!File.Exists(restoredFile))
+                {
+                    result.ErrorMessage = $"Restored file is missing: '{relativePath}'.";
+                    return result;
+                }
+
+                var actualSize = new FileInfo(restoredFile).Length;
+                if (actualSize != entry.Length)
+                {
+                    result.ErrorMessage =
+                        $"Size mismatch for '{relativePath}': archive has {entry.Length} bytes, restored file has {actualSize} bytes.";
+                    return result;
+                }
+
+                var expectedHash = await ComputeEntrySha256Async(entry, cancellationToken).ConfigureAwait(false);
+                var actualHash = await ComputeFileSha256Async(restoredFile, cancellationToken).ConfigureAwait(false);
+
+                if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.ErrorMessage =
+                        $"Content hash mismatch for '{relativePath}': archive {expectedHash}, restored file {actualHash}.";
+                    return result;
+                }
             }
 
             result.Success = true;
-            result.FileCount = actualFileCount;
-            result.TotalSize = actualTotalSize;
+            result.VerifiedFileCount = expected.Count;
+            result.VerifiedTotalSize = expected.Values.Sum(e => e.Length);
+            result.DuplicateEntryNames = duplicateEntryNames;
 
-            return Task.FromResult(result);
+            if (duplicateEntryNames.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Restored backup {BackupPath} contains {Count} duplicate archive entry name(s) (last entry wins): {Names}",
+                    backupPath,
+                    duplicateEntryNames.Count,
+                    string.Join(", ", duplicateEntryNames.Take(5)));
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error verifying restore integrity");
             result.ErrorMessage = $"Verification error: {ex.Message}";
-            return Task.FromResult(result);
+            return result;
         }
+    }
+
+    /// <summary>
+    /// Normalises an archive entry name to a relative Windows path: separators unified, leading
+    /// separators removed, and any traversal segment rejected (empty string means "unusable").
+    /// </summary>
+    private static string NormalizeArchiveEntryPath(string entryFullName)
+    {
+        if (string.IsNullOrWhiteSpace(entryFullName))
+        {
+            return string.Empty;
+        }
+
+        var parts = entryFullName
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries)
+            .Where(part => part != ".")
+            .ToArray();
+
+        if (parts.Length == 0 || parts.Any(part => part == ".."))
+        {
+            return string.Empty;
+        }
+
+        return Path.Combine(parts);
+    }
+
+    /// <summary>SHA-256 of an archive entry's content, as an uppercase hex string.</summary>
+    private static async Task<string> ComputeEntrySha256Async(ZipArchiveEntry entry, CancellationToken cancellationToken)
+    {
+        using var stream = entry.Open();
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var hash = await sha.ComputeHashAsync(stream, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexString(hash);
+    }
+
+    /// <summary>SHA-256 of a file on disk, as an uppercase hex string.</summary>
+    private static async Task<string> ComputeFileSha256Async(string filePath, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 64 * 1024,
+            useAsync: true);
+
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var hash = await sha.ComputeHashAsync(stream, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexString(hash);
+    }
+
+    /// <summary>
+    /// Writes a zip copy of the current save folder plus its database record, before the restore
+    /// overwrites that folder.
+    /// </summary>
+    /// <remarks>
+    /// The record matters as much as the file: without it the copy would be an orphan on disk, the
+    /// user would never see it in the backup list, and nothing would be able to find it again.
+    /// </remarks>
+    private async Task<GameSaveBackup?> CreatePreRestoreSafetyBackupAsync(
+        GameSaveBackup targetBackup,
+        string restorePath,
+        int targetSaveId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var files = EngineSaveDetector.GetFilesWithSizes(restorePath);
+            if (files.Count == 0)
+            {
+                return null;
+            }
+
+            var game = targetBackup.GameInfo;
+            var gameId = targetBackup.GameInfoId;
+            var gameName = game?.DisplayName ?? $"Game {gameId}";
+
+            var gameBackupDir = Path.Combine(_backupStoragePath, $"Game_{gameId}_{SanitizeFileName(gameName)}");
+            Directory.CreateDirectory(gameBackupDir);
+
+            var timestamp = DateTime.UtcNow;
+            var zipPath = Path.Combine(gameBackupDir, $"prerestore_{timestamp:yyyyMMdd_HHmmss}.zip");
+
+            // A collision would overwrite a previous safety copy; keep trying until the name is free.
+            var suffix = 1;
+            while (File.Exists(zipPath))
+            {
+                zipPath = Path.Combine(
+                    gameBackupDir,
+                    $"prerestore_{timestamp:yyyyMMdd_HHmmss}_{suffix++}.zip");
+            }
+
+            await CreateZipBackupCoreAsync(
+                files,
+                new[] { restorePath },
+                zipPath,
+                null,
+                cancellationToken).ConfigureAwait(false);
+
+            var sizeBytes = GetFileSizeSafe(zipPath);
+            if (sizeBytes <= 0)
+            {
+                _logger.LogError("Pre-restore safety backup produced an empty file: {ZipPath}", zipPath);
+                return null;
+            }
+
+            var record = new GameSaveBackup
+            {
+                GameInfoId = gameId,
+                Name = $"恢复前自动备份 - {timestamp:yyyy-MM-dd HH:mm:ss}",
+                BackupPath = zipPath,
+                OriginalSavePath = restorePath,
+                CreatedTime = timestamp,
+                SizeBytes = sizeBytes,
+                Description = $"Safety copy of the current save, taken automatically before restoring backup #{targetSaveId}"
+            };
+
+            using (var db = _dbContextFactory.CreateDbContext())
+            {
+                db.SaveBackups.Add(record);
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            _logger.LogInformation(
+                "Pre-restore safety backup created: ID {BackupId}, {FileCount} file(s), {SizeBytes} bytes at {ZipPath}",
+                record.Id,
+                files.Count,
+                sizeBytes,
+                zipPath);
+
+            // Give the user's backup list a chance to stay bounded, but never let housekeeping
+            // break a restore.
+            try
+            {
+                await CleanupOldBackupsAsync(gameId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(cleanupEx, "Could not clean up old backups after taking a pre-restore safety backup");
+            }
+
+            return record;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The temporary copy taken in step 1 is still a valid rollback source, so this is a
+            // degraded - not fatal - condition. It is logged loudly because the user loses the
+            // visible, durable copy they would otherwise have.
+            _logger.LogError(
+                ex,
+                "Could not create a durable pre-restore safety backup for backup {SaveId}; "
+                + "falling back to the temporary copy for rollback",
+                targetSaveId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Puts the save folder back into the state it had before a failed or cancelled restore.
+    /// </summary>
+    /// <returns>A result describing whether the previous state was restored.</returns>
+    private async Task<RollbackResult> TryRollbackRestoreAsync(
+        GameSaveBackup? safetyBackup,
+        string? tempRestoreDir,
+        string? restorePath,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var result = new RollbackResult();
+
+        if (string.IsNullOrWhiteSpace(restorePath) || !Directory.Exists(restorePath))
+        {
+            result.ErrorMessage = "nothing to roll back: the restore path is unknown or does not exist";
+            _logger.LogWarning("Rollback skipped: {Reason}", result.ErrorMessage);
+            return result;
+        }
+
+        _logger.LogInformation("Rolling back restore of '{RestorePath}' because {Reason}", restorePath, reason);
+
+        // Preferred source: the durable zip taken before the overwrite. It is byte-exact and it
+        // also lets us delete the files the failed restore created.
+        if (safetyBackup != null && !string.IsNullOrWhiteSpace(safetyBackup.BackupPath) && File.Exists(safetyBackup.BackupPath))
+        {
+            try
+            {
+                var restoredCount = await RestoreFromSafetyArchiveAsync(
+                    safetyBackup.BackupPath,
+                    restorePath,
+                    cancellationToken).ConfigureAwait(false);
+
+                result.Success = true;
+                result.Source = RollbackSource.SafetyBackup;
+                result.RestoredFileCount = restoredCount;
+
+                _logger.LogInformation(
+                    "Rollback from safety backup {BackupId} completed: {FileCount} file(s) restored",
+                    safetyBackup.Id,
+                    restoredCount);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Rollback from the safety backup failed; falling back to the temporary copy");
+                result.ErrorMessage = $"safety-backup rollback failed: {ex.Message}";
+            }
+        }
+
+        // Fallback source: the copy made in step 1 of the restore.
+        if (!string.IsNullOrWhiteSpace(tempRestoreDir) && Directory.Exists(tempRestoreDir))
+        {
+            await RollbackRestoreAsync(tempRestoreDir, restorePath, cancellationToken).ConfigureAwait(false);
+
+            var restoredCount = Directory.GetFiles(tempRestoreDir, "*", SearchOption.AllDirectories).Length;
+
+            result.Success = restoredCount > 0;
+            result.Source = RollbackSource.TemporaryCopy;
+            result.RestoredFileCount = restoredCount;
+            result.ErrorMessage = result.Success ? null : "the temporary rollback copy contained no files";
+
+            return result;
+        }
+
+        result.ErrorMessage ??= "no rollback source was available (neither a safety backup nor a temporary copy)";
+        _logger.LogError(
+            "Rollback of '{RestorePath}' could NOT be performed: {ErrorMessage}",
+            restorePath,
+            result.ErrorMessage);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Restores the save folder from the pre-restore safety archive: files that the failed restore
+    /// created are removed, every archived file is written back, and the result is hash-verified.
+    /// </summary>
+    private async Task<int> RestoreFromSafetyArchiveAsync(
+        string safetyZipPath,
+        string restorePath,
+        CancellationToken cancellationToken)
+    {
+        using var zipArchive = ZipFile.OpenRead(safetyZipPath);
+
+        var archivedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in zipArchive.Entries)
+        {
+            if (string.IsNullOrEmpty(entry.Name))
+            {
+                continue;
+            }
+
+            var relativePath = NormalizeArchiveEntryPath(entry.FullName);
+            if (relativePath.Length == 0)
+            {
+                continue;
+            }
+
+            archivedFiles.Add(relativePath);
+        }
+
+        // 1. Remove files that are not part of the archived state - they were created by the failed
+        //    restore (or by the partial extraction) and must not survive the rollback.
+        var removedCount = 0;
+        foreach (var file in Directory.GetFiles(restorePath, "*", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var relativePath = Path.GetRelativePath(restorePath, file);
+            if (archivedFiles.Contains(relativePath))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(file);
+                removedCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not delete file created by the failed restore: {FilePath}", file);
+            }
+        }
+
+        // 2. Write every archived file back, overwriting whatever the failed restore left behind.
+        var restoredCount = 0;
+        foreach (var entry in zipArchive.Entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var relativePath = NormalizeArchiveEntryPath(entry.FullName);
+            if (relativePath.Length == 0)
+            {
+                continue;
+            }
+
+            var targetPath = Path.Combine(restorePath, relativePath);
+            var targetDir = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
+            {
+                Directory.CreateDirectory(targetDir);
+            }
+
+            using (var entryStream = entry.Open())
+            using (var fileStream = File.Create(targetPath))
+            {
+                await entryStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+            }
+
+            // 3. Verify each restored file against the archive: a rollback that silently writes
+            //    something else is worse than reporting failure.
+            var expectedHash = await ComputeEntrySha256Async(entry, cancellationToken).ConfigureAwait(false);
+            var actualHash = await ComputeFileSha256Async(targetPath, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException(
+                    $"Rollback verification failed for '{relativePath}': expected {expectedHash}, got {actualHash}");
+            }
+
+            restoredCount++;
+        }
+
+        _logger.LogInformation(
+            "Rollback wrote {Restored} file(s) back and removed {Removed} file(s) created by the failed restore",
+            restoredCount,
+            removedCount);
+
+        return restoredCount;
+    }
+
+    /// <summary>Which source a rollback used.</summary>
+    private enum RollbackSource
+    {
+        None,
+        SafetyBackup,
+        TemporaryCopy
+    }
+
+    /// <summary>Outcome of a rollback attempt.</summary>
+    private sealed class RollbackResult
+    {
+        public bool Success { get; set; }
+        public RollbackSource Source { get; set; }
+        public int RestoredFileCount { get; set; }
+        public string? ErrorMessage { get; set; }
+    }
+
+    private sealed class RestoreVerificationResult
+    {
+        public bool Success { get; set; }
+        public string? ErrorMessage { get; set; }
+        public int FileCount { get; set; }
+        public long TotalSize { get; set; }
+        public int ExpectedFileCount { get; set; }
+        public long ExpectedTotalSize { get; set; }
+        public int VerifiedFileCount { get; set; }
+        public long VerifiedTotalSize { get; set; }
+        public List<string> DuplicateEntryNames { get; set; } = new();
     }
 
     /// <summary>
@@ -680,14 +1201,6 @@ public class SaveManagementService : ISaveManagementService
         }
 
         return Task.CompletedTask;
-    }
-
-    private class RestoreVerificationResult
-    {
-        public bool Success { get; set; }
-        public string? ErrorMessage { get; set; }
-        public int FileCount { get; set; }
-        public long TotalSize { get; set; }
     }
 
     /// <inheritdoc/>
@@ -839,14 +1352,65 @@ public class SaveManagementService : ISaveManagementService
                 return result;
             }
 
-            // Create backup of current saves first
-            var currentBackup = await CreateBackupAsync(
-                game,
-                $"Quick switch backup - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-                null,
-                cancellationToken).ConfigureAwait(false);
+            // Create backup of current saves first.
+            //
+            // This backup is the ONLY way back: the restore below overwrites the live save files.
+            // When it fails (no save location detected, unreadable files, no disk space) the
+            // previous code carried on regardless and reported success, so the user's current
+            // save was silently destroyed with no copy anywhere. Abort instead.
+            GameSaveBackup? currentBackup;
+            try
+            {
+                currentBackup = await CreateBackupAsync(
+                    game,
+                    $"Quick switch backup - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
+                    null,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Quick switch aborted: creating the safety backup of the current save failed for game {GameId}", gameId);
+                result.ErrorMessage =
+                    "已中止快速切换：无法为当前存档创建安全备份，为避免覆盖后无法回退，未做任何修改。"
+                    + $"原因：{ex.Message}";
+                return result;
+            }
 
             result.CurrentBackup = currentBackup;
+
+            if (currentBackup == null)
+            {
+                // CreateBackupAsync returns null when it could not produce a backup file (or a
+                // database record for it). Continuing here is what lost saves.
+                _logger.LogError(
+                    "Quick switch aborted for game {GameId}: the safety backup of the current save could not be created "
+                    + "(no save location detected or no save file found). The target backup {TargetSaveId} was NOT applied.",
+                    gameId,
+                    targetSaveId);
+
+                result.ErrorMessage =
+                    "已中止快速切换：未能为当前存档创建安全备份（未检测到存档位置或存档文件），"
+                    + "为避免覆盖后无法回退，目标备份未被应用，当前存档保持原样。";
+                return result;
+            }
+
+            // A backup record without a file on disk is just as unusable as no backup at all.
+            if (string.IsNullOrWhiteSpace(currentBackup.BackupPath) || !File.Exists(currentBackup.BackupPath))
+            {
+                _logger.LogError(
+                    "Quick switch aborted for game {GameId}: the safety backup record {BackupId} has no readable file at {BackupPath}",
+                    gameId,
+                    currentBackup.Id,
+                    currentBackup.BackupPath);
+
+                result.ErrorMessage =
+                    "已中止快速切换：当前存档的安全备份文件不可读，未做任何修改。";
+                return result;
+            }
 
             // Restore target backup
             var restoreSuccess = await RestoreBackupAsync(
@@ -861,13 +1425,21 @@ public class SaveManagementService : ISaveManagementService
 
                 _logger.LogInformation(
                     "Quick switch completed: current backup ID {CurrentId}, restored backup ID {TargetId}",
-                    currentBackup?.Id,
+                    currentBackup.Id,
                     targetSaveId);
             }
             else
             {
-                result.ErrorMessage = "Failed to restore target backup";
-                _logger.LogWarning("Quick switch failed: could not restore target backup");
+                // The restore either aborted before touching the save files or rolled itself back
+                // to the state it captured first, so the safety backup above is intact.
+                result.ErrorMessage =
+                    $"已从备份 #{targetSaveId} 恢复失败，本次操作已回滚；恢复前的存档仍保存在安全备份 #{currentBackup.Id} 中。";
+                _logger.LogWarning(
+                    "Quick switch failed: could not restore target backup {TargetSaveId} for game {GameId}; "
+                    + "the pre-switch state is preserved in safety backup {CurrentId}",
+                    targetSaveId,
+                    gameId,
+                    currentBackup.Id);
             }
 
             return result;
@@ -1171,18 +1743,44 @@ public class SaveManagementService : ISaveManagementService
         return files;
     }
 
-    private async Task CreateZipBackupAsync(
+    private Task CreateZipBackupAsync(
         List<(string Path, long Size)> files,
+        IReadOnlyList<string> entryRoots,
         string zipPath,
         IProgress<BackupProgress>? progress,
         int totalFiles,
         long totalBytes,
         CancellationToken cancellationToken)
     {
+        return CreateZipBackupCoreAsync(files, entryRoots, zipPath, progress, cancellationToken, totalFiles, totalBytes);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="files"/> into a zip, using each file's path relative to the first
+    /// matching root in <paramref name="entryRoots"/> as the entry name.
+    /// </summary>
+    /// <remarks>
+    /// The previous naming scheme used the file's immediate parent directory
+    /// (<c>saves\1-1-LT1.save</c> for <c>&lt;install&gt;\game\saves\1-1-LT1.save</c>), so restoring
+    /// into <c>&lt;install&gt;\game\saves</c> wrote the file to
+    /// <c>&lt;install&gt;\game\saves\saves\1-1-LT1.save</c> - next to, not over, the file it was
+    /// meant to replace. Relative names also make each entry unique, which is what the content
+    /// verification in <see cref="VerifyRestoreIntegrityAsync"/> relies on.
+    /// </remarks>
+    private async Task CreateZipBackupCoreAsync(
+        List<(string Path, long Size)> files,
+        IReadOnlyList<string> entryRoots,
+        string zipPath,
+        IProgress<BackupProgress>? progress,
+        CancellationToken cancellationToken,
+        int totalFiles = 0,
+        long totalBytes = 0)
+    {
         long bytesTransferred = 0;
         int filesProcessed = 0;
 
         using var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Create);
+        var usedEntryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (filePath, _) in files)
         {
@@ -1194,13 +1792,7 @@ public class SaveManagementService : ISaveManagementService
                 continue;
             }
 
-            // Create relative entry name
-            var entryName = fileInfo.Name;
-            var directoryName = fileInfo.Directory?.Name;
-            if (!string.IsNullOrEmpty(directoryName))
-            {
-                entryName = Path.Combine(directoryName, fileInfo.Name);
-            }
+            var entryName = BuildBackupEntryName(filePath, entryRoots, usedEntryNames);
 
             var entry = zipArchive.CreateEntry(entryName);
 
@@ -1230,6 +1822,60 @@ public class SaveManagementService : ISaveManagementService
         }
     }
 
+    /// <summary>
+    /// Builds the archive entry name for a file: its path relative to the deepest matching root,
+    /// with separators unified and collisions resolved by a numeric suffix.
+    /// </summary>
+    private static string BuildBackupEntryName(
+        string filePath,
+        IReadOnlyList<string> entryRoots,
+        HashSet<string> usedEntryNames)
+    {
+        var candidate = string.Empty;
+
+        foreach (var root in entryRoots
+                     .Where(r => !string.IsNullOrWhiteSpace(r))
+                     .OrderByDescending(r => r.Length))
+        {
+            var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            if (filePath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || filePath.StartsWith(normalizedRoot + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                candidate = Path.GetRelativePath(normalizedRoot, filePath);
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            candidate = Path.GetFileName(filePath);
+        }
+
+        candidate = candidate
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar);
+
+        if (candidate.Length == 0)
+        {
+            candidate = Path.GetFileName(filePath);
+        }
+
+        // Two files from different roots can map to the same relative name; a duplicate entry name
+        // would make one of them unreachable, so disambiguate.
+        var unique = candidate;
+        var suffix = 1;
+        var extension = Path.GetExtension(candidate);
+        var withoutExtension = candidate[..^extension.Length];
+
+        while (!usedEntryNames.Add(unique))
+        {
+            unique = $"{withoutExtension}_{suffix++}{extension}";
+        }
+
+        return unique;
+    }
+
     private async Task ExtractZipBackupAsync(
         string zipPath,
         string extractPath,
@@ -1245,7 +1891,32 @@ public class SaveManagementService : ISaveManagementService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var entryPath = Path.Combine(extractPath, entry.FullName);
+            // Normalise the entry name and refuse anything that would resolve outside the restore
+            // folder (a "../" entry in a tampered archive would otherwise overwrite arbitrary
+            // files). Legacy archives are normalised the same way, so "dir/file" still lands in
+            // the right place.
+            var relativePath = NormalizeArchiveEntryPath(entry.FullName);
+            if (relativePath.Length == 0)
+            {
+                if (string.IsNullOrEmpty(entry.Name))
+                {
+                    continue; // directory entry
+                }
+
+                throw new IOException($"Unsafe archive entry name: '{entry.FullName}'");
+            }
+
+            var entryPath = Path.Combine(extractPath, relativePath);
+
+            var fullExtractPath = Path.GetFullPath(extractPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var fullEntryPath = Path.GetFullPath(entryPath);
+            if (!fullEntryPath.StartsWith(fullExtractPath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException(
+                    $"Archive entry '{entry.FullName}' resolves outside the restore folder: '{fullEntryPath}'");
+            }
 
             // Ensure directory exists
             var entryDir = Path.GetDirectoryName(entryPath);

@@ -11,6 +11,27 @@ using Microsoft.Extensions.Logging;
 namespace Galbox.App.ViewModels;
 
 /// <summary>
+/// Parameters for <see cref="LibraryViewModel.DeleteGameAsync"/>.
+/// </summary>
+/// <remarks>
+/// A parameter object instead of two arguments because the "also delete the backup files" choice
+/// comes from a confirmation dialog and is deliberately explicit: dropping it silently must not be
+/// possible.
+/// </remarks>
+public sealed class DeleteGameRequest
+{
+    /// <summary>Game to remove from the library.</summary>
+    public GameInfo? Game { get; init; }
+
+    /// <summary>
+    /// Whether the save-backup zip files of this game should be deleted as well. Defaults to
+    /// <c>false</c>: the game files and the save backups survive a library cleanup unless the user
+    /// asked otherwise.
+    /// </summary>
+    public bool DeleteBackupFiles { get; init; }
+}
+
+/// <summary>
 /// ViewModel for the Library/Game Library Page.
 /// Supports table/list view toggle, search, and filtering.
 /// </summary>
@@ -19,6 +40,7 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
     private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
     private readonly INavigationService _navigationService;
     private readonly IGameUtilityService _gameUtilityService;
+    private readonly IGameDeletionService _gameDeletionService;
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly IScrapingSettingsProvider _scrapingSettings;
@@ -114,6 +136,7 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
         IDbContextFactory<GalboxDbContext> dbContextFactory,
         INavigationService navigationService,
         IGameUtilityService gameUtilityService,
+        IGameDeletionService gameDeletionService,
         ILogger<LibraryViewModel> logger,
         IServiceProvider serviceProvider,
         IScrapingSettingsProvider scrapingSettings)
@@ -121,6 +144,7 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
+        _gameDeletionService = gameDeletionService ?? throw new ArgumentNullException(nameof(gameDeletionService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _scrapingSettings = scrapingSettings ?? throw new ArgumentNullException(nameof(scrapingSettings));
@@ -322,6 +346,67 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
     private async Task RefreshAsync()
     {
         await LoadDataAsync();
+    }
+
+    /// <summary>
+    /// Removes a game (and everything that belongs to it) from the library.
+    /// </summary>
+    /// <remarks>
+    /// The game files on disk are never touched - the removal is a database operation only - and
+    /// the confirmation dialog that must precede this call lives in the page, because a ContentDialog
+    /// needs a XamlRoot and therefore cannot be raised from a ViewModel.
+    /// </remarks>
+    /// <param name="request">The game to remove and whether its backup files should go too.</param>
+    [RelayCommand]
+    private async Task DeleteGameAsync(DeleteGameRequest? request)
+    {
+        if (request?.Game == null)
+        {
+            _logger.LogWarning("DeleteGame was called without a game");
+            return;
+        }
+
+        var game = request.Game;
+        ErrorMessage = null;
+        SuccessMessage = null;
+
+        try
+        {
+            var result = await _gameDeletionService.DeleteGameAsync(
+                game.Id,
+                new GameDeletionOptions { DeleteBackupFiles = request.DeleteBackupFiles });
+
+            if (!result.Success)
+            {
+                ErrorMessage = $"删除游戏失败：{result.ErrorMessage ?? "未知原因"}";
+                return;
+            }
+
+            // Re-read the library instead of only patching the observable collections: this also
+            // drops any row that the explicit cascade could not count, so the list can never show
+            // a game that no longer exists in the database.
+            await LoadDataAsync();
+
+            SuccessMessage =
+                $"已从库中移除「{result.GameName}」（清理关联记录 {result.RelatedRowsDeleted} 条）；"
+                + (result.GameFilesKept
+                    ? "游戏文件仍保留在磁盘上，未被删除。"
+                    : "注意：游戏文件夹当前不存在。");
+
+            _logger.LogInformation(
+                "Removed game {GameId} ({GameName}) from the library; game files kept: {GameFilesKept}",
+                game.Id,
+                result.GameName,
+                result.GameFilesKept);
+
+            await Task.Delay(4000);
+            SuccessMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting game {GameId}", game.Id);
+            ErrorMessage = $"删除游戏失败：{ex.Message}";
+        }
     }
 
     /// <summary>
@@ -578,6 +663,21 @@ public partial class LibraryViewModel : ObservableObject, IDisposable
         if (game == null)
         {
             _logger.LogWarning("No game to quick launch");
+            return;
+        }
+
+        // W14: say what is actually wrong instead of the generic "未找到可执行文件" (or, worse, a
+        // silent no-op) when the folder the library points at has been moved or deleted.
+        var installation = GameInstallationStatus.Evaluate(game);
+        if (installation.IsMissing)
+        {
+            ErrorMessage = GameInstallationStatus.BuildLaunchBlockMessage(game);
+            _logger.LogWarning(
+                "Refusing to launch game {GameId} ({GameName}): {Status} - {Detail}",
+                game.Id,
+                game.DisplayName,
+                installation.StatusText,
+                installation.DetailText);
             return;
         }
 

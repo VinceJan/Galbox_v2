@@ -57,7 +57,22 @@ internal static class Program
             new A6MetadataFieldsCheck(),
             new A7UpstreamContractCheck(),
             new A8NavigationPageCheck(),
-            new A9StartupWithCacheCheck()
+            new A9StartupWithCacheCheck(),
+
+            // A10 is reserved for the save-node scan of the data-layer work stream.
+
+            // Regression checks for the user-visible and data-safety defects of the W13-W21 backlog.
+            // Every one of them FAILS against the revision it was written for and PASSES against the
+            // fixed revision; the two runs are recorded in _product\design\acceptance-runs.
+            new A11QuickSwitchSafetyCheck(),
+            new A12RestoreRollbackCheck(),
+            new A13InstallRootSavePathCheck(),
+            new A14RestoreVerificationCheck(),
+            new A15CoverImageDownloadCheck(),
+            new A16DeleteGameCheck(),
+            new A17MissingFolderCheck(),
+            new A18WindowTitleCheck(),
+            new A19PageLoadSmokeCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
