@@ -5,6 +5,7 @@ using Galbox.Core;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
 using Galbox.Data.Migrations;
+using Galbox.Services.Saves;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -187,6 +188,14 @@ public partial class App : Application
         // Error Checking Service
         services.AddSingleton<IErrorCheckingService, ErrorCheckingService>();
 
+        // Save-node scan: the "存档节点" feature (parser x data). Scoped, not singleton - it holds a
+        // DbContext, and a page must get a fresh one per scan. The SaveManagerViewModel therefore
+        // resolves it from a scope it creates itself (IServiceScopeFactory) instead of injecting it:
+        // injecting a scoped service into a root-resolved ViewModel is exactly the captive-dependency
+        // defect the ValidateScopes switch below is there to catch.
+        services.AddScoped<ISaveNodeScanService>(sp => new SaveNodeScanService(
+            sp.GetRequiredService<GalboxDbContext>()));
+
         // Game Utility Service
         services.AddSingleton<IGameUtilityService, GameUtilityService>();
 
@@ -224,11 +233,22 @@ public partial class App : Application
     /// <summary>
     /// Gets the application data path for storing database and settings.
     /// </summary>
+    /// <remarks>
+    /// <c>GALBOX_DATA_DIR</c> overrides the folder when it is set. It exists so the UI can be driven
+    /// and captured by a verification run against a THROWAWAY library: without it, the only way to
+    /// screenshot a populated Save Manager page is to write into the user's real
+    /// <c>%LocalAppData%\Galbox\galbox.db</c>, which is never acceptable. Unset (the normal case)
+    /// the behaviour is exactly what it was.
+    /// </remarks>
     private static string GetAppDataPath()
     {
-        var appDataPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Galbox");
+        var overridePath = Environment.GetEnvironmentVariable("GALBOX_DATA_DIR");
+
+        var appDataPath = string.IsNullOrWhiteSpace(overridePath)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Galbox")
+            : Path.GetFullPath(overridePath);
 
         if (!Directory.Exists(appDataPath))
         {

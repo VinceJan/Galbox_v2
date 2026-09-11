@@ -58,8 +58,9 @@ internal static class Program
             new A7UpstreamContractCheck(),
             new A8NavigationPageCheck(),
             new A9StartupWithCacheCheck(),
-
-            // A10 is reserved for the save-node scan of the data-layer work stream.
+            // --- Save nodes (A10) ---------------------------------------------------------
+            // The product's differentiating feature: names the story node each save belongs to.
+            new A10SaveNodeScanCheck(),
 
             // Regression checks for the user-visible and data-safety defects of the W13-W21 backlog.
             // Every one of them FAILS against the revision it was written for and PASSES against the
@@ -74,7 +75,7 @@ internal static class Program
             new A18WindowTitleCheck(),
             new A19PageLoadSmokeCheck(),
 
-            // --- Patch centre wiring (A30+; A10-A29 are reserved for other work lines) -----
+            // --- Patch centre wiring (A30+; A20-A29 are reserved for other work lines) -----
             new A30PatchCenterWiringCheck(),
             new A31PatchInstallRoundTripCheck(),
             new A32PatchRejectionVisibleCheck()

@@ -141,7 +141,20 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 
             details.Add($"Launched             : pid {process.Id}");
             var stopwatch = Stopwatch.StartNew();
+            var windowSeen = false;
 
+            // The window becomes visible BEFORE the startup sequence is finished: OnLaunched
+            // activates MainWindow and only then runs ProcessMonitorStartup, which writes the
+            // "startup completed" marker this check asserts on. The original loop broke out the
+            // moment a window appeared and killed the process right there, so the marker was read
+            // from a process that had been stopped mid-startup. That made A9 non-deterministic -
+            // the same binary passed or failed depending on how quickly the window handle showed
+            // up (observed: window at +2.1s -> FAIL, window at +2.7s -> PASS, no source change in
+            // between).
+            //
+            // The loop now keeps polling after the first window until the startup log reports
+            // completion or failure, with the same 30s ceiling. Every assertion below is unchanged;
+            // only the moment the process is stopped is now deterministic.
             while (stopwatch.Elapsed < WindowTimeout)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -149,7 +162,7 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 
                 if (process.HasExited)
                 {
-                    exitBeforeWindow = true;
+                    exitBeforeWindow = !windowSeen;
                     break;
                 }
 
@@ -159,18 +172,27 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 
                 if (windowHandle != IntPtr.Zero || visibleTopLevelWindows > 0)
                 {
-                    break;
+                    windowSeen = true;
+
+                    var tail = ReadNewLogLines(logPath, logLengthBefore);
+
+                    if (tail.Any(line => line.Contains(StartupDiagnostics.StartupCompletedMarker, StringComparison.Ordinal))
+                        || tail.Any(line => line.Contains(StartupDiagnostics.StartupFailureMarker, StringComparison.Ordinal)))
+                    {
+                        break;
+                    }
                 }
             }
 
             elapsed = stopwatch.Elapsed;
 
-            if (windowHandle == IntPtr.Zero && visibleTopLevelWindows == 0 && !exitBeforeWindow)
+            if (!windowSeen && !exitBeforeWindow)
             {
                 // Give a slow cold start one more measured chance and report the final numbers.
                 process.Refresh();
                 windowHandle = process.MainWindowHandle;
                 visibleTopLevelWindows = CountVisibleTopLevelWindows(process.Id);
+                windowSeen = windowHandle != IntPtr.Zero || visibleTopLevelWindows > 0;
             }
 
             // Record liveness BEFORE the cleanup below terminates the process, otherwise the

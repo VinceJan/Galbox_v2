@@ -3,6 +3,7 @@ using Galbox.Core;
 using Galbox.Core.Api;
 using Galbox.Core.Patches;
 using Galbox.Data.Entities;
+using Galbox.Services.Saves;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,11 +36,28 @@ namespace Galbox.Acceptance;
 /// </summary>
 public static class AcceptanceContainer
 {
-    /// <summary>Folder (under %LocalAppData%\Galbox) that holds the isolated test database.</summary>
+    /// <summary>
+    /// Folder (under %LocalAppData%\Galbox) that holds the isolated test database.
+    /// </summary>
     public const string AcceptanceFolderName = "acceptance";
 
-    /// <summary>File name of the isolated acceptance database.</summary>
+    /// <summary>
+    /// File name of the isolated acceptance database.
+    /// </summary>
     public const string AcceptanceDatabaseName = "acceptance.db";
+
+    /// <summary>
+    /// Environment variable that redirects the isolated database to another folder.
+    /// </summary>
+    /// <remarks>
+    /// The default path is shared by every worktree of this repository on the machine, and two
+    /// harnesses running at the same time corrupt each other: the first A0 failed with
+    /// <c>IOException: the file is being used by another process</c>, and a run seeded for a
+    /// screenshot picked up another worktree's game row. Setting
+    /// <c>GALBOX_ACCEPTANCE_DIR</c> to an absolute path gives a run its own database. Unset, the
+    /// behaviour is exactly what it always was.
+    /// </remarks>
+    public const string DatabaseDirectoryVariable = "GALBOX_ACCEPTANCE_DIR";
 
     /// <summary>Absolute path of the isolated acceptance database.</summary>
     public static string DatabasePath { get; private set; } = string.Empty;
@@ -57,15 +75,26 @@ public static class AcceptanceContainer
     /// </summary>
     public static ServiceProvider Build(CollectingLoggerProvider logSink)
     {
-        // One database directory per process. Several work lines run this harness at the
-        // same time; a single shared acceptance.db made SQLite lock it for the whole run,
-        // so a concurrent run died in A0 with an IOException that had nothing to do with
-        // the code under test. The pid suffix is the same isolation the image cache uses.
-        var dbDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Galbox",
-            AcceptanceFolderName,
-            $"run-{Environment.ProcessId}");
+        // Two independent ways to keep concurrent runs out of each other's way, and both are
+        // needed:
+        //
+        //   1. GALBOX_ACCEPTANCE_DIR lets a caller point the harness at a private directory. A
+        //      caller that wants a fixed, inspectable location (screenshot seeding, debugging a
+        //      single check) sets it.
+        //   2. When it is NOT set, the default carries the process id. Every worktree holds its
+        //      own copy of this harness but they all share one %LocalAppData%\Galbox, and SQLite
+        //      locks acceptance.db for the whole run - so a second, concurrent run used to die in
+        //      A0 with an IOException that had nothing to do with the code under test. Measured:
+        //      two concurrent runs went from "9 PASS / 1 ERROR" to "10 PASS / 0 ERROR" each.
+        var overrideDirectory = Environment.GetEnvironmentVariable(DatabaseDirectoryVariable);
+
+        var dbDirectory = string.IsNullOrWhiteSpace(overrideDirectory)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Galbox",
+                AcceptanceFolderName,
+                $"run-{Environment.ProcessId}")
+            : Path.GetFullPath(overrideDirectory);
         Directory.CreateDirectory(dbDirectory);
         DatabasePath = Path.Combine(dbDirectory, AcceptanceDatabaseName);
 
@@ -206,6 +235,13 @@ public static class AcceptanceContainer
         // the ones in App.xaml.cs.
         RegisterIfPresent(services, "Galbox.App.Services.IGameDeletionService", "Galbox.App.Services.GameDeletionService");
         RegisterIfPresent(services, "Galbox.App.Services.IGameImageService", "Galbox.App.Services.GameImageService", isolatedImageRoot);
+
+        // --- Save-node scan (verbatim from App.xaml.cs) --------------------------------
+        // Mirrors the registration in src/Galbox.App/App.xaml.cs line for line. A10 asserts that
+        // this resolves; if the shipping app ever stops registering the service, this mirror has to
+        // be kept in step, and A10's first assertion is what makes that visible.
+        services.AddScoped<ISaveNodeScanService>(sp => new SaveNodeScanService(
+            sp.GetRequiredService<GalboxDbContext>()));
 
         // Same validation switches as the shipping app. Without them the harness could happily
         // resolve a graph that the application itself refuses to start with - which is exactly

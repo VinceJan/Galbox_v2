@@ -20,7 +20,8 @@ It exists because "it compiles" was being treated as "it works".
 | A6 | Whether the A5 hits are *usable* metadata: title, rating, cover URL presence per item, plus the per-source totals. |
 | A7 | Upstream contract probe. Prints the traffic the application's **own** HttpClient pipelines produced during A5 (recorded by a transparent handler, so no request literals to go stale), then issues a *corrected* request to the same upstreams to prove whether a scraping failure lives in Galbox or upstream. Also dumps each typed `HttpClient`'s `BaseAddress`. |
 | A8 | Navigation / page / XAML completeness — the regression guard for "implemented but no door": every navigation key resolves to an existing page type, every ViewModel registered in `App.xaml.cs` is referenced by a view under `Views/`, every page is reachable, every converter a view uses is registered, and every `MainWindow.xaml` menu `Tag` is a known key. Source-level on purpose: a runtime test can never see a missing XAML file. |
-| A9 | The only check that starts the shipping GUI. With at least one `search_*.json` file in `%LocalAppData%\Galbox\ScrapingCache`, `Galbox.App.exe` must stay alive and own a visible top-level window within 30 s (`MainWindowHandle` cross-checked with an `EnumWindows` scan); on failure the newest startup-log lines are attached. It exists because the worst defect so far — a thread-affinity `COMException` that left a live process with no window — was invisible to every headless check. |
+| A9 | The only check that starts the shipping GUI. With at least one `search_*.json` file in `%LocalAppData%\Galbox\ScrapingCache`, `Galbox.App.exe` must stay alive and own a visible top-level window within 30 s (`MainWindowHandle` cross-checked with an `EnumWindows` scan) **and** write a startup log that reports completion — a window alone is not accepted, because the startup-failure dialog is a window too. It exists because the worst defect so far — a thread-affinity `COMException` that left a live process with no window — was invisible to every headless check. |
+| A10 | **The save-node feature, end to end.** Resolves `ISaveNodeScanService` from the app-shaped container (the wiring assertion), scans a real game and requires exactly 12 de-duplicated nodes with non-empty scene labels, `auto-3` → 孤独感, CG 6/27 with the id set `{0101,0301,0401,0501,0801,2401}`, a second scan that inserts nothing, a missing/empty directory that fails with a concrete reason and leaves no row behind, and — driven through the real `SaveManagerViewModel` — a timeline with no blank label, 自动档/手动档 separation, the 疑似 route marker, the honest progress figure, the visible parse-failure state, the "还差 21 张" list, the empty state and the unsupported-engine state. |
 
 Exit code: `0` when every check passes, `1` when anything fails or errors.
 
@@ -56,6 +57,10 @@ Options:
 * **No user data.** The database lives at
   `%LocalAppData%\Galbox\acceptance\acceptance.db` and is deleted and recreated on every run.
   The real `%LocalAppData%\Galbox\galbox.db` is never opened.
+  Set `GALBOX_ACCEPTANCE_DIR` to an absolute folder to move it: the default path is shared by every
+  worktree on the machine, and two harnesses running at once corrupt each other (observed: A0
+  failing with `IOException: the file is being used by another process`, and a run that seeded a
+  screenshot picking up another worktree's game row).
 * **No scraping cache.** The persistent cache is disabled
   (`AcceptanceContainer.DisableScrapingCache`), so A5 is always a genuine network query and
   `%LocalAppData%\Galbox\ScrapingCache` is neither read nor written.
