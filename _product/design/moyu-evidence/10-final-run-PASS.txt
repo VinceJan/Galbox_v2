@@ -1,7 +1,7 @@
 ====================================================================================================
  GALBOX HEADLESS ACCEPTANCE RUN
 ====================================================================================================
- UTC started        : 2026-09-11 16:31:10Z
+ UTC started        : 2026-09-11 16:36:50Z
  OS                 : Microsoft Windows 10.0.26200
  Process arch       : X64
  Runtime            : .NET 8.0.31
@@ -9,7 +9,7 @@
  Working directory  : E:\tmp\Galbox_moyu
  Game folder        : D:\GAME\Dreamin'_Her (exists: True)
  Scraping query     : "Dreamin' Her"
- Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36664\acceptance.db
+ Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-32900\acceptance.db
  Real app DB        : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (untouched)
  Verbose logs       : False
 
@@ -39,7 +39,7 @@
 EXPECTED : fresh acceptance.db is (re)created, GameInfo persists and reads back identically, and a second reset proves the run is repeatable
 ACTUAL   : created=True, roundTrip=True, repeatable=True
 DETAILS  :
-  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36664\acceptance.db
+  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-32900\acceptance.db
   Real app DB path   : C:\Users\Jiang\AppData\Local\Galbox\galbox.db
   In isolation       : True
   EnsureDeleted()    : False
@@ -58,12 +58,12 @@ DETAILS  :
     IsScraped          : False
     EngineType         : Unknown
     DisplayName        : Dreamin' Her
-    AddedTime (UTC)    : 2026-09-11 16:31:11Z
+    AddedTime (UTC)    : 2026-09-11 16:36:51Z
   --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
     games after reset  : 0 (expected 0)
     DB size after reset: 4096 bytes
   --- re-seeded test game for later checks: Id=1 ---
-RESULT   : PASS  (1436 ms)
+RESULT   : PASS  (1472 ms)
 
 ####################################################################################################
 # [A1] FindExecutableInFolder picks the intended launcher
@@ -81,7 +81,7 @@ DETAILS  :
   Service result name: dreaminher.exe
     exists           : True
     size             : 123392 bytes
-RESULT   : PASS  (16 ms)
+RESULT   : PASS  (15 ms)
 
 ####################################################################################################
 # [A2] CalculateFolderSize reports the real folder size
@@ -93,7 +93,7 @@ DETAILS  :
   Service result     : 1079379981 bytes (1.005 GB)
   Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
   Deviation          : 0 bytes (0%)
-RESULT   : PASS  (128 ms)
+RESULT   : PASS  (138 ms)
 
 ####################################################################################################
 # [A3] DetectSaveLocationAsync finds the Ren'Py save folder
@@ -150,7 +150,7 @@ DETAILS  :
   Findings           : 0
   (no issues reported - this is a valid outcome for an English-path Ren'Py game)
   ErrorRecords rows persisted for this game: 0
-RESULT   : PASS  (29 ms)
+RESULT   : PASS  (28 ms)
 
 ####################################################################################################
 # [A5] SearchGameAsync returns live results from the four sources
@@ -161,7 +161,7 @@ DETAILS  :
   Query string       : "Dreamin' Her"
   Persistent cache   : DISABLED for this run (guarantees a live network query)
   HttpClient timeout : 30s per request, as configured by the container
-  Total elapsed      : 1347 ms
+  Total elapsed      : 1644 ms
   SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
   HasResults         : True
   BestMatch          : Bangumi (4 items)
@@ -171,7 +171,7 @@ DETAILS  :
     SearchQuery         : "Dreamin' Her"
     Success             : True
     ErrorMessage        : (null)
-    ElapsedMilliseconds : 930
+    ElapsedMilliseconds : 1282
     Items               : 4
     ExtendedErrorInfo   : (null)
     Items (raw, in returned order):
@@ -241,7 +241,7 @@ Touhou Artificial Dream in Arcadia Steam charts, data, update history.
     SearchQuery         : "Dreamin' Her"
     Success             : True
     ErrorMessage        : (null)
-    ElapsedMilliseconds : 1283
+    ElapsedMilliseconds : 1554
     Items               : 2
     ExtendedErrorInfo   : (null)
     Items (raw, in returned order):
@@ -283,7 +283,7 @@ Touhou Artificial Dream in Arcadia Steam charts, data, update history.
     Items               : 0
     ExtendedErrorInfo   : (null)
     (no items)
-RESULT   : PASS  (1360 ms)
+RESULT   : PASS  (1656 ms)
 
 ####################################################################################################
 # [A6] Scraped metadata is complete enough to use
@@ -360,7 +360,7 @@ DETAILS  :
   
   Best-match row title present      : True
   Best-match row cover URL present  : True
-RESULT   : PASS  (8 ms)
+RESULT   : PASS  (7 ms)
 
 ####################################################################################################
 # [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
@@ -427,7 +427,7 @@ DETAILS  :
     Bangumi holds this game  : True (total=4)
     VNDB reachable           : True (corrected HTTP 200)
     VNDB holds this game     : True (results[]=2)
-RESULT   : PASS  (2378 ms)
+RESULT   : PASS  (2299 ms)
 
 ####################################################################################################
 # [A8] Navigation, page and XAML resource completeness (no feature without a door)
@@ -492,44 +492,44 @@ DETAILS  :
     [OK]   menu Tag 'ScrapingProgress' -> ScrapingProgressPage
   
   Sub-check failures : 0
-RESULT   : PASS  (69 ms)
+RESULT   : PASS  (66 ms)
 
 ####################################################################################################
 # [A9] The GUI application opens a window while scrape-cache data is present
 ####################################################################################################
 EXPECTED : with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s
-ACTUAL   : window present: MainWindowHandle=0x9D04C0 ("WinUI Desktop"), startup log reports completion, pid alive after 2086 ms
+ACTUAL   : window present: MainWindowHandle=0x10C09F0 ("WinUI Desktop"), startup log reports completion, pid alive after 2353 ms
 DETAILS  :
   Repository root      : E:\tmp\Galbox_moyu
   Application          : E:\tmp\Galbox_moyu\src\Galbox.App\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
-  Application built    : 2026-09-11 16:30:14Z (newest file in the output folder)
+  Application built    : 2026-09-11 16:36:26Z (newest file in the output folder)
   Newest source file   : 2026-09-11 16:29:52Z (src/Galbox.App, obj/bin excluded)
   Cache precondition  : 2 existing search_*.json file(s), left untouched:
       search_dreamin'_her.json (11859 bytes)
       search_sabbatofthewitch.json (1640 bytes)
   Cache directory      : C:\Users\Jiang\AppData\Local\Galbox\ScrapingCache
-  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (exists: True, bytes before launch: 157813)
-  Launched             : pid 2700
+  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (exists: True, bytes before launch: 190955)
+  Launched             : pid 30620
   Alive when measured  : True (measured before the cleanup kill)
-  MainWindowHandle     : 0x9D04C0 (non-zero)
+  MainWindowHandle     : 0x10C09F0 (non-zero)
   Visible top-level windows owned by the process: 1
-  Elapsed              : 2086 ms (timeout 30s)
+  Elapsed              : 2353 ms (timeout 30s)
   Exited before window : False
   Cache files now      : 2 search_*.json
   --- startup log lines written by this launch (9) ---
-      r built (ValidateScopes=true, ValidateOnBuild=true)
-      2026-09-12 00:31:16.562 [tid:1] OnLaunched: startup sequence begins
-      2026-09-12 00:31:17.229 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
-      2026-09-12 00:31:17.318 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
-      2026-09-12 00:31:17.585 [tid:1] BangumiAuthService initialized
-      2026-09-12 00:31:17.658 [tid:1] ScrapingCacheService initialized (entries: 2)
-      2026-09-12 00:31:18.032 [tid:1] Main window created and activated: handle=0x9D04C0
-      2026-09-12 00:31:18.048 [tid:1] Process monitor: started=True, registered=1/1
-      2026-09-12 00:31:18.049 [tid:1] OnLaunched: startup sequence completed
+      (ValidateScopes=true, ValidateOnBuild=true)
+      2026-09-12 00:36:57.033 [tid:1] OnLaunched: startup sequence begins
+      2026-09-12 00:36:57.798 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+      2026-09-12 00:36:57.882 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+      2026-09-12 00:36:58.244 [tid:1] BangumiAuthService initialized
+      2026-09-12 00:36:58.350 [tid:1] ScrapingCacheService initialized (entries: 2)
+      2026-09-12 00:36:58.739 [tid:1] Main window created and activated: handle=0x10C09F0
+      2026-09-12 00:36:58.755 [tid:1] Process monitor: started=True, registered=1/1
+      2026-09-12 00:36:58.756 [tid:1] OnLaunched: startup sequence completed
   Window title         : "WinUI Desktop"
   Window is the startup-failure dialog: False
   Startup log says     : completed=True, failed=False
-RESULT   : PASS  (2212 ms)
+RESULT   : PASS  (2633 ms)
 
 ####################################################################################################
 # [A60] MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
@@ -554,7 +554,7 @@ DETAILS  :
   Pacing                 : 1.0s between requests, 30 per rolling minute
   Download folder        : C:\Users\Jiang\Downloads
   MoyuApi shares the container's limiter instance : yes
-RESULT   : PASS  (2 ms)
+RESULT   : PASS  (3 ms)
 
 ####################################################################################################
 # [A61] No configured nmk_ key is reported as a distinct failure, never as an empty result
@@ -577,7 +577,7 @@ DETAILS  :
   HTTP requests actually sent: 0
   Elapsed                    : 6 ms
   Container moyu requests    : 0
-RESULT   : PASS  (11 ms)
+RESULT   : PASS  (9 ms)
 
 ####################################################################################################
 # [A62] The nmk_ key is DPAPI-encrypted on disk and never stored in plaintext
@@ -587,7 +587,7 @@ ACTUAL   : 278-byte DPAPI blob, 0 plaintext occurrences, CurrentUser decrypt und
 DETAILS  :
   Store type           : Galbox.Core.Api.MoyuDpapiKeyStore
   Kind                 : windows-dpapi
-  Store path           : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-36664-8e11fae1d54e4526afbb8e9bd46da98a\secrets\moyu-api-key.bin
+  Store path           : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-32900-462907aa16a440a69c597856d28ff8dc\secrets\moyu-api-key.bin
   IsConfigured (empty) : False
   
   File size            : 278 bytes
@@ -603,7 +603,7 @@ DETAILS  :
   Fingerprint                      : 912E967BA5DF
   MoyuOptions.ToString()           : MoyuOptions { ApiKey = configured (source=memory, fingerprint=912E967BA5DF), BaseAddress = https://api.nextmoe.dev/, Pacing = 1.0s / 30 per minute }
   MoyuOptions.DescribeKey()        : configured (source=memory, fingerprint=912E967BA5DF)
-  MoyuDpapiKeyStore.ToString()     : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-36664-8e11fae1d54e4526afbb8e9bd46da98a\secrets\moyu-api-key.bin, Configured = yes }
+  MoyuDpapiKeyStore.ToString()     : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-32900-462907aa16a440a69c597856d28ff8dc\secrets\moyu-api-key.bin, Configured = yes }
   MoyuMemoryKeyStore.ToString()    : MoyuMemoryKeyStore { Configured = True }
   Fingerprint differs for a different key : yes (it is a digest, not a constant)
   
@@ -644,7 +644,7 @@ DETAILS  :
           host=api.nextmoe.dev  -> allowed
   
   Moyu/nextmoe requests recorded on the application's own pipelines: 0
-RESULT   : PASS  (34 ms)
+RESULT   : PASS  (37 ms)
 
 ####################################################################################################
 # [A64] size strings parse as binary units and game anchors accept only vndb:/catalog:
@@ -737,20 +737,42 @@ DETAILS  :
      FromVndbId("1234")             -> vndb:v1234
      FromVndbId("bangumi:1234")    -> (null)
      FromVndbId("v65869")          -> vndb:v65869
-RESULT   : PASS  (5 ms)
+  
+  The `save` type discriminator:
+     IsSaveType([save]) -> True (want True) OK
+     IsSaveType([manual]) -> False (want False) OK
+     IsSaveType([manual,save]) -> True (want True) OK
+     IsSaveType([SAVE]) -> True (want True) OK
+     IsSaveType([(empty)]) -> False (want False) OK
+  
+  Upstream type vocabulary (12 values, spec line 508) -> Chinese labels:
+     manual               -> 人工翻译补丁
+     ai                   -> AI 翻译补丁
+     machine_polishing    -> 机翻润色
+     machine              -> 机翻补丁
+     save                 -> 全 CG 存档
+     crack                -> 破解补丁
+     fix                  -> 修正补丁
+     mod                  -> 魔改补丁
+     r18                  -> 18+
+     decensor             -> 去马赛克补丁
+     image                -> 修图补丁
+     other                -> 其它
+     something_new        -> something_new (unknown values pass through unchanged, so a contract change stays visible instead of being relabelled `其它`)
+RESULT   : PASS  (7 ms)
 
 ####################################################################################################
 # [A65] The downloads-folder watcher adopts the new file and times out cleanly
 ####################################################################################################
 EXPECTED : a file appearing in the watched folder is adopted (Found) once its size is stable; a watch that sees nothing returns TimedOut; an oversized mismatch is not adopted
-ACTUAL   : adopted "A65-synthetic-patch.rar" after 972 ms by size match; a 64 KB file was refused against a declared 170 MB; the empty watch reported TimedOut; cancellation and a missing folder are reported states
+ACTUAL   : adopted "A65-synthetic-patch.rar" after 971 ms by size match; a 64 KB file was refused against a declared 170 MB; the empty watch reported TimedOut; cancellation and a missing folder are reported states
 DETAILS  :
-  Watched folder    : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-36664-28830ed822ef4632b1cd4fc31f8e75e8
+  Watched folder    : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-32900-e4934b53834f4a49aa3b15f333b0b438
   Expected size     : 4096 bytes
   Stability window  : 300 ms
   The file is written 600 ms AFTER the watch starts, on purpose: a watch that adopted a pre-existing file would grab last week's download.
   
-  Positive watch    : State=Found, File=C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-36664-28830ed822ef4632b1cd4fc31f8e75e8\A65-synthetic-patch.rar, Size=4096, Elapsed=972 ms
+  Positive watch    : State=Found, File=C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-32900-e4934b53834f4a49aa3b15f333b0b438\A65-synthetic-patch.rar, Size=4096, Elapsed=971 ms
     Reason          : 已接管 A65-synthetic-patch.rar（4 KB，与来源声明的 4 KB 匹配）。该文件将交给本机补丁引擎做预览与安装，Galbox 不会自行解压或覆盖游戏目录。
     Considered      : A65-synthetic-patch.rar：4 KB，期望 4 KB
   
@@ -760,12 +782,12 @@ DETAILS  :
   Size-mismatch watch: State=TimedOut, File=(none)
   
   Empty watch       : State=TimedOut, elapsed=750 ms (timeout was 700 ms)
-    Reason          : 等待 0 分钟后仍未在 C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-timeout-36664-cbcf918fffe544f3bcb460d037e1496f 中发现匹配的文件。如果浏览器还在下载，或者你把它存到了别处，可以从下载文件夹手动选择补丁包安装。
+    Reason          : 等待 0 分钟后仍未在 C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-timeout-32900-d965216ba95540bda4e3232cf0a56869 中发现匹配的文件。如果浏览器还在下载，或者你把它存到了别处，可以从下载文件夹手动选择补丁包安装。
   
   Cancelled watch   : State=Cancelled
   
-  Missing folder    : State=Failed, Reason=下载文件夹不存在：C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\does-not-exist-bf9620d061494929a0489eb3a61ee86d
-RESULT   : PASS  (2700 ms)
+  Missing folder    : State=Failed, Reason=下载文件夹不存在：C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\does-not-exist-e803b2165ca74cfa9279dd5012fe4f02
+RESULT   : PASS  (2701 ms)
 
 ####################################################################################################
 # [A66] The browser hop accepts only HTTPS moyu pages and refuses API URLs
@@ -803,45 +825,45 @@ RESULT   : PASS  (2 ms)
 # [A67] 429 Retry-After is honoured and a 304 reuses the cached document
 ####################################################################################################
 EXPECTED : a 429 carrying Retry-After=2 is not retried immediately; a second call sends If-None-Match and a 304 returns the cached rows; Retry-After beyond the cap is reported instead of waited out
-ACTUAL   : If-None-Match sent on the second call and the 304 reused the cache; Retry-After: 2 honoured (2016 ms); Retry-After: 3600 reported as RateLimited without waiting; the key is absent from every error surface; pacing and the minute budget both hold
+ACTUAL   : If-None-Match sent on the second call and the 304 reused the cache; Retry-After: 2 honoured (2012 ms); Retry-After: 3600 reported as RateLimited without waiting; the key is absent from every error surface; pacing and the minute budget both hold
 DETAILS  :
   Call 1            : Failed=False, rows=1, If-None-Match=(absent)
   Call 2            : Failed=False, rows=1, If-None-Match="etag-a67"
   
-  429 then 200     : attempts=2, elapsed=2016 ms, Failed=False, rows=1
+  429 then 200     : attempts=2, elapsed=2012 ms, Failed=False, rows=1
   
   Retry-After: 3600 (cap 5s): attempts=1, elapsed=0 ms, Failed=True, Code=RateLimited, RetryAfter=3600s
   
   Key present in any failure/LastError surface: False
   lastRateLimitNotice: (none)
   
-  Pacing            : 3 acquisitions at 250 ms spacing took 506 ms (2 required a wait)
+  Pacing            : 3 acquisitions at 250 ms spacing took 505 ms (2 required a wait)
   Minute budget     : 2/minute limiter allowed 2 of 5 immediate requests
-RESULT   : PASS  (2529 ms)
+RESULT   : PASS  (2525 ms)
 
 ====================================================================================================
  ACCEPTANCE SUMMARY
 ====================================================================================================
  ID   STATUS        TIME  CHECK
 ----------------------------------------------------------------------------------------------------
- A0   PASS       1436 ms  Database isolation, schema creation and GameInfo round-trip
- A1   PASS         16 ms  FindExecutableInFolder picks the intended launcher
- A2   PASS        128 ms  CalculateFolderSize reports the real folder size
+ A0   PASS       1472 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   PASS         15 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS        138 ms  CalculateFolderSize reports the real folder size
  A3   PASS          8 ms  DetectSaveLocationAsync finds the Ren'Py save folder
- A4   PASS         29 ms  CheckGameAsync runs without internal failure
- A5   PASS       1360 ms  SearchGameAsync returns live results from the four sources
- A6   PASS          8 ms  Scraped metadata is complete enough to use
- A7   PASS       2378 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
- A8   PASS         69 ms  Navigation, page and XAML resource completeness (no feature without a door)
- A9   PASS       2212 ms  The GUI application opens a window while scrape-cache data is present
- A60  PASS          2 ms  MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
- A61  PASS         11 ms  No configured nmk_ key is reported as a distinct failure, never as an empty result
+ A4   PASS         28 ms  CheckGameAsync runs without internal failure
+ A5   PASS       1656 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       2299 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+ A8   PASS         66 ms  Navigation, page and XAML resource completeness (no feature without a door)
+ A9   PASS       2633 ms  The GUI application opens a window while scrape-cache data is present
+ A60  PASS          3 ms  MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
+ A61  PASS          9 ms  No configured nmk_ key is reported as a distinct failure, never as an empty result
  A62  PASS         22 ms  The nmk_ key is DPAPI-encrypted on disk and never stored in plaintext
- A63  PASS         34 ms  No request path under /api is reachable (robots.txt Disallow: /api)
- A64  PASS          5 ms  size strings parse as binary units and game anchors accept only vndb:/catalog:
- A65  PASS       2700 ms  The downloads-folder watcher adopts the new file and times out cleanly
+ A63  PASS         37 ms  No request path under /api is reachable (robots.txt Disallow: /api)
+ A64  PASS          7 ms  size strings parse as binary units and game anchors accept only vndb:/catalog:
+ A65  PASS       2701 ms  The downloads-folder watcher adopts the new file and times out cleanly
  A66  PASS          2 ms  The browser hop accepts only HTTPS moyu pages and refuses API URLs
- A67  PASS       2529 ms  429 Retry-After is honoured and a 304 reuses the cached document
+ A67  PASS       2525 ms  429 Retry-After is honoured and a 304 reuses the cached document
 ----------------------------------------------------------------------------------------------------
  PASSED : 18
  FAILED : 0
@@ -850,6 +872,6 @@ RESULT   : PASS  (2529 ms)
  TOTAL  : 18
 
  EXIT CODE: 0  (all checks PASS)
- DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-36664\acceptance.db
+ DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-32900\acceptance.db
  GAME     : D:\GAME\Dreamin'_Her
 ====================================================================================================

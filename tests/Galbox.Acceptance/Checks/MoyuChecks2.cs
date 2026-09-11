@@ -458,6 +458,54 @@ public sealed class A64MoyuSizeAndAnchorCheck : IAcceptanceCheck
             problems.Add($"FromVndbId(\"v65869\") produced {fromVndb?.ToString() ?? "(null)"}, expected vndb:v65869");
         }
 
+        // --- The `save` discriminator, which decides a routing question ---------------------
+        // The local engine rejects a `save` resource by declared type, and routing a save to the
+        // save-node workstream is a product rule rather than an implementation detail. So the
+        // predicate has to be exactly right in both directions.
+        details.Add(string.Empty);
+        details.Add("The `save` type discriminator:");
+        var saveCases = new (string[] Types, bool Want)[]
+        {
+            (new[] { "save" }, true),
+            (new[] { "manual" }, false),
+            (new[] { "manual", "save" }, true),
+            (new[] { "SAVE" }, true),
+            (Array.Empty<string>(), false)
+        };
+
+        foreach (var (types, want) in saveCases)
+        {
+            var got = MoyuPatchTypes.IsSaveType(types);
+            var shown = types.Length == 0 ? "(empty)" : string.Join(",", types);
+            details.Add($"   IsSaveType([{shown}]) -> {got} (want {want}) {(got == want ? "OK" : "<-- MISMATCH")}");
+            if (got != want)
+            {
+                problems.Add($"IsSaveType([{shown}]) returned {got}, expected {want}");
+            }
+        }
+
+        // --- The twelve-value vocabulary the spec defines -----------------------------------
+        details.Add(string.Empty);
+        details.Add("Upstream type vocabulary (12 values, spec line 508) -> Chinese labels:");
+        string[] allTypes = { "manual", "ai", "machine_polishing", "machine", "save", "crack", "fix", "mod", "r18", "decensor", "image", "other" };
+        foreach (var type in allTypes)
+        {
+            var label = MoyuPatchTypes.Describe(type);
+            details.Add($"   {type,-20} -> {label}");
+            if (label == type)
+            {
+                problems.Add($"type \"{type}\" was not mapped to a Chinese label");
+            }
+        }
+
+        var unmapped = MoyuPatchTypes.Describe("something_new");
+        details.Add($"   {"something_new",-20} -> {unmapped} (unknown values pass through unchanged, "
+                    + "so a contract change stays visible instead of being relabelled `其它`)");
+        if (unmapped != "something_new")
+        {
+            problems.Add($"an unknown type was relabelled to \"{unmapped}\" instead of passing through");
+        }
+
         foreach (var problem in problems)
         {
             details.Add($"PROBLEM: {problem}");

@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -16,6 +16,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Galbox.Acceptance", "tests\Galbox.Acceptance\Galbox.Acceptance.csproj", "{E4CCCDF4-CC42-4B68-B57A-EBD2AAC6BF2E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Galbox.Services", "src\Galbox.Services\Galbox.Services.csproj", "{A0AAD407-A4F6-451A-8B35-1D342A1E8BEB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{CCC8D9D6-3DA2-4559-9B15-69E4CCFDD14D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Galbox.MoyuVerifier", "tools\Galbox.MoyuVerifier\Galbox.MoyuVerifier.csproj", "{C7B4E93C-6F44-4B03-B27A-9137B304E79E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -87,6 +91,18 @@ Global
 		{A0AAD407-A4F6-451A-8B35-1D342A1E8BEB}.Release|x64.Build.0 = Release|Any CPU
 		{A0AAD407-A4F6-451A-8B35-1D342A1E8BEB}.Release|x86.ActiveCfg = Release|Any CPU
 		{A0AAD407-A4F6-451A-8B35-1D342A1E8BEB}.Release|x86.Build.0 = Release|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Debug|x64.Build.0 = Debug|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Debug|x86.Build.0 = Debug|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Release|x64.ActiveCfg = Release|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Release|x64.Build.0 = Release|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Release|x86.ActiveCfg = Release|Any CPU
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,5 +113,6 @@ Global
 		{80AC7D61-3E9F-49F9-ADE7-387D5C181EA9} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{E4CCCDF4-CC42-4B68-B57A-EBD2AAC6BF2E} = {A3BBF3B1-EE10-4221-B30B-13AA5FF64B33}
 		{A0AAD407-A4F6-451A-8B35-1D342A1E8BEB} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{C7B4E93C-6F44-4B03-B27A-9137B304E79E} = {CCC8D9D6-3DA2-4559-9B15-69E4CCFDD14D}
 	EndGlobalSection
 EndGlobal
