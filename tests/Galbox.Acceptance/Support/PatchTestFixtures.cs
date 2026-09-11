@@ -16,11 +16,46 @@ public static class PatchTestFixtures
     public const string LedgerFolderName = ".galbox";
 
     /// <summary>Creates a fresh scratch directory.</summary>
+    /// <remarks>
+    /// Sibling directories older than a day are removed first, so repeated runs of the harness cannot
+    /// grow the temp folder without bound. Only this harness's own root is touched.
+    /// </remarks>
     public static string NewScratch(string tag)
     {
-        var root = Path.Combine(Path.GetTempPath(), "Galbox", "acceptance-patches", $"{tag}-{Guid.NewGuid():N}");
+        var parent = Path.Combine(Path.GetTempPath(), "Galbox", "acceptance-patches");
+        SweepOldScratch(parent);
+        var root = Path.Combine(parent, $"{tag}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         return root;
+    }
+
+    /// <summary>
+    /// A game id that is unique to this run.
+    /// </summary>
+    /// <remarks>
+    /// The engine's ledger is keyed by game id and lives outside the game directory, so it survives a
+    /// harness run. Reusing a fixed id made the second run grade a fresh fixture as "a file a previous
+    /// Galbox install wrote" (provenance ManagedByGalbox) instead of "unknown origin", which changed
+    /// the preview from a conflict to an overwrite. That is correct engine behaviour and a defect in
+    /// the fixture, so the fixture has to be as unique as the account it borrows.
+    /// </remarks>
+    public static int UniqueGameId() => Random.Shared.Next(100_000_000, 2_000_000_000);
+
+    private static void SweepOldScratch(string parent)
+    {
+        try
+        {
+            if (!Directory.Exists(parent)) return;
+            foreach (var directory in Directory.EnumerateDirectories(parent))
+            {
+                if (DateTime.UtcNow - Directory.GetLastWriteTimeUtc(directory) < TimeSpan.FromDays(1)) continue;
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort: a scratch folder that cannot be removed is harmless.
+        }
     }
 
     /// <summary>

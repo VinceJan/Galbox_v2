@@ -260,7 +260,7 @@ public sealed class A31PatchInstallRoundTripCheck : IAcceptanceCheck
 
         viewModel.SelectedGame = new GameInfo
         {
-            Id = 900001,
+            Id = PatchTestFixtures.UniqueGameId(),
             NameOriginal = "Acceptance Fixture",
             InstallPath = vmGameRoot,
             MainExecutable = "game.exe"

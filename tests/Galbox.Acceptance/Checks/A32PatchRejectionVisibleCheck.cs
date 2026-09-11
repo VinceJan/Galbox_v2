@@ -242,7 +242,7 @@ public sealed class A32PatchRejectionVisibleCheck : IAcceptanceCheck
 
         viewModel.SelectedGame = new GameInfo
         {
-            Id = 900002,
+            Id = PatchTestFixtures.UniqueGameId(),
             NameOriginal = "Acceptance Fixture (hostile package)",
             InstallPath = vmGameRoot,
             MainExecutable = "game.exe"

@@ -27,6 +27,8 @@
         <converters:PatchTypeFilterConverter x:Key="PatchTypeFilterConverter"/>
         <converters:PatchStatusToVisibilityConverter x:Key="PatchStatusToVisibilityConverter"/>
         <converters:PatchTypeToColorConverter x:Key="PatchTypeToColorConverter"/>
+        <converters:PatchOperationStatusTextConverter x:Key="PatchOperationStatusTextConverter"/>
+        <converters:PatchOperationActionTextConverter x:Key="PatchOperationActionTextConverter"/>
 
         <!-- Styles - Local styles only, global styles defined in App.xaml -->
         <Style x:Key="PatchCenterCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
@@ -387,6 +389,7 @@
 
                         <!-- Patches List -->
                         <ScrollViewer Grid.Row="2" Visibility="{Binding SelectedGame, Converter={StaticResource NullToVisibilityConverter}}">
+                          <StackPanel Spacing="12">
                             <ItemsRepeater
                                 ItemsSource="{x:Bind ViewModel.FilteredPatches, Mode=OneWay}"
                                 Margin="0,0,0,8">
@@ -494,6 +497,409 @@
                                     </DataTemplate>
                                 </ItemsRepeater.ItemTemplate>
                             </ItemsRepeater>
+
+                            <!-- ==================================================================
+                                 本地补丁包（已下载）—— 补丁中心真正能做的事
+                                 引擎能力：Inspect / Preview / Install（可取消、带进度）/ Rollback /
+                                 GetStatus / FindInterrupted + Recover。
+                                 在线补丁源未实现：这里只有一句说明，没有点了没反应的按钮。
+                                 ================================================================== -->
+                            <Border
+                                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                CornerRadius="8"
+                                Padding="16">
+                                <StackPanel Spacing="12">
+
+                                    <TextBlock Text="本地补丁包（已下载）" FontSize="16" FontWeight="SemiBold"/>
+                                    <TextBlock
+                                        Text="选一个你已经下载到本机的补丁压缩包。Galbox 会先把它解压到临时沙箱，列出每个文件的落点、哪些会被覆盖、哪些条目会被拒绝；你确认之后才写入游戏目录，覆盖前会先备份。"
+                                        FontSize="12"
+                                        TextWrapping="Wrap"
+                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+
+                                    <!-- 在线补丁源：未实现。明确说明，不放假按钮。 -->
+                                    <InfoBar
+                                        IsOpen="True"
+                                        IsClosable="False"
+                                        Severity="Informational"
+                                        Title="在线补丁源：未实现"
+                                        Message="{x:Bind ViewModel.OnlinePatchSourceNotice, Mode=OneWay}"/>
+
+                                    <!-- 选择补丁包 -->
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Click="OnPickPatchArchiveClick" CornerRadius="8">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon FontSize="14" Glyph="&#xE8E5;"/>
+                                                <TextBlock Text="选择补丁压缩包..."/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button
+                                            Content="重新预览"
+                                            Command="{x:Bind ViewModel.PreviewArchiveCommand}"
+                                            IsEnabled="{x:Bind ViewModel.CanPreview, Mode=OneWay}"
+                                            CornerRadius="8"/>
+                                        <Button
+                                            Content="刷新台账"
+                                            Command="{x:Bind ViewModel.RefreshPatchStateCommand}"
+                                            CornerRadius="8"/>
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        FontSize="12"
+                                        TextWrapping="Wrap"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{x:Bind ViewModel.SelectedArchivePath, Mode=OneWay}"
+                                        Visibility="{x:Bind ViewModel.SelectedArchivePath, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                                    <!-- 检查结果（Inspect） -->
+                                    <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.HasArchiveInfo, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="包内容检查" FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock
+                                            FontSize="12"
+                                            TextWrapping="Wrap"
+                                            Text="{x:Bind ViewModel.ArchiveSummary, Mode=OneWay}"/>
+                                        <ItemsControl
+                                            ItemsSource="{x:Bind ViewModel.ArchiveWarnings, Mode=OneWay}"
+                                            Visibility="{x:Bind ViewModel.HasArchiveWarnings, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock
+                                                        Text="{Binding}"
+                                                        FontSize="12"
+                                                        TextWrapping="Wrap"
+                                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <InfoBar
+                                            IsOpen="{x:Bind ViewModel.RequiresManualRun, Mode=OneWay}"
+                                            IsClosable="False"
+                                            Severity="Warning"
+                                            Title="自解压可执行文件"
+                                            Message="{x:Bind ViewModel.ManualRunAdvice, Mode=OneWay}"/>
+                                    </StackPanel>
+
+                                    <!-- 整个包被拒绝：必须说出来，不能显示成空的成功 -->
+                                    <InfoBar
+                                        IsOpen="{x:Bind ViewModel.PackageRejectionMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
+                                        IsClosable="False"
+                                        Severity="Error"
+                                        Title="这个补丁包没有被接受，没有写入任何文件"
+                                        Message="{x:Bind ViewModel.PackageRejectionMessage, Mode=OneWay}"/>
+                                    <TextBlock
+                                        FontSize="12"
+                                        TextWrapping="Wrap"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{x:Bind ViewModel.PackageRejectionRemedy, Mode=OneWay}"
+                                        Visibility="{x:Bind ViewModel.PackageRejectionRemedy, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                                    <!-- ================= 预览 ================= -->
+                                    <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.HasPreview, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="覆盖预览" FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock
+                                            FontSize="12"
+                                            TextWrapping="Wrap"
+                                            Text="{x:Bind ViewModel.PreviewHeadline, Mode=OneWay}"/>
+
+                                        <!-- 将被覆盖的既有文件 -->
+                                        <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.HasOverwriteEntries, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="将被覆盖的既有文件（覆盖前会先备份，可用「回滚」还原）" FontSize="12" FontWeight="SemiBold"/>
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.OverwriteEntries, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="{Binding TargetRelativePath}" FontSize="12" TextWrapping="Wrap"/>
+                                                                <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                                                                    <Run Text="{Binding ActionText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding ProvenanceText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding HashText}"/>
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding SanitizationNote}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <!-- 新增 -->
+                                        <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.HasCreateEntries, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="新增文件" FontSize="12" FontWeight="SemiBold"/>
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.CreateEntries, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                            <TextBlock Text="{Binding TargetRelativePath}" FontSize="12" TextWrapping="Wrap"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <!-- 冲突：必须逐个确认 -->
+                                        <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.HasConflictEntries, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="冲突文件（来历不明，必须你确认后才会写入）" FontSize="12" FontWeight="SemiBold" Foreground="#C2410C"/>
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.ConflictEntries, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="{Binding TargetRelativePath}" FontSize="12" TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding Reason}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                                <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                                                                    <Run Text="{Binding ProvenanceText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding HashText}"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <Button
+                                                Content="确认覆盖这些文件"
+                                                Command="{x:Bind ViewModel.ConfirmConflictsCommand}"
+                                                CornerRadius="8"
+                                                HorizontalAlignment="Left"/>
+                                        </StackPanel>
+
+                                        <!-- 被拒绝的条目：与「将要写入」分开展示 -->
+                                        <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.HasRejectedEntries, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="被拒绝的条目（永远不会写入，也不计入上面的数量）" FontSize="12" FontWeight="SemiBold" Foreground="#B91C1C"/>
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.RejectedEntries, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                            <StackPanel Spacing="2">
+                                                                <TextBlock Text="{Binding ArchiveEntryName}" FontSize="12" TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding Reason}" FontSize="11" TextWrapping="Wrap" Foreground="#B91C1C"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <!-- 预览警告 -->
+                                        <ItemsControl
+                                            ItemsSource="{x:Bind ViewModel.PreviewWarnings, Mode=OneWay}"
+                                            Visibility="{x:Bind ViewModel.HasPreviewWarnings, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- ================= 安装 ================= -->
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button
+                                                Command="{x:Bind ViewModel.InstallPatchCommand}"
+                                                CornerRadius="8">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <FontIcon FontSize="14" Glyph="&#xE896;"/>
+                                                    <TextBlock Text="安装到游戏目录"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button
+                                                Content="取消安装"
+                                                Command="{x:Bind ViewModel.InstallPatchCancelCommand}"
+                                                CornerRadius="8"/>
+                                        </StackPanel>
+
+                                        <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.IsInstalling, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ProgressBar Value="{x:Bind ViewModel.InstallProgress, Mode=OneWay}" Maximum="1" ShowPaused="False" ShowError="False"/>
+                                            <TextBlock Text="{x:Bind ViewModel.InstallPhase, Mode=OneWay}" FontSize="12" TextWrapping="Wrap"/>
+                                        </StackPanel>
+
+                                        <!-- 安装结果 -->
+                                        <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.InstallResult, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
+                                            <TextBlock Text="{x:Bind ViewModel.InstallSummary, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" FontWeight="SemiBold"/>
+
+                                            <!-- 失败的文件：显式列出，绝不并入一句「安装成功」 -->
+                                            <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.HasFailedOperations, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="没有成功的文件" FontSize="12" FontWeight="SemiBold" Foreground="#B91C1C"/>
+                                                <ItemsControl ItemsSource="{x:Bind ViewModel.FailedOperations, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                                <StackPanel Spacing="2">
+                                                                    <TextBlock Text="{Binding RelativePath}" FontSize="12" TextWrapping="Wrap"/>
+                                                                    <TextBlock Text="{Binding Message}" FontSize="11" TextWrapping="Wrap" Foreground="#B91C1C"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+
+                                            <ItemsControl
+                                                ItemsSource="{x:Bind ViewModel.BlockingConflicts, Mode=OneWay}"
+                                                Visibility="{x:Bind ViewModel.HasBlockingConflicts, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" Foreground="#B91C1C"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <ItemsControl
+                                                ItemsSource="{x:Bind ViewModel.InstallErrors, Mode=OneWay}"
+                                                Visibility="{x:Bind ViewModel.HasInstallErrors, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" Foreground="#B91C1C"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <TextBlock Text="逐文件结果" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.InstallOperations, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock FontSize="11" TextWrapping="Wrap">
+                                                            <Run Text="{Binding Status, Converter={StaticResource PatchOperationStatusTextConverter}}"/>
+                                                            <Run Text=" · "/>
+                                                            <Run Text="{Binding Action, Converter={StaticResource PatchOperationActionTextConverter}}"/>
+                                                            <Run Text=" · "/>
+                                                            <Run Text="{Binding RelativePath}"/>
+                                                            <Run Text="{Binding Message}"/>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- ================= 状态台账 ================= -->
+                                    <StackPanel Spacing="4" Visibility="{x:Bind ViewModel.HasStatusReport, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="这个游戏当前的补丁台账" FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{x:Bind ViewModel.StatusHeadline, Mode=OneWay}" FontSize="12" TextWrapping="Wrap"/>
+                                        <!-- 事实 vs 推测：引擎的证据分级原样呈现 -->
+                                        <TextBlock Text="{x:Bind ViewModel.StatusEvidenceText, Mode=OneWay}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+
+                                        <ItemsControl
+                                            ItemsSource="{x:Bind ViewModel.ChangedSinceInstallFiles, Mode=OneWay}"
+                                            Visibility="{x:Bind ViewModel.HasChangedSinceInstallFiles, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock FontSize="11" TextWrapping="Wrap">
+                                                        <Run Text="{Binding State}"/>
+                                                        <Run Text=" · "/>
+                                                        <Run Text="{Binding RelativePath}"/>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- 启发式痕迹：明确标注这是推测 -->
+                                        <ItemsControl
+                                            ItemsSource="{x:Bind ViewModel.HeuristicTraces, Mode=OneWay}"
+                                            Visibility="{x:Bind ViewModel.HasHeuristicTraces, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                                                        <Run Text="[启发式痕迹]"/>
+                                                        <Run Text="{Binding RelativePath}"/>
+                                                        <Run Text=" — "/>
+                                                        <Run Text="{Binding Detail}"/>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.StatusNotes, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <!-- ================= 中断恢复 ================= -->
+                                    <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.HasInterruptedPlans, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="检测到上次安装中断" FontSize="13" FontWeight="SemiBold" Foreground="#B91C1C"/>
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.InterruptedPlans, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock FontSize="12" TextWrapping="Wrap">
+                                                                <Run Text="{Binding PatchName}"/>
+                                                                <Run Text=" · "/>
+                                                                <Run Text="{Binding Reason}"/>
+                                                            </TextBlock>
+                                                            <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                                                                <Run Text="可还原 "/>
+                                                                <Run Text="{Binding RestorableFileCount}"/>
+                                                                <Run Text=" 个文件，可移除 "/>
+                                                                <Run Text="{Binding RemovableFileCount}"/>
+                                                                <Run Text=" 个新增文件，无法判定 "/>
+                                                                <Run Text="{Binding IndeterminateFileCount}"/>
+                                                                <Run Text=" 个"/>
+                                                            </TextBlock>
+                                                            <Button
+                                                                Content="恢复到安装前状态"
+                                                                Tag="{Binding}"
+                                                                Click="OnRecoverInterruptedClick"
+                                                                CornerRadius="8"
+                                                                HorizontalAlignment="Left"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <!-- ================= 回滚 ================= -->
+                                    <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.HasRollbackCandidates, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="可以回滚的安装记录" FontSize="13" FontWeight="SemiBold"/>
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.RollbackCandidates, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="4" Padding="8" Margin="0,2,0,2">
+                                                        <Grid ColumnSpacing="8">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                                <TextBlock Text="{Binding PatchName}" FontSize="12" TextWrapping="Wrap"/>
+                                                                <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                                                                    <Run Text="{Binding StatusText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding FileCount}"/>
+                                                                    <Run Text=" 个文件 · "/>
+                                                                    <Run Text="{Binding InstallId}"/>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                            <Button
+                                                                Grid.Column="1"
+                                                                Content="回滚"
+                                                                Tag="{Binding InstallId}"
+                                                                Click="OnRollbackClick"
+                                                                VerticalAlignment="Center"
+                                                                CornerRadius="8"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        Text="{x:Bind ViewModel.RollbackSummary, Mode=OneWay}"
+                                        FontSize="12"
+                                        TextWrapping="Wrap"
+                                        Visibility="{x:Bind ViewModel.RollbackSummary, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                                </StackPanel>
+                            </Border>
+                          </StackPanel>
                         </ScrollViewer>
 
                         <!-- No Patches Available -->

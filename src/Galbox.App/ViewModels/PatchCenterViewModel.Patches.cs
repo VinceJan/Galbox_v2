@@ -64,6 +64,21 @@ public partial class PatchCenterViewModel
     /// <summary>Non-fatal observations about the container.</summary>
     public System.Collections.ObjectModel.ObservableCollection<string> ArchiveWarnings { get; } = new();
 
+    /// <summary>True when an <see cref="ArchiveInfo"/> has been produced.</summary>
+    [ObservableProperty]
+    private bool _hasArchiveInfo;
+
+    /// <summary>True when the container carries non-fatal observations.</summary>
+    [ObservableProperty]
+    private bool _hasArchiveWarnings;
+
+    /// <summary>True when a package path has been selected and can be (re-)previewed.</summary>
+    [ObservableProperty]
+    private bool _canPreview;
+
+    /// <summary>Archive extensions the file picker offers (from the service, not hard-coded here).</summary>
+    public IReadOnlyList<string> SupportedArchiveExtensions => _patchService.SupportedArchiveExtensions;
+
     // ===================================================================== 预览
 
     /// <summary>The non-throwing preview result, including the rejection code when it was refused.</summary>
@@ -102,6 +117,26 @@ public partial class PatchCenterViewModel
 
     /// <summary>Non-fatal observations produced while previewing.</summary>
     public System.Collections.ObjectModel.ObservableCollection<string> PreviewWarnings { get; } = new();
+
+    /// <summary>True when the game already has files the patch would replace after a backup.</summary>
+    [ObservableProperty]
+    private bool _hasOverwriteEntries;
+
+    /// <summary>True when the patch would add files.</summary>
+    [ObservableProperty]
+    private bool _hasCreateEntries;
+
+    /// <summary>True when some targets have unknown provenance and need explicit approval.</summary>
+    [ObservableProperty]
+    private bool _hasConflictEntries;
+
+    /// <summary>True when some entries were refused by the engine.</summary>
+    [ObservableProperty]
+    private bool _hasRejectedEntries;
+
+    /// <summary>True when the preview produced non-fatal observations.</summary>
+    [ObservableProperty]
+    private bool _hasPreviewWarnings;
 
     /// <summary>Number of conflicts the user has explicitly approved.</summary>
     [ObservableProperty]
@@ -147,10 +182,30 @@ public partial class PatchCenterViewModel
     /// <summary>Conflicts that blocked an install because they were not confirmed.</summary>
     public System.Collections.ObjectModel.ObservableCollection<string> BlockingConflicts { get; } = new();
 
+    /// <summary>True when at least one file failed or failed its read-back check.</summary>
+    [ObservableProperty]
+    private bool _hasFailedOperations;
+
+    /// <summary>True when the engine reported fatal errors.</summary>
+    [ObservableProperty]
+    private bool _hasInstallErrors;
+
+    /// <summary>True when the engine reported non-fatal observations.</summary>
+    [ObservableProperty]
+    private bool _hasInstallWarnings;
+
+    /// <summary>True when the install was blocked by unconfirmed conflicts.</summary>
+    [ObservableProperty]
+    private bool _hasBlockingConflicts;
+
     // ===================================================================== 回滚
 
     /// <summary>Installs the ledger can still roll back, newest last.</summary>
     public System.Collections.ObjectModel.ObservableCollection<PatchRollbackCandidate> RollbackCandidates { get; } = new();
+
+    /// <summary>True when the ledger offers at least one install to roll back.</summary>
+    [ObservableProperty]
+    private bool _hasRollbackCandidates;
 
     /// <summary>Result of the last rollback.</summary>
     [ObservableProperty]
@@ -165,6 +220,10 @@ public partial class PatchCenterViewModel
     /// <summary>What Galbox's own ledger can prove about this game directory.</summary>
     [ObservableProperty]
     private PatchStatusReport? _statusReport;
+
+    /// <summary>True when a status verdict is available.</summary>
+    [ObservableProperty]
+    private bool _hasStatusReport;
 
     /// <summary>Chinese headline of the verdict.</summary>
     [ObservableProperty]
@@ -186,10 +245,22 @@ public partial class PatchCenterViewModel
     /// <summary>Caveats attached to the verdict.</summary>
     public System.Collections.ObjectModel.ObservableCollection<string> StatusNotes { get; } = new();
 
+    /// <summary>True when a manifest exists and some of its files no longer match.</summary>
+    [ObservableProperty]
+    private bool _hasChangedSinceInstallFiles;
+
+    /// <summary>True when the directory scan found third-party traces (inference only).</summary>
+    [ObservableProperty]
+    private bool _hasHeuristicTraces;
+
     // ===================================================================== 中断恢复
 
     /// <summary>Installs left pending by a crash or power loss, each with a dry-run recovery plan.</summary>
     public System.Collections.ObjectModel.ObservableCollection<PatchRecoveryPlan> InterruptedPlans { get; } = new();
+
+    /// <summary>True when an interrupted install was detected and can be recovered.</summary>
+    [ObservableProperty]
+    private bool _hasInterruptedPlans;
 
     /// <summary>Result of the last recovery run.</summary>
     [ObservableProperty]
@@ -280,6 +351,7 @@ public partial class PatchCenterViewModel
         }
 
         SelectedArchivePath = archivePath;
+        CanPreview = true;
         var gameId = GameIdOf(game.Id);
 
         try
@@ -428,6 +500,7 @@ public partial class PatchCenterViewModel
             }
 
             await RefreshPatchLedgerAsync(linked.Token).ConfigureAwait(true);
+            RefreshWorkflowFlags();
             return result.Success;
         }
         catch (OperationCanceledException)
@@ -547,6 +620,7 @@ public partial class PatchCenterViewModel
 
         if (game is null || string.IsNullOrWhiteSpace(game.InstallPath) || !Directory.Exists(game.InstallPath))
         {
+            RefreshWorkflowFlags();
             return;
         }
 
@@ -570,6 +644,8 @@ public partial class PatchCenterViewModel
 
             var plans = await _patchService.FindInterruptedAsync(game.InstallPath, gameId, ct).ConfigureAwait(true);
             foreach (var plan in plans) InterruptedPlans.Add(plan);
+
+            RefreshWorkflowFlags();
         }
         catch (Exception ex)
         {
@@ -583,6 +659,7 @@ public partial class PatchCenterViewModel
     /// <summary>Clears everything that belonged to the previous package.</summary>
     private void ResetPatchWorkflow()
     {
+        CanPreview = false;
         ArchiveInfo = null;
         ArchiveSummary = null;
         RequiresManualRun = false;
@@ -614,8 +691,35 @@ public partial class PatchCenterViewModel
         RollbackResult = null;
         RollbackSummary = null;
 
+        RefreshWorkflowFlags();
         ErrorMessage = null;
         SuccessMessage = null;
+    }
+
+    /// <summary>
+    /// Recomputes the boolean view-state the page binds to. Kept explicit (instead of a converter on
+    /// <c>Collection.Count</c>) so the page cannot end up in a state where a list is empty but its
+    /// heading still claims there is something to look at.
+    /// </summary>
+    private void RefreshWorkflowFlags()
+    {
+        HasArchiveInfo = ArchiveInfo is not null;
+        HasArchiveWarnings = ArchiveWarnings.Count > 0;
+        HasPreview = Preview is not null;
+        HasOverwriteEntries = OverwriteEntries.Count > 0;
+        HasCreateEntries = CreateEntries.Count > 0;
+        HasConflictEntries = ConflictEntries.Count > 0;
+        HasRejectedEntries = RejectedEntries.Count > 0;
+        HasPreviewWarnings = PreviewWarnings.Count > 0;
+        HasFailedOperations = FailedOperations.Count > 0;
+        HasInstallErrors = InstallErrors.Count > 0;
+        HasInstallWarnings = InstallWarnings.Count > 0;
+        HasBlockingConflicts = BlockingConflicts.Count > 0;
+        HasRollbackCandidates = RollbackCandidates.Count > 0;
+        HasStatusReport = StatusReport is not null;
+        HasInterruptedPlans = InterruptedPlans.Count > 0;
+        HasChangedSinceInstallFiles = ChangedSinceInstallFiles.Count > 0;
+        HasHeuristicTraces = HeuristicTraces.Count > 0;
     }
 
     /// <summary>Turns an engine preview into the page's collections.</summary>
@@ -663,6 +767,8 @@ public partial class PatchCenterViewModel
             + $"来历不明需确认 {preview.Summary.ConflictCount}，内容已相同 {preview.Summary.UnchangedCount}）；"
             + $"被拒绝 {preview.Summary.RejectedCount} 个条目；"
             + $"预计写入 {FormatBytes(preview.Summary.BytesToWrite)}，备份 {FormatBytes(preview.Summary.BytesToBackup)}。";
+
+        RefreshWorkflowFlags();
     }
 
     /// <summary>Formats one <see cref="PatchArchiveInfo"/> for the page header.</summary>
