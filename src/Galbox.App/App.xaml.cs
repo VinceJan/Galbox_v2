@@ -1,6 +1,7 @@
 using Galbox.App.Converters;
 using Galbox.App.Services;
 using Galbox.App.ViewModels;
+using Galbox.Core;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
 using Galbox.Data.Migrations;
@@ -197,6 +198,17 @@ public partial class App : Application
         // Game deletion: removes a game and everything that belongs to it from the library without
         // ever touching the game files on disk.
         services.AddSingleton<IGameDeletionService, GameDeletionService>();
+
+        // ------------------------------------------------------- Local patch installer (no network)
+        // Galbox.Core.Patches was complete and verified while nothing in the application ever resolved
+        // it - no registration, no page, no command. This is that door.
+        //
+        // Everything behind it is local: it consumes an archive the user already downloaded plus a
+        // game directory, and produces serialisable results. No HTTP client, no API key, no download.
+        // Registrations are singletons, which is what the engine wants (it is stateless apart from the
+        // files it writes, and the ledger scans are cheap to share).
+        services.AddGalboxPatches();
+        services.AddSingleton<ILocalPatchService, LocalPatchService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();

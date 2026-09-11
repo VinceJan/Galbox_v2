@@ -72,7 +72,12 @@ internal static class Program
             new A16DeleteGameCheck(),
             new A17MissingFolderCheck(),
             new A18WindowTitleCheck(),
-            new A19PageLoadSmokeCheck()
+            new A19PageLoadSmokeCheck(),
+
+            // --- Patch centre wiring (A30+; A10-A29 are reserved for other work lines) -----
+            new A30PatchCenterWiringCheck(),
+            new A31PatchInstallRoundTripCheck(),
+            new A32PatchRejectionVisibleCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));

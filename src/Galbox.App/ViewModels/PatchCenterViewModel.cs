@@ -28,6 +28,13 @@ public partial class PatchCenterViewModel : ObservableObject
     private readonly ILogger<PatchCenterViewModel> _logger;
 
     /// <summary>
+    /// The door onto the local patch installer. Patch <b>packages</b> come from this; patch
+    /// <b>records</b> still come from the database. Online sources are a separate work line and are
+    /// deliberately not represented here.
+    /// </summary>
+    private readonly ILocalPatchService _patchService;
+
+    /// <summary>
     /// Whether the page is loading data.
     /// </summary>
     [ObservableProperty]
@@ -126,11 +133,13 @@ public partial class PatchCenterViewModel : ObservableObject
     public PatchCenterViewModel(
         IDbContextFactory<GalboxDbContext> dbContextFactory,
         INavigationService navigationService,
-        ILogger<PatchCenterViewModel> logger)
+        ILogger<PatchCenterViewModel> logger,
+        ILocalPatchService patchService)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
     }
 
     /// <summary>
@@ -368,8 +377,10 @@ public partial class PatchCenterViewModel : ObservableObject
     {
         if (value != null)
         {
-            // Get the dispatcher from the App's main window
-            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            // Get the dispatcher from the App's main window. The lookup is guarded because
+            // DispatcherQueue.GetForCurrentThread() throws COMException 0x80040154 when the Windows
+            // App SDK runtime is not initialised (headless hosts, tests).
+            var dispatcher = TryGetUiDispatcher();
             if (dispatcher == null)
             {
                 // Fallback: just run directly if no dispatcher
@@ -422,8 +433,9 @@ public partial class PatchCenterViewModel : ObservableObject
                     .ConfigureAwait(false);
             }
 
-            // Get dispatcher for UI thread updates
-            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            // Get dispatcher for UI thread updates (null when there is no XAML host: see the guard
+            // in OnSelectedGameChanged).
+            var dispatcher = TryGetUiDispatcher();
 
             if (dispatcher != null)
             {
