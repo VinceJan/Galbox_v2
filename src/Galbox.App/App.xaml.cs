@@ -3,6 +3,7 @@ using Galbox.App.Services;
 using Galbox.App.ViewModels;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
+using Galbox.Data.Migrations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -280,44 +281,28 @@ public partial class App : Application
         var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
 
         StartupDiagnostics.Log($"Preparing database: {dbContext.Database.GetDbConnection().DataSource}");
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(true);
 
-        // Add missing columns for EngineType / VndbId if not exists (SQLite migration)
-        try
+        // Schema evolution is owned by the EF Core migration mechanism, not by hand-written
+        // ALTER TABLE statements. GalboxDatabaseInitializer recognises databases created by the
+        // old EnsureCreated() call (tables present, no __EFMigrationsHistory), stamps the baseline
+        // migration as already applied and then applies the pending migrations, so existing user
+        // data is never re-created or dropped. It also tolerates columns that were added by hand
+        // in the meantime.
+        var dbLogger = Services.GetService<ILogger<App>>();
+        var dbResult = await GalboxDatabaseInitializer.InitializeAsync(
+            dbContext,
+            new DatabaseInitializationOptions { Logger = dbLogger }).ConfigureAwait(true);
+
+        StartupDiagnostics.Log(
+            $"Database initialization: mode={dbResult.Mode}, applied={dbResult.AppliedNow.Count}");
+
+        if (!dbResult.SchemaReport.IsConsistent)
         {
-            // Columns that were added to GameInfo after the first release. EnsureCreatedAsync
-            // does not alter an existing table, so each one is added explicitly.
-            var requiredColumns = new (string Name, string Definition)[]
-            {
-                ("EngineType", "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0"),
-                ("VndbId", "ALTER TABLE Games ADD COLUMN VndbId TEXT NULL")
-            };
-
-            var connection = dbContext.Database.GetDbConnection();
-            await connection.OpenAsync().ConfigureAwait(true);
-
-            foreach (var (columnName, alterStatement) in requiredColumns)
-            {
-                using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"SELECT name FROM pragma_table_info('Games') WHERE name='{columnName}'";
-                var result = await command.ExecuteScalarAsync().ConfigureAwait(true);
-
-                if (result == null || result == DBNull.Value)
-                {
-                    command.CommandText = alterStatement;
-                    await command.ExecuteNonQueryAsync().ConfigureAwait(true);
-                    StartupDiagnostics.Log($"Database migration: added column Games.{columnName}");
-                }
-            }
-
-            await connection.CloseAsync().ConfigureAwait(true);
-        }
-        catch (Exception ex)
-        {
-            // Migration failed, log but continue
-            StartupDiagnostics.LogException("database migration", ex);
-            System.Diagnostics.Debug.WriteLine($"Database migration warning: {ex.Message}");
+            // Not fatal, but the user must be able to find out about it: writing through a stale
+            // schema is the one situation that can lose data.
+            StartupDiagnostics.Log(
+                "Database schema problems:" + Environment.NewLine +
+                string.Join(Environment.NewLine, dbResult.SchemaReport.Problems()));
         }
     }
 

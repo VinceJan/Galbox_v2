@@ -186,6 +186,28 @@ public class GameInfo
     public GameEngineType EngineType { get; set; } = GameEngineType.Unknown;
 
     /// <summary>
+    /// Persisted library status of the game (product spec §4.1: 正在游玩 / 已完成 / 待玩 / 暂停中 / 未玩过).
+    /// </summary>
+    /// <remarks>
+    /// This is a stored value, not a display-time derivation. Storing it is what makes the "待玩" (backlog)
+    /// and "暂停中" (on hold) states possible at all — neither can be inferred from play statistics.
+    /// Use <see cref="GameStatusDerivation.Suggest"/> when a default value is needed.
+    /// </remarks>
+    public GameStatus Status { get; set; } = GameStatus.NotPlayed;
+
+    /// <summary>
+    /// True when <see cref="Status"/> was set by the user explicitly, so automatic suggestions must not
+    /// overwrite it. False means the stored value is still allowed to be replaced by a suggested default.
+    /// </summary>
+    public bool IsStatusUserSet { get; set; }
+
+    /// <summary>
+    /// UTC time when <see cref="Status"/> was last changed. Null when the status has never been changed
+    /// since the game was added.
+    /// </summary>
+    public DateTime? StatusChangedTime { get; set; }
+
+    /// <summary>
     /// Collection of characters associated with the game.
     /// </summary>
     public ICollection<GameCharacter> Characters { get; set; } = new List<GameCharacter>();
@@ -209,6 +231,16 @@ public class GameInfo
     /// Collection of save backups for the game.
     /// </summary>
     public ICollection<GameSaveBackup> SaveBackups { get; set; } = new List<GameSaveBackup>();
+
+    /// <summary>
+    /// Collection of save nodes (story positions / snapshots) recorded for the game.
+    /// </summary>
+    public ICollection<SaveNode> SaveNodes { get; set; } = new List<SaveNode>();
+
+    /// <summary>
+    /// Collection of save groups (branch/route groupings) defined for the game.
+    /// </summary>
+    public ICollection<SaveGroup> SaveGroups { get; set; } = new List<SaveGroup>();
 
     /// <summary>
     /// Gets the display name (prefer Chinese name, fallback to original).
@@ -390,6 +422,12 @@ public class GameScreenshot
 /// <summary>
 /// Represents a save backup for a game.
 /// </summary>
+/// <remarks>
+/// This entity stays what it always was: a <b>file-level backup record</b> (which files were copied where, when,
+/// and how big they are). Story information (scene label, route, chapter progress, CG rate, snapshot flag) lives
+/// on <see cref="SaveNode"/> instead, so that "what the player is playing" and "which bytes were archived" can
+/// evolve independently. <see cref="SaveNodeId"/> optionally links a backup to the node it protects.
+/// </remarks>
 public class GameSaveBackup
 {
     [Key]
@@ -397,6 +435,13 @@ public class GameSaveBackup
 
     [Required]
     public int GameInfoId { get; set; }
+
+    /// <summary>
+    /// Optional identifier of the <see cref="SaveNode"/> this backup protects (§3.3 "三重保障" step 2:
+    /// back up the current save before replacing it). Null for automatic/timed backups that are not tied to a
+    /// specific story node. The backup row is kept (set to null) if the node is deleted.
+    /// </summary>
+    public int? SaveNodeId { get; set; }
 
     [Required]
     [MaxLength(500)]
@@ -417,6 +462,11 @@ public class GameSaveBackup
     public string? Description { get; set; }
 
     public GameInfo GameInfo { get; set; } = null!;
+
+    /// <summary>
+    /// Navigation property to the save node this backup belongs to, if any.
+    /// </summary>
+    public SaveNode? SaveNode { get; set; }
 
     public string FormattedSize
     {

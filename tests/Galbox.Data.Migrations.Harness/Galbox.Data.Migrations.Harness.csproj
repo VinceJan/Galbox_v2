@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Must match Galbox.Data (net8.0-windows): a plain net8.0 project cannot reference it. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Galbox.Data.Migrations.Harness</RootNamespace>
+    <AssemblyName>Galbox.Data.Migrations.Harness</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Console evidence tool; the WinUI app is the real deliverable. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Galbox.Data\Galbox.Data.csproj" />
+  </ItemGroup>
+</Project>
