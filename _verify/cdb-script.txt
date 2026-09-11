@@ -1,0 +1,6 @@
+.symfix+ C:\symbols
+.sympath+ C:\symbols
+.reload /f combase.dll
+sxe -c ".echo ================ STOWED EXCEPTION 0xC000027B ================; .ecxr; kb; !analyze -v; .dump /ma /u E:\\tmp\\Galbox_verify\\_verify\\logs\\crash.dmp; q" 0xc000027b
+sxe -c ".echo ================ FAIL FAST 0xC0000409 ================; .ecxr; kb; !analyze -v; q" 0xc0000409
+g
