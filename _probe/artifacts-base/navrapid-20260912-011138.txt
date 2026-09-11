@@ -1,0 +1,33 @@
+================================================================
+ GAlBOX RAPID NAVIGATION PROBE
+================================================================
+ started            : 2026-09-12 01:11:38Z
+ exe                : E:\tmp\Galbox_crash_base\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+ target switches    : 200
+ pacing (StepMs)    : 40
+ first-chance trace : False
+ report file        : E:\tmp\Galbox_crash\_probe\artifacts-base\navrapid-20260912-011138.txt
+ process            : pid=2192
+ window acquired after 2500 ms -> handle=16124264
+ nav item resolved : 主页
+ nav item resolved : 游戏库
+ nav item resolved : 存档管理
+ nav item resolved : 补丁中心
+ nav item NOT FOUND : Settings
+
+--- rapid navigation: 200 switches, 40 ms pacing ---
+  ... 25/200 switches at 2.1s
+  ... 50/200 switches at 3.9s
+  ... 75/200 switches at 5.9s
+  ... 100/200 switches at 7.8s
+  ... 125/200 switches at 9.7s
+
+--- RESULT ---
+ switches completed : 127 / 200
+ select calls failed: 2
+ elapsed            : 10.1172525 s
+ PROCESS DIED       : YES
+ exit code          : 0x00000000 (0)
+ died after switch  : 127
+ last item clicked  : 存档管理
+ next item would be : 主页
