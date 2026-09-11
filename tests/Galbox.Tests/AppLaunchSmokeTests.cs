@@ -36,9 +36,14 @@ public sealed class AppLaunchSmokeTests
     [Fact]
     public void Application_starts_and_shows_a_real_top_level_window()
     {
-        var observations = AppLaunchObserver.Launch(
+        var (observations, interference) = AppLaunchObserver.LaunchRetryingExternalKills(
             AppLaunchObserver.DefaultWindowTimeout,
             AppLaunchObserver.DefaultSettlePeriod);
+
+        foreach (var note in interference)
+        {
+            _output.WriteLine($"INTERFERENCE: {note}");
+        }
 
         _output.WriteLine(observations.Report());
 
@@ -57,7 +62,13 @@ public sealed class AppLaunchSmokeTests
         Assert.False(
             observations.ExitedBeforeWindow,
             "The application exited before any window appeared. This is the " +
-            "'starts and immediately disappears' failure.\n" + observations.Report());
+            "'starts and immediately disappears' failure."
+          + (observations.ExternallyTerminated
+                ? " NOTE: the exit code is -1, which only an external Process.Kill() produces, so "
+                + "this attempt was almost certainly killed by another tool on this machine rather "
+                + "than by the application."
+                : string.Empty)
+          + "\n" + observations.Report());
 
         // ------------------------------------------------------ a window must actually appear
         Assert.True(
@@ -73,12 +84,23 @@ public sealed class AppLaunchSmokeTests
             observations.WindowsAfterSettle.Count == 0,
             "A window was observed during startup but no visible top-level window existed "
           + $"{AppLaunchObserver.DefaultSettlePeriod.TotalSeconds:F0} s later, so the window did "
-          + "not survive the first frames.\n" + observations.Report());
+          + "not survive the first frames."
+          + (observations.ExternallyTerminated
+                ? " NOTE: the exit code is -1, which only an external Process.Kill() produces, so "
+                + "this attempt was almost certainly killed by another tool on this machine rather "
+                + "than by the application."
+                : string.Empty)
+          + "\n" + observations.Report());
 
         Assert.True(
             observations.AliveAfterSettle,
-            "The application terminated within the settle period after showing its window.\n"
-          + observations.Report());
+            "The application terminated within the settle period after showing its window."
+          + (observations.ExternallyTerminated
+                ? " NOTE: the exit code is -1, which only an external Process.Kill() produces, so "
+                + "this attempt was almost certainly killed by another tool on this machine rather "
+                + "than by the application."
+                : string.Empty)
+          + "\n" + observations.Report());
 
         var window = observations.WindowsAfterSettle[0];
 

@@ -35,6 +35,19 @@ internal sealed record AppLaunchObservations
 
     public int? ExitCode { get; init; }
 
+    /// <summary>
+    /// True when the process was terminated by somebody else rather than exiting on its own.
+    ///
+    /// <c>-1</c> (0xFFFFFFFF) is the exit code <see cref="Process.Kill()"/> writes via
+    /// <c>TerminateProcess</c>, and this application cannot produce it: it contains no
+    /// <c>Environment.Exit</c> and no <c>Environment.FailFast</c>, <c>Program.Main</c> returns only 0
+    /// or 1, an unhandled managed exception exits with a CLR code, and a WinUI crash exits with an
+    /// NTSTATUS such as 0xC000027B. Observed live: other Galbox checkouts on this machine run test
+    /// harnesses that terminate every <c>Galbox.App</c> process by name, which kills this test's
+    /// process mid-flight.
+    /// </summary>
+    public bool ExternallyTerminated => ExitCode == -1;
+
     /// <summary>Time until the first window was observed, or null when none ever appeared.</summary>
     public TimeSpan? TimeToFirstWindow { get; init; }
 
@@ -176,6 +189,59 @@ internal static class AppLaunchObserver
     public static readonly TimeSpan DefaultSettlePeriod = TimeSpan.FromSeconds(3);
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// Launches the application, retrying only when the attempt was cut short by an external kill.
+    ///
+    /// <para>
+    /// WHY THIS RETRY EXISTS AND WHY IT IS NOT A WEAKENED CHECK. This machine runs several Galbox
+    /// checkouts at once, and at least one of them runs a test harness that terminates every
+    /// <c>Galbox.App</c> process by name (<c>Process.GetProcessesByName("Galbox.App")</c> then
+    /// <c>Kill()</c>) - the previous version of this very file did that too, which is why this
+    /// project no longer does. That call kills this test's process mid-launch, and the resulting
+    /// observation is indistinguishable from a real failure unless it is classified properly.
+    /// </para>
+    /// <para>
+    /// The classification is narrow: an attempt is retried <b>only</b> when the exit code is exactly
+    /// <c>-1</c>, which is unreachable for this application (see
+    /// <see cref="AppLaunchObservations.ExternallyTerminated"/>). It is never retried for "no window
+    /// appeared", "the window did not survive", "the window is the failure dialog" or any other
+    /// reason. Every retry is appended to the returned notes and printed, so the interference can
+    /// never be hidden, and if every attempt is killed the test still fails - with a message that
+    /// says the environment is hostile rather than that the application is broken.
+    /// </para>
+    /// </summary>
+    /// <returns>The final attempt's observations, plus a note for each retried attempt.</returns>
+    public static (AppLaunchObservations Observations, IReadOnlyList<string> Notes) LaunchRetryingExternalKills(
+        TimeSpan windowTimeout,
+        TimeSpan settlePeriod,
+        int maxAttempts = 3)
+    {
+        var notes = new List<string>();
+
+        for (var attempt = 1; ; attempt++)
+        {
+            var observation = Launch(windowTimeout, settlePeriod);
+
+            if (!observation.ExternallyTerminated || attempt >= maxAttempts)
+            {
+                if (notes.Count > 0 && observation.ExternallyTerminated)
+                {
+                    notes.Add(
+                        $"all {maxAttempts} attempts were terminated externally; this is an ENVIRONMENT "
+                      + "problem (another process is killing every Galbox.App by name), not an "
+                      + "application defect.");
+                }
+
+                return (observation, notes);
+            }
+
+            notes.Add(
+                $"attempt {attempt}/{maxAttempts}: observed process {observation.ProcessId} was terminated "
+              + "externally (exit code -1, which only Process.Kill() produces and this application cannot "
+              + "produce), so the attempt proves nothing about the application. Retrying.");
+        }
+    }
 
     /// <summary>
     /// Resolves the build, launches it and observes it. Never throws for an application-level

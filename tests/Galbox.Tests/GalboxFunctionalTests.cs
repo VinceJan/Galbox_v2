@@ -174,9 +174,14 @@ public sealed class GalboxFunctionalTests
     [Fact]
     public void Step9_StartupDiagnosticsAndDatabaseAreReal()
     {
-        var observations = AppLaunchObserver.Launch(
+        var (observations, interference) = AppLaunchObserver.LaunchRetryingExternalKills(
             AppLaunchObserver.DefaultWindowTimeout,
             AppLaunchObserver.DefaultSettlePeriod);
+
+        foreach (var note in interference)
+        {
+            _output.WriteLine($"INTERFERENCE: {note}");
+        }
 
         _output.WriteLine(observations.Report());
 
