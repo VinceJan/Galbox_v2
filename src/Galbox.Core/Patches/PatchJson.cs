@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,12 +11,17 @@ namespace Galbox.Core.Patches;
 /// </summary>
 public static class PatchJson
 {
-    /// <summary>Indented, camelCase, null-skipping options used for manifests and previews on disk.</summary>
+    /// <summary>
+    /// Indented, camelCase, null-skipping options used for manifests and previews on disk.
+    /// Non-ASCII text is written verbatim so that the in-game manifest stays readable for the user
+    /// (patch names are usually Chinese or Japanese).
+    /// </summary>
     public static readonly JsonSerializerOptions HumanReadable = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 

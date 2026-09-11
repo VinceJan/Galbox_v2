@@ -134,6 +134,11 @@ public static class PathSafety
         var relative = string.Join('\\', stack);
         var changed = !string.Equals(relative, name, StringComparison.Ordinal) || notes.Count > 0;
 
+        if (collapsedParent)
+        {
+            notes.Insert(0, $"redundant '..' segments were collapsed: '{rawName}' -> '{relative}'");
+        }
+
         return new PathSafetyResult
         {
             OriginalName = rawName,
