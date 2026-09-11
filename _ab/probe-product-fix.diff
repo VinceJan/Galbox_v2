@@ -1,0 +1,25 @@
+diff --git a/src/Galbox.App/Services/EngineSaveDetector.cs b/src/Galbox.App/Services/EngineSaveDetector.cs
+index 812ac42..71cc80e 100644
+--- a/src/Galbox.App/Services/EngineSaveDetector.cs
++++ b/src/Galbox.App/Services/EngineSaveDetector.cs
+@@ -494,10 +494,19 @@ public static class EngineSaveDetector
+         }
+ 
+         // Alternative location: game/saves/ in game folder
++        // TEMPORARY A80 PROBE PATCH - REVERTED BEFORE COMMIT.
+         var gameFolderSavePath = Path.Combine(game.InstallPath, "game", "saves");
+         if (Directory.Exists(gameFolderSavePath))
+         {
+-            result.AlternativePaths.Add(gameFolderSavePath);
++            if (string.IsNullOrEmpty(result.PrimarySavePath))
++            {
++                result.PrimarySavePath = gameFolderSavePath;
++            }
++            else
++            {
++                result.AlternativePaths.Add(gameFolderSavePath);
++            }
++
+             CollectSaveFiles(result, gameFolderSavePath, RenpySavePatterns);
+         }
+ 
