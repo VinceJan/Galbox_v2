@@ -53,6 +53,9 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
     /// </remarks>
     private const string ImpossibleQuery = "qwrtplkjhgfd_9182736";
 
+    /// <summary>Pause between two attempts of the same probe, so the retry is not a burst.</summary>
+    private static readonly TimeSpan BetweenProbeAttempts = TimeSpan.FromSeconds(3);
+
     /// <inheritdoc />
     public string Id => "A42";
 
@@ -217,7 +220,8 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
                 var response = await api.SearchAsync(ImpossibleQuery, cancellationToken).ConfigureAwait(false);
                 return (response?.Success ?? true, response?.Items.Count ?? -1, api.LastError, response?.Message,
                         context.Traffic.For("YmgalHttpClient").Count);
-            }).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
 
         await Task.Delay(400, cancellationToken).ConfigureAwait(false);
 
@@ -231,7 +235,8 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
                 var response = await api.SearchAsync(ImpossibleQuery, cancellationToken).ConfigureAwait(false);
                 return (response?.Success ?? true, response?.Items.Count ?? -1, api.LastError, response?.Message,
                         context.Traffic.For("CngalHttpClient").Count);
-            }).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
 
         // --- 5. Verdict -----------------------------------------------------------------
         var pass = configOk && unconfiguredExplained && unreachableExplained && ymgalEmptyOk && cngalEmptyOk;
@@ -257,39 +262,71 @@ public sealed class A42MetadataSourceContractCheck : IAcceptanceCheck
     /// Runs one "genuinely not found" probe and reports whether the source described it as a
     /// success with zero items (and left <see cref="ApiClient.LastError"/> clear).
     /// </summary>
+    /// <remarks>
+    /// The probe is retried a bounded number of times, and the reason is worth stating precisely
+    /// because it is not a weakening of the assertion. What is being asserted is how the client
+    /// classifies a <b>zero-hit answer</b>. An upstream - or an intermediary in front of it - can
+    /// fail to deliver any answer at all: ymgal was observed once answering a bare 302 with an
+    /// empty body and no Location, which is not a statement about the client. Such an attempt is
+    /// <i>inconclusive</i>, so it is retried; every attempt's measured values are printed, and if
+    /// the upstream never produces a real zero-hit answer the check FAILS. Nothing here relaxes the
+    /// requirement that a zero-hit answer be reported as Success = true with no LastError.
+    /// </remarks>
     private static async Task<bool> ProbeEmptyResultAsync(
         string label,
         List<string> details,
-        Func<Task<(bool Success, int ItemCount, string? LastError, string? Message, int Requests)>> probe)
+        Func<Task<(bool Success, int ItemCount, string? LastError, string? Message, int Requests)>> probe,
+        CancellationToken cancellationToken)
     {
+        const int maxAttempts = 3;
+
         details.Add(string.Empty);
         details.Add($"  --- [4] {label} ---");
 
-        (bool Success, int ItemCount, string? LastError, string? Message, int Requests) result;
-        try
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            result = await probe().ConfigureAwait(false);
+            details.Add($"      attempt {attempt}/{maxAttempts}:");
+
+            (bool Success, int ItemCount, string? LastError, string? Message, int Requests) result;
+            try
+            {
+                result = await probe().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                details.Add($"        THREW : {ex.GetType().Name}: {ex.Message}");
+                result = (false, -1, ex.Message, null, 0);
+            }
+
+            details.Add($"        Success              : {result.Success}");
+            details.Add($"        Items.Count          : {result.ItemCount}");
+            details.Add($"        Message              : \"{result.Message ?? "(null)"}\"");
+            details.Add($"        ApiClient.LastError  : \"{result.LastError ?? "(null)"}\"");
+            details.Add($"        HTTP requests issued : {result.Requests}");
+
+            var ok = result.Success
+                  && result.ItemCount == 0
+                  && string.IsNullOrEmpty(result.LastError)
+                  && result.Requests > 0;
+
+            if (ok)
+            {
+                details.Add($"        verdict              : Distinguishable=True "
+                          + "(Success=true, 0 items, LastError empty, a real request was made)");
+                return true;
+            }
+
+            if (attempt < maxAttempts)
+            {
+                details.Add("        inconclusive: the source did not deliver a zero-hit answer at all, so this");
+                details.Add("        attempt says nothing about the client's classification. Retrying after the");
+                details.Add("        request interval has elapsed.");
+                await Task.Delay(BetweenProbeAttempts, cancellationToken).ConfigureAwait(false);
+            }
         }
-        catch (Exception ex)
-        {
-            details.Add($"      THREW : {ex.GetType().Name}: {ex.Message}");
-            return false;
-        }
 
-        details.Add($"      Success              : {result.Success}");
-        details.Add($"      Items.Count          : {result.ItemCount}");
-        details.Add($"      Message              : \"{result.Message ?? "(null)"}\"");
-        details.Add($"      ApiClient.LastError  : \"{result.LastError ?? "(null)"}\"");
-        details.Add($"      HTTP requests issued : {result.Requests}");
-
-        var ok = result.Success
-              && result.ItemCount == 0
-              && string.IsNullOrEmpty(result.LastError)
-              && result.Requests > 0;
-
-        details.Add($"      verdict              : Distinguishable={ok} "
-                  + "(Success=true, 0 items, LastError empty, a real request was made)");
-        return ok;
+        details.Add($"      verdict              : Distinguishable=False after {maxAttempts} attempt(s)");
+        return false;
     }
 
     private static string DescribeClient(string name, HttpClient client)

@@ -38,6 +38,12 @@ public sealed class A40YmgalSearchCheck : IAcceptanceCheck
     /// <summary>Endpoint path documented by the ymgal open API.</summary>
     private const string ExpectedPathFragment = "/open/archive/search-game";
 
+    /// <summary>How many times the live search may be re-issued when ymgal refuses to answer.</summary>
+    private const int MaxSearchAttempts = 3;
+
+    /// <summary>Pause between two search attempts, so the retry is not a burst.</summary>
+    private static readonly TimeSpan BetweenSearchAttempts = TimeSpan.FromSeconds(3);
+
     /// <inheritdoc />
     public string Id => "A40";
 
@@ -69,36 +75,72 @@ public sealed class A40YmgalSearchCheck : IAcceptanceCheck
         details.Add(string.Empty);
         details.Add("--- [2] live search through the DI-resolved YmgalApi ---");
         details.Add($"  query                : \"{Query}\"");
+        details.Add($"  credential source    : {(api.Options.UsesDedicatedClient
+            ? $"dedicated client from {YmgalEndpointOptions.ClientIdVariable}"
+            : $"ymgal's documented public client ({api.Options.ClientId})")}" );
+        details.Add($"  base URL             : {api.Options.BaseUrl}");
+        details.Add("  ymgal is a community service and was observed intermittently answering a bare HTTP 302");
+        details.Add("  with an empty body under concurrent load. That is the upstream refusing to answer, not a");
+        details.Add("  statement about this client, so the search is retried a bounded number of times with every");
+        details.Add("  attempt reported. If ymgal never answers, the check FAILS - the assertion is unchanged.");
 
         var stopwatch = Stopwatch.StartNew();
         YmgalSearchResponse? response = null;
         Exception? thrown = null;
-        try
+        var attempts = 0;
+
+        for (var attempt = 1; attempt <= MaxSearchAttempts; attempt++)
         {
-            response = await api.SearchAsync(Query, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            thrown = ex;
+            attempts = attempt;
+            response = null;
+            thrown = null;
+            context.Traffic.Clear();
+            var attemptWatch = Stopwatch.StartNew();
+
+            try
+            {
+                response = await api.SearchAsync(Query, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+
+            attemptWatch.Stop();
+
+            var attemptExchanges = context.Traffic.For("YmgalHttpClient");
+            details.Add($"  attempt {attempt}/{MaxSearchAttempts}: {attemptWatch.ElapsedMilliseconds} ms, "
+                      + $"requests={attemptExchanges.Count}, "
+                      + $"response={(response is null ? "(null)" : $"Success={response.Success}, Items={response.Items.Count}")}, "
+                      + $"lastError=\"{api.LastError ?? "(null)"}\"");
+            foreach (var exchange in attemptExchanges)
+            {
+                details.Add($"      {exchange.Method} {exchange.Url}  ->  HTTP {exchange.StatusCode}"
+                          + (exchange.Error is null ? string.Empty : $"  (transport error: {exchange.Error})"));
+                details.Add($"        response body : {Truncate(exchange.ResponseBody, 700)}");
+            }
+
+            if (thrown is not null)
+            {
+                details.Add($"      THREW : {thrown.GetType().Name}: {thrown.Message}");
+            }
+
+            if (response is { Success: true })
+            {
+                break;
+            }
+
+            if (attempt < MaxSearchAttempts)
+            {
+                details.Add("      inconclusive: ymgal did not answer this query; retrying.");
+                await Task.Delay(BetweenSearchAttempts, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         stopwatch.Stop();
 
         var exchanges = context.Traffic.For("YmgalHttpClient");
-        details.Add($"  elapsed              : {stopwatch.ElapsedMilliseconds} ms");
-        details.Add($"  HTTP requests issued : {exchanges.Count}");
-        foreach (var exchange in exchanges)
-        {
-            details.Add($"      {exchange.Method} {exchange.Url}  ->  HTTP {exchange.StatusCode}"
-                      + (exchange.Error is null ? string.Empty : $"  (transport error: {exchange.Error})"));
-            details.Add($"        response body : {Truncate(exchange.ResponseBody, 700)}");
-        }
-
-        if (thrown is not null)
-        {
-            details.Add($"  THREW                : {thrown.GetType().Name}: {thrown.Message}");
-        }
-
+        details.Add($"  total elapsed        : {stopwatch.ElapsedMilliseconds} ms over {attempts} attempt(s)");
         details.Add($"  ApiClient.LastError  : {api.LastError ?? "(null)"}");
         details.Add($"  response             : {(response is null ? "(null)" : $"Success={response.Success}, Items={response.Items.Count}, Message=\"{response.Message}\"")}");
 

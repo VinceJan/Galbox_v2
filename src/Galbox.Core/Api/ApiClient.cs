@@ -277,7 +277,13 @@ public abstract class ApiClient
             return;
 
         var statusCode = response.StatusCode;
-        var reasonPhrase = response.ReasonPhrase ?? statusCode.ToString();
+
+        // Include the numeric code: an intermediary can answer with a status whose reason phrase is
+        // empty or misleading (a bare 302 with no Location, for instance), and "API error: Found ()"
+        // tells a user nothing.
+        var reasonPhrase = string.IsNullOrWhiteSpace(response.ReasonPhrase)
+            ? statusCode.ToString()
+            : response.ReasonPhrase!;
 
         // Get response body for error details
         var errorBody = string.Empty;
@@ -292,11 +298,11 @@ public abstract class ApiClient
 
         // Record the failure so callers can distinguish "server rejected the request"
         // from "the search legitimately returned nothing".
-        LastError = $"API error: {statusCode} ({reasonPhrase})";
+        LastError = $"API error: {(int)statusCode} {reasonPhrase}";
         LastErrorBody = Truncate(errorBody);
 
         throw new HttpRequestException(
-            $"API error: {statusCode} ({reasonPhrase}). Response: {errorBody}",
+            $"API error: {(int)statusCode} {reasonPhrase}. Response: {errorBody}",
             null,
             statusCode);
     }
