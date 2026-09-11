@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PriInfo>
+	<ResourceMap name="Application" version="1.0" primary="true">
+		<Qualifiers/>
+		<ResourceMapSubtree name="Files">
+			<NamedResource name="App.xbf" uri="ms-resource://Application/Files/App.xbf">
+				<Candidate type="Path">
+					<Value>App.xbf</Value>
+				</Candidate>
+			</NamedResource>
+			<NamedResource name="MainWindow.xbf" uri="ms-resource://Application/Files/MainWindow.xbf">
+				<Candidate type="Path">
+					<Value>MainWindow.xbf</Value>
+				</Candidate>
+			</NamedResource>
+			<NamedResource name="priconfig.xml" uri="ms-resource://Application/Files/priconfig.xml">
+				<Candidate type="Path">
+					<Value>priconfig.xml</Value>
+				</Candidate>
+			</NamedResource>
+			<ResourceMapSubtree name="Views">
+				<NamedResource name="ErrorReportPage.xbf" uri="ms-resource://Application/Files/Views/ErrorReportPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\ErrorReportPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="GameDetailPage.xbf" uri="ms-resource://Application/Files/Views/GameDetailPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\GameDetailPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="LibraryPage.xbf" uri="ms-resource://Application/Files/Views/LibraryPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\LibraryPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="MainPage.xbf" uri="ms-resource://Application/Files/Views/MainPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\MainPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="PatchCenterPage.xbf" uri="ms-resource://Application/Files/Views/PatchCenterPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\PatchCenterPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="SaveManagerPage.xbf" uri="ms-resource://Application/Files/Views/SaveManagerPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\SaveManagerPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="ScrapingProgressPage.xbf" uri="ms-resource://Application/Files/Views/ScrapingProgressPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\ScrapingProgressPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+				<NamedResource name="SettingsPage.xbf" uri="ms-resource://Application/Files/Views/SettingsPage.xbf">
+					<Candidate type="Path">
+						<Value>Views\SettingsPage.xbf</Value>
+					</Candidate>
+				</NamedResource>
+			</ResourceMapSubtree>
+		</ResourceMapSubtree>
+	</ResourceMap>
+</PriInfo>
