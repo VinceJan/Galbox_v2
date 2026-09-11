@@ -10,11 +10,180 @@
     <UseWinUI>true</UseWinUI>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- Disable MRT Core tooling to avoid MSBuild task error when UWP tools are not installed -->
+    <!--
+      The official MRT Core tooling (GenerateProjectPriFile) needs
+      Microsoft.Build.Packaging.Pri.Tasks.dll, which ships with the Visual Studio UWP/Appx
+      workload. That workload is not installed on this machine: turning this on fails with
+      MSB4062 ("could not load Microsoft.Build.Packaging.Pri.Tasks.dll").
+      The target below (GenerateAppResourcePriFile) replaces it by driving the standalone
+      MakePri.exe from the Microsoft.Windows.SDK.BuildTools package, which IS available.
+    -->
     <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
     <!-- Disable auto-generated Main to use custom Program.cs with Bootstrap initialization -->
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
+
+  <!--
+    Self-contained publishing and the Windows App SDK bootstrapper are mutually exclusive: the
+    bootstrapper locates and loads the *framework package* even though the runtime is already
+    shipped next to the executable. Program.cs compiles the bootstrap call out entirely when this
+    constant is present. (The same constant name is also emitted by Microsoft.WindowsAppSDK's own
+    SelfContained.targets, so the two definitions simply agree.)
+  -->
+  <PropertyGroup Condition="'$(WindowsAppSDKSelfContained)' == 'true'">
+    <DefineConstants>$(DefineConstants);WINDOWSAPPSDK_SELFCONTAINED</DefineConstants>
+  </PropertyGroup>
+
+  <!--
+    Unpackaged WinUI 3 resource (PRI) generation
+
+    WHY THIS EXISTS
+    WinUI 3 resolves its own framework resources - starting with
+    "ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml", which is requested during
+    Application.Start - through the *application's primary resource map*. For an unpackaged app
+    that map is the app's own resources.pri, and it must contain a MERGED copy of the framework
+    PRI maps (Microsoft.UI.pri, Microsoft.UI.Xaml.Controls.pri). Lookup of a resource that only
+    exists in the neutral framework package fails for an unpackaged process (MRT reports
+    0x80073D54 "process has no package identity" and then 0x80070002 file-not-found).
+
+    Without resources.pri the failure surfaces as:
+
+        COMException: Cannot locate resource from
+        'ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml'
+        thrown from Application.Start -> 0xC000027B (STATUS_STOWED_EXCEPTION) inside
+        Microsoft.UI.Xaml.dll, i.e. the process dies before OnLaunched ever runs.
+
+    NOTE: this is NOT a publish-only or Release-only problem. Any configuration that produces an
+    output folder (dotnet build included) is affected; it only became visible when the first
+    self-contained output was launched.
+  -->
+  <PropertyGroup>
+    <!-- MakePri.exe: prefer the path the Windows App SDK resolved (Microsoft.Windows.SDK.BuildTools). -->
+    <MakePriExePath Condition="'$(MakePriExePath)' == ''">$(MakePriExeFullPath)</MakePriExePath>
+    <MakePriExePath Condition="'$(MakePriExePath)' == '' and Exists('$(WindowsSDKBuildToolsBinVersionedArchFolder)\makepri.exe')">$(WindowsSDKBuildToolsBinVersionedArchFolder)\makepri.exe</MakePriExePath>
+
+    <!-- Default qualifier language for the generated index. The app ships no localised resources
+         of its own, so this only labels the index default and does not affect the framework maps. -->
+    <AppPriDefaultLanguage Condition="'$(AppPriDefaultLanguage)' == ''">en-US</AppPriDefaultLanguage>
+  </PropertyGroup>
+
+  <!-- Last-resort fallback: the installed Windows SDK itself. Glob expansion is ascending, so the
+       last match (highest SDK version) wins. -->
+  <ItemGroup>
+    <_MakePriSdkCandidate Include="$(MSBuildProgramFiles32)\Windows Kits\10\bin\*\x64\makepri.exe" Condition="'$(MakePriExePath)' == ''" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(MakePriExePath)' == ''">
+    <MakePriExePath>@(_MakePriSdkCandidate)</MakePriExePath>
+  </PropertyGroup>
+
+  <!--
+    Paths depend on IntermediateOutputPath/OutDir, which the SDK assigns during its own imports -
+    i.e. AFTER this project body. Resolving them here at evaluation time yields empty strings, so
+    they are computed in a target that everything else depends on.
+  -->
+  <Target Name="_ResolveAppPriPaths">
+    <PropertyGroup>
+      <_AppPriIntermediateDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)','$(IntermediateOutputPath)'))</_AppPriIntermediateDir>
+      <_AppPriIntermediateDir Condition="$([System.IO.Path]::IsPathRooted('$(IntermediateOutputPath)'))">$([MSBuild]::NormalizeDirectory('$(IntermediateOutputPath)'))</_AppPriIntermediateDir>
+      <_AppPriStagingDir>$(_AppPriIntermediateDir)AppPri\</_AppPriStagingDir>
+      <!-- Same path without the trailing separator: avoids the native argv escaping hazard of
+           passing a quoted argument that ends in a backslash. -->
+      <_AppPriStagingDirArg>$(_AppPriIntermediateDir)AppPri</_AppPriStagingDirArg>
+      <_AppPriConfigFile>$(_AppPriIntermediateDir)AppPri.config.xml</_AppPriConfigFile>
+      <AppPriOutputFile>$(OutDir)resources.pri</AppPriOutputFile>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="_EnsureMakePriTool">
+    <Error Condition="'$(MakePriExePath)' == '' or !Exists('$(MakePriExePath)')"
+           Text="MakePri.exe was not found. It ships in the Microsoft.Windows.SDK.BuildTools NuGet package (usually pulled in by Microsoft.WindowsAppSDK) and in the Windows SDK under bin\&lt;version&gt;\x64\. Install either, or set MakePriExePath manually." />
+    <Message Importance="normal" Text="MakePri tool: $(MakePriExePath)" />
+    <Message Importance="normal" Text="App PRI output: $(AppPriOutputFile)" />
+  </Target>
+
+  <!--
+    Collects what has to go into the app's index:
+      * every .xbf the XAML compiler produced for this project (its own pages/windows),
+        excluding the framework asset folder that the Windows App SDK payload drops in OutDir;
+      * every framework .pri sitting next to the output - these are MERGED into the app index by
+        the "type=PRI" indexer, which is what makes the Microsoft.UI.Xaml resource map resolvable
+        from the app.
+  -->
+  <Target Name="_CollectAppPriInputs">
+    <ItemGroup>
+      <_AppPriXbf Include="$(OutDir)**\*.xbf" Exclude="$(OutDir)Microsoft.UI.Xaml\**\*.xbf;$(OutDir)publish\**\*.xbf;$(PublishDir)**\*.xbf" />
+      <_AppPriFrameworkPri Include="$(OutDir)*.pri" Exclude="$(OutDir)resources.pri" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="GenerateAppResourcePriFile"
+          AfterTargets="CopyFilesToOutputDirectory"
+          DependsOnTargets="_EnsureMakePriTool;_ResolveAppPriPaths;_CollectAppPriInputs"
+          Inputs="@(_AppPriXbf);@(_AppPriFrameworkPri)"
+          Outputs="$(AppPriOutputFile)">
+
+    <!-- Stage in a clean folder so that only app-owned resources and the framework PRIs are
+         indexed. Indexing the whole output folder would also pull in the ~470 runtime binaries
+         and every localisation satellite. -->
+    <RemoveDir Directories="$(_AppPriStagingDir)" />
+    <MakeDir Directories="$(_AppPriStagingDir)" />
+    <Copy SourceFiles="@(_AppPriXbf)"
+          DestinationFiles="@(_AppPriXbf->'$(_AppPriStagingDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(_AppPriFrameworkPri)"
+          DestinationFiles="@(_AppPriFrameworkPri->'$(_AppPriStagingDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false" />
+
+    <Exec Command="&quot;$(MakePriExePath)&quot; createconfig /cf &quot;$(_AppPriConfigFile)&quot; /dq $(AppPriDefaultLanguage) /pv 10.0.0 /o"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          StandardOutputImportance="low" />
+    <Exec Command="&quot;$(MakePriExePath)&quot; new /pr &quot;$(_AppPriStagingDirArg)&quot; /cf &quot;$(_AppPriConfigFile)&quot; /of &quot;$(AppPriOutputFile)&quot; /o"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          StandardOutputImportance="low" />
+    <Error Condition="!Exists('$(AppPriOutputFile)')" Text="MakePri did not produce $(AppPriOutputFile)." />
+    <Message Importance="normal" Text="Generated $(AppPriOutputFile) from @(_AppPriXbf->Count()) compiled XAML file(s) merged with @(_AppPriFrameworkPri->Count()) framework PRI file(s)." />
+  </Target>
+
+  <!--
+    dotnet publish copies the assembly and the declared content/None items, but not files an
+    intermediate target drops straight into OutDir: the loose .xbf produced by the XAML compiler,
+    nor the resources.pri generated above. Without them the published app is missing its compiled
+    XAML and its whole resource map. Carry both over explicitly.
+  -->
+  <Target Name="_IncludeLooseAppResourcesInPublish"
+          AfterTargets="Publish"
+          DependsOnTargets="GenerateAppResourcePriFile">
+    <ItemGroup>
+      <_LooseAppResourceToPublish Include="$(OutDir)**\*.xbf" Exclude="$(OutDir)publish\**\*.xbf;$(PublishDir)**\*.xbf" />
+      <_LooseAppResourceToPublish Include="$(OutDir)resources.pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LooseAppResourceToPublish)"
+          DestinationFiles="@(_LooseAppResourceToPublish->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="normal" Text="Published @(_LooseAppResourceToPublish->Count()) loose app resource file(s) (.xbf + resources.pri) to $(PublishDir)." />
+  </Target>
+
+  <!--
+    Size optimisation: the self-contained payload extracted from
+    Microsoft.WindowsAppRuntime.1.6.msix contains ~95 localisation satellite folders holding only
+    .mui files for Microsoft.ui.xaml.dll and Microsoft.UI.Xaml.Phone.dll (~8.5 MB in total).
+    Windows falls back to the neutral (English) messages embedded in the DLLs when a satellite is
+    absent, so only the languages this application's audience actually uses are shipped.
+    Set GalboxTrimUnusedFrameworkLocales=false to keep all of them.
+  -->
+  <PropertyGroup>
+    <GalboxTrimUnusedFrameworkLocales Condition="'$(GalboxTrimUnusedFrameworkLocales)' == ''">true</GalboxTrimUnusedFrameworkLocales>
+  </PropertyGroup>
+
+  <Target Name="_TrimUnusedFrameworkLocales"
+          BeforeTargets="AddMicrosoftWindowsAppSDKPayloadFiles"
+          Condition="'$(WindowsAppSDKSelfContained)' == 'true' and '$(GalboxTrimUnusedFrameworkLocales)' == 'true'">
+    <ItemGroup>
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\**\*.mui"
+                                           Exclude="$(MicrosoftWindowsAppSDKMsixContent)\en-us\**\*.mui;$(MicrosoftWindowsAppSDKMsixContent)\en-GB\**\*.mui;$(MicrosoftWindowsAppSDKMsixContent)\zh-CN\**\*.mui;$(MicrosoftWindowsAppSDKMsixContent)\zh-TW\**\*.mui;$(MicrosoftWindowsAppSDKMsixContent)\zh-Hans\**\*.mui;$(MicrosoftWindowsAppSDKMsixContent)\zh-Hant\**\*.mui" />
+    </ItemGroup>
+    <Message Importance="low" Text="Trimming @(MicrosoftWindowsAppSDKFilesExcluded->Count()) unused framework locale satellite file(s)." />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />

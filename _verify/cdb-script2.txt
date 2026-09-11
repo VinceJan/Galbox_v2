@@ -1,0 +1,3 @@
+.loadby sos coreclr
+sxe -c ".echo ====CLR-FIRSTCHANCE====; kb; !clrstack -a; .echo ====PE====; !pe; q" e0434352
+g

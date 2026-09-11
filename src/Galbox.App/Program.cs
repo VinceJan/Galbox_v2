@@ -13,11 +13,39 @@ public static class Program
     [System.STAThreadAttribute]
     static int Main(string[] args)
     {
-        // Initialize Windows App SDK Bootstrap
-        // For Windows App SDK 1.6, use version 0x00010006
+        // TEMPORARY DIAGNOSTIC (verification worktree only): dump every first-chance managed
+        // exception with its stack to %LocalAppData%\Galbox\logs\firstchance.log. WinUI reports
+        // native failures as stowed exceptions (0xC000027B) with no managed stack, so this is the
+        // only way to see which managed call site is actually failing.
+        if (Environment.GetEnvironmentVariable("GALBOX_FIRSTCHANCE_TRACE") == "1")
+        {
+            var tracePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Galbox", "logs", "firstchance.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(tracePath)!);
+            AppDomain.CurrentDomain.FirstChanceException += (_, e) =>
+            {
+                try
+                {
+                    File.AppendAllText(tracePath,
+                        $"{DateTime.Now:HH:mm:ss.fff} {e.Exception.GetType().FullName}: {e.Exception.Message}\n{e.Exception.StackTrace}\n\n");
+                }
+                catch { }
+            };
+        }
+
+        // Windows App SDK bootstrap.
+        //
+        // Framework-dependent builds rely on the bootstrapper to locate the installed
+        // Windows App SDK framework package. A SELF-CONTAINED build ships the runtime next to
+        // the executable, and calling the bootstrapper there pulls the framework package in
+        // as well, mixing two runtime versions - observed as a native crash (0xC000027B) inside
+        // Microsoft.UI.Xaml.dll. WINDOWSAPPSDK_SELFCONTAINED is defined by the csproj when
+        // WindowsAppSDKSelfContained=true, so the bootstrapper is compiled out entirely.
+#if !WINDOWSAPPSDK_SELFCONTAINED
         try
         {
-            // Use the simplest Bootstrap initialization
+            // For Windows App SDK 1.6, use version 0x00010006
             Bootstrap.Initialize(0x00010006);
             System.Diagnostics.Debug.WriteLine("Bootstrap initialized successfully");
         }
@@ -26,6 +54,7 @@ public static class Program
             System.Diagnostics.Debug.WriteLine($"Bootstrap initialization failed: {ex.Message}");
             // Continue anyway - might work with installed runtime
         }
+#endif
 
         try
         {
