@@ -130,7 +130,15 @@ internal static class Program
             // PatchCenterViewModel for the thread-affinity half and PatchCenterPage.xaml for the
             // Flyout half.
             // the navigation menu is switched back to back.
-            new A50RapidNavigationSurvivalCheck()
+            new A50RapidNavigationSurvivalCheck(),
+
+            // --- Full chain (A80+; A68-A79 are reserved for other work lines) --------------
+            // Every check above measures ONE feature. This one measures the product: the whole
+            // journey over the real game, each step consuming the artifact the previous step
+            // produced. It is the only check that can answer "can a user actually do this".
+            // It is appended last on purpose: A80.1 removes A0's seeded library row for the
+            // reference install path, so every consumer of that fixture must have run already.
+            new A80FullChainCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
