@@ -57,7 +57,12 @@ internal static class Program
             new A6MetadataFieldsCheck(),
             new A7UpstreamContractCheck(),
             new A8NavigationPageCheck(),
-            new A9StartupWithCacheCheck()
+            new A9StartupWithCacheCheck(),
+
+            // --- Patch centre wiring (A30+; A10-A29 are reserved for other work lines) -----
+            new A30PatchCenterWiringCheck(),
+            new A31PatchInstallRoundTripCheck(),
+            new A32PatchRejectionVisibleCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
