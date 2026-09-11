@@ -1,5 +1,7 @@
 using Galbox.App.Services;
+using Galbox.Core;
 using Galbox.Core.Api;
+using Galbox.Core.Patches;
 using Galbox.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +43,12 @@ public static class AcceptanceContainer
 
     /// <summary>Absolute path of the isolated acceptance database.</summary>
     public static string DatabasePath { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Root of the acceptance-time patch backup store and extraction sandbox
+    /// (<c>%TEMP%\Galbox\acceptance-patchdata</c>). Never the user's real Galbox folder.
+    /// </summary>
+    public static string PatchDataRoot { get; private set; } = string.Empty;
 
     /// <summary>
     /// Builds the service provider. <paramref name="logSink"/> receives every log record
@@ -144,6 +152,20 @@ public static class AcceptanceContainer
         services.AddSingleton<ISaveManagementService, SaveManagementService>();
         services.AddSingleton<IProcessMonitorService, ProcessMonitorService>();
         services.AddSingleton<IAutoScrapingService, AutoScrapingService>();
+
+        // --- Local patch installer -----------------------------------------------------
+        // Same registrations as the shipping app (App.xaml.cs), with ONE deliberate deviation that
+        // mirrors the database-path deviation above: the backup store and the extraction sandbox are
+        // moved under %TEMP% so an acceptance run can never write into the user's real
+        // %LocalAppData%\Galbox\patchbak. The option values cannot affect whether the container can
+        // construct the engine, which is what A30 asserts.
+        PatchDataRoot = Path.Combine(Path.GetTempPath(), "Galbox", "acceptance-patchdata");
+        services.AddGalboxPatches(new PatchInstallerOptions
+        {
+            BackupRoot = Path.Combine(PatchDataRoot, "patchbak"),
+            SandboxRoot = Path.Combine(PatchDataRoot, "patchsink")
+        });
+        services.AddSingleton<ILocalPatchService, LocalPatchService>();
 
         services.AddSingleton<IBangumiAuthService>(sp =>
         {
