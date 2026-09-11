@@ -300,12 +300,12 @@ public class GameScrapingService : IGameScrapingService
                     return await GetVndbDetailsAsync(sourceId, cancellationToken).ConfigureAwait(false);
 
                 case ScraperSource.Ymgal:
-                    // Stub - return null
-                    return null;
+                    // ymgal builds its own request interval into YmgalApi, and enforces it on the
+                    // token request too, so no extra rate limiter is applied here.
+                    return await GetYmgalDetailsAsync(sourceId, cancellationToken).ConfigureAwait(false);
 
                 case ScraperSource.Cngal:
-                    // Stub - return null
-                    return null;
+                    return await GetCngalDetailsAsync(sourceId, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (HttpRequestException)
@@ -630,6 +630,201 @@ public class GameScrapingService : IGameScrapingService
         }
 
         return result;
+    }
+
+    private async Task<GameMetadata?> GetYmgalDetailsAsync(
+        string gameId,
+        CancellationToken cancellationToken)
+    {
+        var detail = await _ymgalApi.GetGameAsync(gameId, cancellationToken).ConfigureAwait(false);
+        if (detail == null)
+        {
+            // ymgal reports why it could not answer through LastError; log it so a detail lookup
+            // that failed for a reason (no credentials, rate limit, bad id) is not mistaken for
+            // "this archive has no extra data".
+            if (!string.IsNullOrEmpty(_ymgalApi.LastError))
+            {
+                _logger?.LogWarning("ymgal detail unavailable for {GameId}: {Error}", gameId, _ymgalApi.LastError);
+            }
+
+            return null;
+        }
+
+        var metadata = new GameMetadata
+        {
+            SourceId = detail.Id,
+            Source = ScraperSource.Ymgal,
+            TitleCn = detail.TitleCn,
+            TitleOriginal = detail.Title,
+            Description = detail.Description,
+            CoverImageUrl = UpgradeToHttps(detail.CoverUrl),
+            ReleaseDate = ParseSourceDate(detail.ReleaseDate),
+            Developer = detail.Developer
+        };
+
+        // The search hit carries the developer name (orgName); the detail object only carries the
+        // org id, so keep whichever one is present.
+        if (string.IsNullOrWhiteSpace(metadata.Developer) && !string.IsNullOrWhiteSpace(detail.DeveloperId))
+        {
+            metadata.ExtendedData["DeveloperId"] = detail.DeveloperId;
+        }
+
+        foreach (var title in detail.GetAllTitles())
+        {
+            if (!metadata.Titles.Contains(title))
+            {
+                metadata.Titles.Add(title);
+            }
+        }
+
+        foreach (var alias in detail.Aliases.Where(a => !string.IsNullOrWhiteSpace(a)))
+        {
+            if (!metadata.Titles.Contains(alias))
+            {
+                metadata.Titles.Add(alias);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(detail.ChineseReleaseName))
+        {
+            metadata.ExtendedData["ChineseRelease"] = detail.ChineseReleaseName!;
+        }
+
+        if (detail.Staff.Count > 0)
+        {
+            metadata.ExtendedData["Staff"] = string.Join(" / ", detail.Staff);
+        }
+
+        if (detail.Websites.Count > 0)
+        {
+            metadata.ExtendedData["Websites"] = string.Join(" | ", detail.Websites);
+        }
+
+        metadata.Characters = detail.Characters.Select(c => new CharacterInfo
+        {
+            // ymgal knows both names; NameCn only when ymgal actually recorded a Chinese one.
+            Name = string.IsNullOrWhiteSpace(c.NameOriginal) ? c.Name : c.NameOriginal!,
+            NameCn = string.IsNullOrWhiteSpace(c.NameOriginal) ? null : c.Name,
+            ImageUrl = UpgradeToHttps(c.ImageUrl)
+        }).ToList();
+
+        return metadata;
+    }
+
+    private async Task<GameMetadata?> GetCngalDetailsAsync(
+        string gameId,
+        CancellationToken cancellationToken)
+    {
+        var detail = await _cngalApi.GetGameAsync(gameId, cancellationToken).ConfigureAwait(false);
+        if (detail == null)
+        {
+            if (!string.IsNullOrEmpty(_cngalApi.LastError))
+            {
+                _logger?.LogWarning("cngal detail unavailable for {GameId}: {Error}", gameId, _cngalApi.LastError);
+            }
+
+            return null;
+        }
+
+        var metadata = new GameMetadata
+        {
+            SourceId = detail.Id,
+            Source = ScraperSource.Cngal,
+            TitleCn = detail.TitleCn,
+            TitleOriginal = detail.Title,
+            Description = detail.Description,
+            CoverImageUrl = UpgradeToHttps(detail.CoverUrl),
+            ReleaseDate = ParseSourceDate(detail.ReleaseDate),
+            Developer = detail.Developer,
+            Tags = detail.Tags.ToList()
+        };
+
+        foreach (var title in detail.GetAllTitles())
+        {
+            if (!metadata.Titles.Contains(title))
+            {
+                metadata.Titles.Add(title);
+            }
+        }
+
+        // CnGal stores aliases as one comma separated string ("三色绘恋，Tricolour Lovestory").
+        foreach (var alias in SplitAliases(detail.AnotherName))
+        {
+            if (!metadata.Titles.Contains(alias))
+            {
+                metadata.Titles.Add(alias);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(detail.Engine))
+        {
+            metadata.ExtendedData["Engine"] = detail.Engine!;
+        }
+
+        if (detail.Information.Count > 0)
+        {
+            metadata.ExtendedData["Information"] = string.Join(" | ", detail.Information);
+        }
+
+        if (detail.ReleaseNames.Count > 0)
+        {
+            metadata.ExtendedData["Releases"] = string.Join(" / ", detail.ReleaseNames);
+        }
+
+        metadata.Characters = detail.Characters.Select(c => new CharacterInfo
+        {
+            // CnGal is a Chinese-language database, so its character name is already the Chinese
+            // one; there is no separate original name to fill in.
+            Name = c.Name,
+            NameCn = c.Name,
+            ImageUrl = UpgradeToHttps(c.ImageUrl),
+            Role = c.VoiceActor
+        }).ToList();
+
+        return metadata;
+    }
+
+    /// <summary>
+    /// Splits a CnGal alias list, which uses both the ASCII and the full-width comma.
+    /// </summary>
+    private static IEnumerable<string> SplitAliases(string? anotherName)
+    {
+        if (string.IsNullOrWhiteSpace(anotherName))
+        {
+            return Array.Empty<string>();
+        }
+
+        return anotherName
+            .Split(new[] { ',', '，', '、', ';', '；' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(a => a.Trim())
+            .Where(a => a.Length > 0);
+    }
+
+    /// <summary>
+    /// Parses the <c>yyyy-MM-dd</c> (or <c>yyyy-MM</c> / <c>yyyy</c>) dates the sources return,
+    /// widening a partial date to the start of its period.
+    /// </summary>
+    private static DateTime? ParseSourceDate(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var value = raw.Trim();
+        const System.Globalization.DateTimeStyles styles = System.Globalization.DateTimeStyles.None;
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+
+        if (DateTime.TryParseExact(value, "yyyy-MM-dd", culture, styles, out var exact))
+            return exact;
+
+        if (DateTime.TryParseExact(value, "yyyy-MM", culture, styles, out var monthOnly))
+            return monthOnly;
+
+        if (int.TryParse(value, out var year) && year is > 1900 and < 2200)
+            return new DateTime(year, 1, 1);
+
+        return DateTime.TryParse(value, culture, styles, out var parsed) ? parsed : null;
     }
 
     private async Task<GameMetadata?> GetBangumiDetailsAsync(

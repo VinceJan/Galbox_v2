@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using Galbox.App.Services;
 using Galbox.Core.Api;
 
 namespace Galbox.Acceptance.Checks;
@@ -156,8 +157,50 @@ public sealed class A41CngalSearchCheck : IAcceptanceCheck
             details.Add("  skipped: the search returned no usable id to look up.");
         }
 
-        // --- 4. Verdict -----------------------------------------------------------------
-        var pass = baseAddressConfigured && userAgentConfigured && requestIssued && pathHit && httpOk && searchOk && detailOk;
+        // --- 4. The application-level detail path --------------------------------------
+        details.Add(string.Empty);
+        details.Add("--- [4] GameScrapingService.GetGameDetailsAsync (the path the UI uses) ---");
+
+        GameMetadata? appDetail = null;
+        var appDetailOk = false;
+        if (detailId is not null)
+        {
+            var scraper = context.Get<IGameScrapingService>();
+            try
+            {
+                appDetail = await scraper.GetGameDetailsAsync(detailId, ScraperSource.Cngal, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                details.Add($"  THREW : {ex.GetType().Name}: {ex.Message}");
+            }
+
+            if (appDetail is null)
+            {
+                details.Add("  result               : (null) - the application path returned nothing for an id the API answered");
+            }
+            else
+            {
+                details.Add($"  result               : source={appDetail.Source}, id={appDetail.SourceId}, "
+                          + $"titleOriginal=\"{appDetail.TitleOriginal}\", titleCn=\"{appDetail.TitleCn}\", "
+                          + $"developer=\"{appDetail.Developer}\", "
+                          + $"releaseDate={appDetail.ReleaseDate?.ToString("yyyy-MM-dd") ?? "(null)"}, "
+                          + $"tags={appDetail.Tags.Count}, characters={appDetail.Characters.Count}");
+                details.Add($"  titles               : {string.Join(" | ", appDetail.Titles)}");
+            }
+
+            appDetailOk = appDetail is not null
+                       && appDetail.Source == ScraperSource.Cngal
+                       && appDetail.Titles.Any(t => Contains(t, QueryToken));
+        }
+        else
+        {
+            details.Add("  skipped: the search returned no usable id to look up.");
+        }
+
+        // --- 5. Verdict -----------------------------------------------------------------
+        var pass = baseAddressConfigured && userAgentConfigured && requestIssued && pathHit && httpOk && searchOk && detailOk && appDetailOk;
 
         details.Add(string.Empty);
         details.Add("--- verdict inputs ---");
@@ -166,10 +209,11 @@ public sealed class A41CngalSearchCheck : IAcceptanceCheck
         details.Add($"  HTTP request issued          : {requestIssued} ({exchanges.Count} observed)");
         details.Add($"  documented path requested    : {pathHit} ({ExpectedPathFragment})");
         details.Add($"  search Success + title match : {searchOk} (success={response?.Success}, items={items.Count}, titleMatched={titleMatched}, lastError=\"{api.LastError ?? "(null)"}\")");
-        details.Add($"  detail lookup usable         : {detailOk} (id={detailId ?? "(none)"})");
+        details.Add($"  API detail lookup usable     : {detailOk} (id={detailId ?? "(none)"})");
+        details.Add($"  service detail lookup usable : {appDetailOk}");
 
         var actual = $"baseAddress={baseAddressConfigured}, userAgent={userAgentConfigured}, requests={exchanges.Count}, "
-                   + $"pathHit={pathHit}, searchOk={searchOk}, items={items.Count}, detailOk={detailOk}";
+                   + $"pathHit={pathHit}, searchOk={searchOk}, items={items.Count}, detailOk={detailOk}, appDetailOk={appDetailOk}";
 
         return (pass
                 ? CheckResult.Pass(Id, Title, expected, actual)

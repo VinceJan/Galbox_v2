@@ -73,9 +73,9 @@ catch.
 Exit code **0**. Full log at `E:\tmp\Galbox_meta\after-A40-A42.txt`.
 
 ```
- A40  PASS       1536 ms  ymgal source performs a real search and returns the real game
- A41  PASS       1258 ms  cngal source performs a real search and returns the real game
- A42  PASS      13942 ms  metadata sources distinguish 'not configured' / 'unreachable' / 'no results'
+ A40  PASS       5897 ms  ymgal source performs a real search and returns the real game
+ A41  PASS       2253 ms  cngal source performs a real search and returns the real game
+ A42  PASS      10624 ms  metadata sources distinguish 'not configured' / 'unreachable' / 'no results'
  PASSED : 13
  FAILED : 0
  ERRORS : 0
@@ -85,7 +85,7 @@ Exit code **0**. Full log at `E:\tmp\Galbox_meta\after-A40-A42.txt`.
 
 ```
 # [A40]
-ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=True, items=1, detailOk=True
+ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=True, items=1, detailOk=True, appDetailOk=True
   --- [2] live search through the DI-resolved YmgalApi ---
     credential source    : ymgal's documented public client (ymgal)
     attempt 1/3: 196 ms, requests=1, response=Success=True, Items=1, lastError="(null)"
@@ -96,12 +96,15 @@ ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=
     GetGameAsync("23682") requests : 1
         GET https://www.ymgal.games/open/archive?gid=23682  ->  HTTP 200
     result               : id=23682, title="サノバウィッチ", titleCn="魔女的夜宴", releaseDate="2015-02-27", tags=0, characters=12
-RESULT   : PASS  (1536 ms)
+  --- [4] GameScrapingService.GetGameDetailsAsync (the path the UI uses) ---
+    result               : source=Ymgal, id=23682, titleOriginal="サノバウィッチ", titleCn="魔女的夜宴", releaseDate=2015-02-27, titles=7, characters=12
+    titles               : サノバウィッチ | 魔女的夜宴 | サノバウィッチ Sabbat of the Witch | Son of a Witch: Sabbat of the Witch | Sonova Witch | Sonovawitch | Sabbath of the Witch
+RESULT   : PASS  (5897 ms)
 ```
 
 ```
 # [A41]
-ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=True, items=10, detailOk=True
+ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=True, items=10, detailOk=True, appDetailOk=True
   --- [2] live search through the DI-resolved CngalApi ---
     HTTP requests issued : 1
         GET https://api.cngal.org/api/home/Search?Types=Game&Text=三色绘恋&Page=1  ->  HTTP 200
@@ -110,7 +113,10 @@ ACTUAL   : baseAddress=True, userAgent=True, requests=1, pathHit=True, searchOk=
   --- [3] detail endpoint through the DI-resolved CngalApi ---
         GET https://api.cngal.org/api/entries/GetEntryView/80?renderMarkdown=false  ->  HTTP 200
     result               : id=80, title="三色△绘恋", developer="绘恋制作组", releaseDate="2017-09-21", tags=1, characters=9
-RESULT   : PASS  (1258 ms)
+  --- [4] GameScrapingService.GetGameDetailsAsync (the path the UI uses) ---
+    result               : source=Cngal, id=80, titleOriginal="三色△绘恋", titleCn="三色△绘恋", developer="绘恋制作组", releaseDate=2017-09-21, tags=1, characters=9
+    titles               : 三色△绘恋 | 三色绘恋 | Tricolour Lovestory
+RESULT   : PASS  (2253 ms)
 ```
 
 ```
@@ -153,3 +159,11 @@ itself is not relaxed: a zero-hit answer must still be `Success = true`, 0 items
 
 A second consecutive run after the retry was added produced `PASSED : 13 / FAILED : 0` with no
 retry needed (`E:\tmp\Galbox_meta\after-A40-A42-confirm.txt`).
+
+## 4. How the check set evolved
+
+The baseline run above used the A40/A41/A42 revision committed as `1f17c38`. The final revision
+added one diagnostic line to A40 (which credential source was used) and one further assertion to
+A40/A41 — section `[4]`, which drives `IGameScrapingService.GetGameDetailsAsync`, the application
+path the UI actually calls. Both additions are visible in the `After` output above, and neither
+relaxes anything: `pass` gained a term (`appDetailOk`) rather than losing one.
