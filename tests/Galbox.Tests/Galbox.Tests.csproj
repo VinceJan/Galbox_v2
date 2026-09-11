@@ -1,12 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- Must match src/Galbox.App: a net8.0-windows (no platform version) project cannot
+         reference the Windows App SDK target, and the launch smoke test needs
+         Galbox.App.Services.StartupDiagnostics so the log markers it asserts on are the very
+         same constants the application writes. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RootNamespace>Galbox.Tests</RootNamespace>
+    <!-- Same three switches as tests/Galbox.Acceptance, which already references Galbox.App
+         successfully: without them the transitive Windows App SDK / MRT targets are imported and
+         the auto-initializer tries to bootstrap the SDK inside the test host. -->
+    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +35,13 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The launch smoke test asserts against the application's own diagnostic constants and
+         needs the application to be built before it can run, so this reference is load-bearing
+         rather than decorative. It also transitively brings in Galbox.Core and Galbox.Data. -->
+    <ProjectReference Include="..\..\src\Galbox.App\Galbox.App.csproj" />
   </ItemGroup>
 
 </Project>
