@@ -31,7 +31,7 @@ public class ErrorCheckingService : IErrorCheckingService
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex XpVistaIndicatorPattern = new(
-        @"(xp|vista|windows\s+(xp|vista)|win\s+(xp|vista))",
+        @"\b(?:windows\s+(?:xp|vista|98|95)|win\s?(?:xp|vista|98|95)|xp|vista)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex VideoFilePattern = new(
@@ -93,13 +93,24 @@ public class ErrorCheckingService : IErrorCheckingService
     private readonly IDbContextFactory<GalboxDbContext> _dbContextFactory;
 
     /// <summary>
+    /// The repair implementation behind the "一键修复" button.
+    /// </summary>
+    /// <remarks>
+    /// Injected rather than implemented here so that detection stays a pure read-only operation and
+    /// every repair lives in one auditable place that can report what it changed and how to undo it.
+    /// </remarks>
+    private readonly IGameHealthFixService _fixService;
+
+    /// <summary>
     /// Creates an ErrorCheckingService with injected dependencies.
     /// </summary>
     public ErrorCheckingService(
         IDbContextFactory<GalboxDbContext> dbContextFactory,
+        IGameHealthFixService fixService,
         ILogger<ErrorCheckingService> logger)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+        _fixService = fixService ?? throw new ArgumentNullException(nameof(fixService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -247,14 +258,48 @@ public class ErrorCheckingService : IErrorCheckingService
     /// <summary>
     /// Attempt automatic fix for an error.
     /// </summary>
+    /// <remarks>
+    /// The dispatch is deliberately conservative: a category only reaches a repair when
+    /// <see cref="IGameHealthFixService.CanAutoFix"/> says a repair exists AND the finding itself is
+    /// flagged as auto-fixable. Anything else returns a failure with an explanation, because a
+    /// success that did not happen is worse than an honest refusal - that is precisely the defect the
+    /// product spec records ("8 个诊断项全部标记为不可自动修复").
+    /// </remarks>
     public async Task<AutoFixResult> AttemptAutoFixAsync(GameErrorInfo error, CancellationToken cancellationToken = default)
     {
+        if (error == null)
+        {
+            throw new ArgumentNullException(nameof(error));
+        }
+
+        var categoryLabel = DiagnosisText.CategoryLabel(error.Category);
+
+        if (!_fixService.CanAutoFix(error.Category))
+        {
+            return new AutoFixResult
+            {
+                Success = false,
+                Message = $"「{categoryLabel}」没有自动修复方案。请按“解决步骤”里的说明手动处理，"
+                        + "或点“下载所需组件”打开官方下载页。"
+            };
+        }
+
         if (!error.AutoFixAvailable)
         {
             return new AutoFixResult
             {
                 Success = false,
-                Message = "Auto fix is not available for this error type."
+                Message = $"这一条「{categoryLabel}」当前不满足自动修复的条件（例如中文出现在上层目录）。"
+                        + "请按“解决步骤”里的说明处理。"
+            };
+        }
+
+        if (error.GameId <= 0)
+        {
+            return new AutoFixResult
+            {
+                Success = false,
+                Message = "这条诊断记录没有关联到具体的游戏（GameId 为空），无法自动修复。请先重新检测该游戏。"
             };
         }
 
@@ -262,26 +307,65 @@ public class ErrorCheckingService : IErrorCheckingService
 
         try
         {
-            return error.Category switch
+            var result = error.Category switch
             {
-                ErrorCategory.PermissionIssue => await FixPermissionIssueAsync(error, cancellationToken).ConfigureAwait(false),
-                _ => new AutoFixResult
-                {
-                    Success = false,
-                    Message = "Auto fix implementation not yet available for this error type."
-                }
+                ErrorCategory.ChineseDirectory =>
+                    await _fixService.FixChineseInstallPathAsync(error.GameId, cancellationToken).ConfigureAwait(false),
+
+                ErrorCategory.WindowsCompatibility =>
+                    await _fixService
+                        .ApplyWindowsCompatibilityModeAsync(error.GameId, ResolveCompatibilityMode(error), cancellationToken)
+                        .ConfigureAwait(false),
+
+                _ => GameHealthFixResult.Failure($"「{categoryLabel}」还没有实现自动修复。")
             };
+
+            if (result.Success)
+            {
+                _logger.LogInformation("Auto fix applied for game {GameId}, category {Category}", error.GameId, error.Category);
+            }
+            else
+            {
+                _logger.LogWarning("Auto fix refused for game {GameId}, category {Category}: {Message}",
+                    error.GameId, error.Category, result.Message);
+            }
+
+            return new AutoFixResult
+            {
+                Success = result.Success,
+                Message = result.Message,
+                Details = result.Notes.Count == 0 ? null : string.Join(Environment.NewLine, result.Notes),
+                Fix = result
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Auto fix failed for error {ErrorId}", error.Id);
+            _logger.LogError(ex, "Auto fix failed for game {GameId}, category {Category}", error.GameId, error.Category);
             return new AutoFixResult
             {
                 Success = false,
-                Message = $"Auto fix failed: {ex.Message}",
+                Message = $"自动修复出错：{ex.Message}",
                 Details = ex.ToString()
             };
         }
+    }
+
+    /// <summary>
+    /// Reads the compatibility mode the diagnosis recommended out of the finding's context data,
+    /// falling back to the mode used for XP-era games.
+    /// </summary>
+    private static string ResolveCompatibilityMode(GameErrorInfo error)
+    {
+        if (error.ContextData.TryGetValue("CompatibilityMode", out var value) && value is string text && !string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        return "Windows 7";
     }
 
     /// <summary>
@@ -367,7 +451,20 @@ public class ErrorCheckingService : IErrorCheckingService
             _logger.LogDebug("Found Chinese characters in path for game {GameId}: {Segments}",
                 gameInfo.Id, chineseSegments);
 
-            return GameErrorInfo.CreateChineseDirectoryError(gameInfo.Id, path, chineseSegments);
+            // The one-click repair renames the game folder itself. When the Chinese characters only
+            // appear in an ancestor folder, that repair cannot help, and promising it anyway would put
+            // a button on the screen that cannot do what it says.
+            var (leafWithChinese, ancestorsWithChinese) = GamePathNaming.AnalysePath(path);
+            var canAutoFix = leafWithChinese is not null;
+
+            if (!canAutoFix && ancestorsWithChinese.Count > 0)
+            {
+                _logger.LogDebug(
+                    "Chinese characters are only in ancestor folders for game {GameId}: {Ancestors}",
+                    gameInfo.Id, string.Join(" / ", ancestorsWithChinese));
+            }
+
+            return GameErrorInfo.CreateChineseDirectoryError(gameInfo.Id, path, chineseSegments, canAutoFix);
         }
 
         return null;
@@ -631,11 +728,28 @@ public class ErrorCheckingService : IErrorCheckingService
         var gamePath = gameInfo.InstallPath;
         var gameName = gameInfo.NameOriginal;
 
+        // Never report a compatibility problem for a game that already carries a compatibility layer:
+        // the diagnosis describes something the user still has to do, and after a successful repair
+        // there is nothing left to do. Reporting it again would leave a Critical item in the list
+        // forever, with a repair button that repairs nothing.
+        GameErrorInfo? ReportIfNotAlreadyHandled()
+        {
+            if (_fixService.IsCompatibilityModeApplied(gameInfo.MainExecutable))
+            {
+                _logger.LogDebug(
+                    "Windows compatibility issue for game {GameId} is already handled by a compatibility layer",
+                    gameInfo.Id);
+                return null;
+            }
+
+            return GameErrorInfo.CreateWindowsCompatibilityError(gameInfo.Id, "Windows XP/Vista", "Windows 7");
+        }
+
         // Check game name for XP/Vista indicators
         if (!string.IsNullOrWhiteSpace(gameName) && XpVistaIndicatorPattern.IsMatch(gameName))
         {
             _logger.LogDebug("Found XP/Vista indicator in game name for game {GameId}", gameInfo.Id);
-            return GameErrorInfo.CreateWindowsCompatibilityError(gameInfo.Id, "Windows XP/Vista", "Windows 7");
+            return ReportIfNotAlreadyHandled();
         }
 
         if (string.IsNullOrWhiteSpace(gamePath) || !Directory.Exists(gamePath))
@@ -662,7 +776,7 @@ public class ErrorCheckingService : IErrorCheckingService
                     {
                         _logger.LogDebug("Found XP/Vista indicator in documentation for game {GameId}",
                             gameInfo.Id);
-                        return GameErrorInfo.CreateWindowsCompatibilityError(gameInfo.Id, "Windows XP/Vista", "Windows 7");
+                        return ReportIfNotAlreadyHandled();
                     }
                 }
                 catch (Exception)
@@ -684,7 +798,7 @@ public class ErrorCheckingService : IErrorCheckingService
                         (versionInfo.ProductVersion != null &&
                          XpVistaIndicatorPattern.IsMatch(versionInfo.ProductVersion)))
                     {
-                        return GameErrorInfo.CreateWindowsCompatibilityError(gameInfo.Id, "Windows XP/Vista", "Windows 7");
+                        return ReportIfNotAlreadyHandled();
                     }
                 }
                 catch (Exception)
@@ -989,25 +1103,6 @@ public class ErrorCheckingService : IErrorCheckingService
     private static bool ContainsJapaneseCharacters(string text)
     {
         return JapaneseCharacterPattern.IsMatch(text);
-    }
-
-    /// <summary>
-    /// Fix permission issues by running with elevated privileges.
-    /// </summary>
-    private async Task<AutoFixResult> FixPermissionIssueAsync(GameErrorInfo error, CancellationToken cancellationToken)
-    {
-        await Task.Yield();
-        cancellationToken.ThrowIfCancellationRequested();
-
-        // Note: This cannot actually fix permissions programmatically in most cases
-        // We can provide guidance only
-
-        return new AutoFixResult
-        {
-            Success = false,
-            Message = "Permission issues require manual intervention.",
-            Details = "Move the game folder outside of Program Files, or run the game as administrator each time."
-        };
     }
 
     /// <summary>

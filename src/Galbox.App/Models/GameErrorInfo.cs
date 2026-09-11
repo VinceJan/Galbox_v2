@@ -90,63 +90,62 @@ public class GameErrorInfo
     /// <summary>
     /// Gets the severity display text.
     /// </summary>
-    public string SeverityDisplay => Severity switch
-    {
-        ErrorSeverity.Critical => "Critical",
-        ErrorSeverity.Major => "Major",
-        ErrorSeverity.Minor => "Minor",
-        ErrorSeverity.Info => "Info",
-        _ => "Unknown"
-    };
+    public string SeverityDisplay => DiagnosisText.SeverityLabel(Severity);
 
     /// <summary>
     /// Gets the category display text.
     /// </summary>
-    public string CategoryDisplay => Category switch
-    {
-        ErrorCategory.ChineseDirectory => "Chinese Directory",
-        ErrorCategory.LocaleRequirement => "Locale Requirement",
-        ErrorCategory.DirectXMissing => "DirectX Missing",
-        ErrorCategory.KLiteCodecMissing => "Codec Missing",
-        ErrorCategory.WindowsCompatibility => "Windows Compatibility",
-        ErrorCategory.RuntimeMissing => "Runtime Missing",
-        ErrorCategory.GameDependency => "Game Dependency",
-        ErrorCategory.PermissionIssue => "Permission Issue",
-        ErrorCategory.AntivirusBlocking => "Antivirus Blocking",
-        _ => "Unknown"
-    };
+    public string CategoryDisplay => DiagnosisText.CategoryLabel(Category);
 
     /// <summary>
     /// Gets the solution type display text.
     /// </summary>
-    public string SolutionTypeDisplay => SolutionType switch
-    {
-        SolutionType.AutoFix => "Auto Fix",
-        SolutionType.ManualFix => "Manual Fix",
-        SolutionType.ExternalTool => "External Tool",
-        SolutionType.None => "No Fix Available",
-        _ => "Unknown"
-    };
+    public string SolutionTypeDisplay => DiagnosisText.SolutionTypeLabel(SolutionType);
+
+    /// <summary>
+    /// Gets a one-line Chinese explanation of what the solution level means for the user.
+    /// </summary>
+    public string SolutionTypeDescription => DiagnosisText.SolutionTypeDescription(SolutionType);
 
     /// <summary>
     /// Creates a Chinese directory error.
     /// </summary>
-    public static GameErrorInfo CreateChineseDirectoryError(int gameId, string path, string chineseSegments)
+    /// <param name="gameId">The game the finding belongs to.</param>
+    /// <param name="path">The install path that contains Chinese characters.</param>
+    /// <param name="chineseSegments">The Chinese characters that were found, for the description.</param>
+    /// <param name="canAutoFix">
+    /// False when the Chinese characters sit in a parent folder rather than in the game folder
+    /// itself. Renaming the game folder cannot repair that, and promising a one-click repair in that
+    /// case would be exactly the kind of "button without a door" this project has to stop producing.
+    /// </param>
+    public static GameErrorInfo CreateChineseDirectoryError(
+        int gameId,
+        string path,
+        string chineseSegments,
+        bool canAutoFix = true)
     {
         return new GameErrorInfo
         {
             GameId = gameId,
             Category = ErrorCategory.ChineseDirectory,
             Severity = ErrorSeverity.Major,
-            Title = "Chinese Characters in Path",
-            Description = $"The game path contains Chinese characters: {chineseSegments}. Some Japanese games may fail to run with Chinese paths.",
-            SolutionType = SolutionType.ManualFix,
-            SolutionInstructions = "Rename the folder to use English characters or Pinyin. Example: '游戏' -> 'Game' or 'youxi'",
-            AutoFixAvailable = false,
+            Title = canAutoFix ? "游戏路径包含中文字符" : "游戏所在的上层目录包含中文字符",
+            Description = canAutoFix
+                ? $"游戏路径中含中文字符：{chineseSegments}。部分日文游戏在中文路径下无法运行，或无法读写存档。"
+                : $"游戏路径中含中文字符：{chineseSegments}，但它们出现在游戏目录之外的上层目录里。"
+                  + "重命名游戏目录解决不了这个问题，需要把游戏整个移到纯英文路径。",
+            SolutionType = canAutoFix ? SolutionType.AutoFix : SolutionType.ManualFix,
+            SolutionInstructions = canAutoFix
+                ? "点「一键修复」把游戏目录改成英文或拼音名（例如 游戏 → Game），程序会同时更新库里的安装路径、"
+                  + "主程序路径和备选程序路径。重命名前会自动确认游戏没有在运行，失败会回滚。"
+                : "把游戏移动到纯英文路径（例如 D:\\Games\\），然后在库里重新扫描或修正安装路径。",
+            AutoFixAvailable = canAutoFix,
+            FixAction = canAutoFix ? "RenameInstallPath" : null,
             ContextData = new Dictionary<string, object>
             {
                 ["Path"] = path,
-                ["ChineseSegments"] = chineseSegments
+                ["ChineseSegments"] = chineseSegments,
+                ["ChineseInParentFolder"] = !canAutoFix
             }
         };
     }
@@ -161,10 +160,12 @@ public class GameErrorInfo
             GameId = gameId,
             Category = ErrorCategory.LocaleRequirement,
             Severity = ErrorSeverity.Critical,
-            Title = "Locale/Region Requirement",
-            Description = $"This game requires {requiredLocale} locale to run properly. Running with wrong locale may cause text display issues or crashes.",
+            Title = "需要日文区域设置",
+            Description = $"该游戏需要 {requiredLocale} 区域设置才能正常运行，区域不对会出现文字乱码、字体缺失或启动即崩溃。",
             SolutionType = SolutionType.ExternalTool,
-            SolutionInstructions = "Use Locale Emulator or NTLEA to run the game with the required locale. These tools can temporarily change the system locale for the game process.",
+            SolutionInstructions = "用 Locale Emulator 或 NTLEA 以日文区域启动游戏。这两个工具可以只对单个进程临时改区域，"
+                                + "不影响系统全局设置。Galbox 不代你安装它们：它们需要挂钩进程加载，属于系统级工具，"
+                                + "安装必须由你确认。",
             AutoFixAvailable = false,
             DownloadUrl = "https://github.com/xupefei/Locale-Emulator",
             ToolName = "Locale Emulator",
@@ -178,24 +179,26 @@ public class GameErrorInfo
     /// <summary>
     /// Creates a DirectX missing error.
     /// </summary>
-    public static GameErrorInfo CreateDirectXMissingError(int gameId, string missingDll, string DirectXVersion)
+    public static GameErrorInfo CreateDirectXMissingError(int gameId, string missingDll, string directXVersion)
     {
         return new GameErrorInfo
         {
             GameId = gameId,
             Category = ErrorCategory.DirectXMissing,
             Severity = ErrorSeverity.Major,
-            Title = "DirectX Dependency Missing",
-            Description = $"Missing DirectX file: {missingDll}. This game requires DirectX {DirectXVersion} components.",
+            Title = "缺少 DirectX 组件",
+            Description = $"游戏需要的 {missingDll} 在本机没有找到（游戏要求 DirectX {directXVersion}），"
+                        + "缺少它可能表现为启动失败、黑屏或过场动画不播放。",
             SolutionType = SolutionType.ExternalTool,
-            SolutionInstructions = "Download and install DirectX End-User Runtime from Microsoft. This will install all required DirectX components.",
+            SolutionInstructions = "安装微软官方的 DirectX End-User Runtime，它会一次性补齐 DirectX 9.0c 的全部组件。"
+                                + "Galbox 不代你安装运行时：那是系统级改动，需要你自己确认。",
             AutoFixAvailable = false,
-            DownloadUrl = "https://www.microsoft.com/en-us/download/details.aspx?id=35",
+            DownloadUrl = "https://www.microsoft.com/download/details.aspx?id=35",
             ToolName = "DirectX End-User Runtime",
             ContextData = new Dictionary<string, object>
             {
                 ["MissingDll"] = missingDll,
-                ["DirectXVersion"] = DirectXVersion
+                ["DirectXVersion"] = directXVersion
             }
         };
     }
@@ -210,10 +213,11 @@ public class GameErrorInfo
             GameId = gameId,
             Category = ErrorCategory.KLiteCodecMissing,
             Severity = ErrorSeverity.Minor,
-            Title = "Video Codec Missing",
-            Description = "This game contains video files that may require additional codecs for playback. Without proper codecs, in-game videos may not play.",
+            Title = "缺少视频解码器",
+            Description = "游戏目录里有视频文件，但本机没有检测到常见的解码器包。游戏本体可以玩，过场动画可能黑屏或没有声音。",
             SolutionType = SolutionType.ExternalTool,
-            SolutionInstructions = "Download and install K-Lite Codec Pack (Basic or Standard version recommended). This provides codecs for various video formats.",
+            SolutionInstructions = "安装 K-Lite Codec Pack（推荐 Basic 或 Standard 版）即可播放游戏内的视频。"
+                                + "这是可选的：如果不介意过场动画，可以不管这一项。",
             AutoFixAvailable = false,
             DownloadUrl = "https://codecguide.com/download_kl.htm",
             ToolName = "K-Lite Codec Pack",
@@ -231,11 +235,14 @@ public class GameErrorInfo
             GameId = gameId,
             Category = ErrorCategory.WindowsCompatibility,
             Severity = ErrorSeverity.Critical,
-            Title = "Windows Compatibility Issue",
-            Description = $"This game was designed for {originalOs} and may not run correctly on current Windows version.",
-            SolutionType = SolutionType.ManualFix,
-            SolutionInstructions = $"Try running in compatibility mode: Right-click executable > Properties > Compatibility > Run this program in compatibility mode for {compatibilityMode}. For games requiring XP/Vista, consider using a virtual machine.",
-            AutoFixAvailable = false,
+            Title = "需要 Windows 兼容模式",
+            Description = $"该游戏面向 {originalOs} 时代，在当前 Windows 上可能启动失败、花屏或无法切换全屏。",
+            SolutionType = SolutionType.AutoFix,
+            SolutionInstructions = $"点「一键修复」为游戏主程序写入 Windows 兼容模式（{compatibilityMode}）。"
+                                + "设置只写入当前用户（HKCU），随时可以点「撤销」还原；如果兼容模式仍然无效，"
+                                + "XP/Vista 时代的游戏建议放进虚拟机运行。",
+            AutoFixAvailable = true,
+            FixAction = "ApplyWindowsCompatibilityMode",
             ContextData = new Dictionary<string, object>
             {
                 ["OriginalOS"] = originalOs,
@@ -256,8 +263,8 @@ public class GameErrorInfo
             GameId = gameId,
             Category = ErrorCategory.RuntimeMissing,
             Severity = ErrorSeverity.Critical,
-            Title = "Runtime Dependency Missing",
-            Description = $"Missing {runtimeName} {version}. This game requires this runtime to execute.",
+            Title = $"缺少运行库 {runtimeName}",
+            Description = $"游戏依赖 {runtimeName} {version}，本机没有检测到它。缺少运行库时游戏通常在启动瞬间报错退出。",
             SolutionType = SolutionType.ExternalTool,
             SolutionInstructions = instructions,
             AutoFixAvailable = false,
@@ -279,16 +286,19 @@ public class GameErrorInfo
         return runtimeName.ToLowerInvariant() switch
         {
             ".net framework" or "netframework" =>
-                ("https://dotnet.microsoft.com/en-us/download/dotnet-framework",
-                 "Download and install the required .NET Framework version from Microsoft."),
-            "visual c++" or "vc++" or "msvc" =>
-                ("https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist",
-                 "Download and install the Visual C++ Redistributable from Microsoft."),
-            "java" or "jre" or "jdk" =>
+                ("https://dotnet.microsoft.com/download/dotnet-framework",
+                 $"从微软官网下载并安装 .NET Framework {version}。Windows 10/11 自带 4.8，缺失通常是更老的版本。"),
+
+            "visual c++" or "vc++" or "msvc" or "visual c++ 2015-2022" =>
+                ("https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist",
+                 $"从微软官网下载并安装 Visual C++ Redistributable（x86 与 x64 都装一遍最稳妥），对应版本 {version}。"),
+
+            "java" or "jre" or "jdk" or "java runtime" =>
                 ("https://adoptium.net/",
-                 "Download and install Java Runtime Environment. Adoptium provides free LTS versions."),
+                 "下载并安装 Java 运行时（Adoptium Temurin 的免费 LTS 版本即可）。"),
+
             _ =>
-                ("", "Search online for the required runtime and install it.")
+                ("", $"本机缺少 {runtimeName} {version}，请在搜索引擎中查找该运行库的官方安装包后安装。")
         };
     }
 
@@ -302,10 +312,12 @@ public class GameErrorInfo
             GameId = gameId,
             Category = ErrorCategory.AntivirusBlocking,
             Severity = ErrorSeverity.Info,
-            Title = "Antivirus May Block Game",
-            Description = $"Some antivirus software may incorrectly flag game executables as threats. This is common with Japanese games due to unusual packing methods.",
+            Title = "可能被安全软件拦截",
+            Description = $"日文游戏常见的加壳/自解压打包方式容易被杀毒软件误报，{executableName} 有可能被隔离或删除。"
+                        + "如果游戏启动后立刻闪退、或者文件莫名消失，先排查这一类问题。",
             SolutionType = SolutionType.ManualFix,
-            SolutionInstructions = "Add the game folder to your antivirus exclusion list. Right-click antivirus icon > Settings > Exclusions > Add folder.",
+            SolutionInstructions = "把游戏目录加入杀毒软件的排除列表（Windows 安全中心：病毒和威胁防护 → 管理设置 → 排除项 → 添加文件夹）。"
+                                + "Galbox 不会代你修改安全软件设置，那需要你自己判断风险。",
             AutoFixAvailable = false,
             ContextData = new Dictionary<string, object>
             {
@@ -324,10 +336,12 @@ public class GameErrorInfo
             GameId = gameId,
             Category = ErrorCategory.PermissionIssue,
             Severity = ErrorSeverity.Major,
-            Title = "File Permission Issue",
-            Description = $"The game may have permission issues accessing files at: {path}. This can prevent the game from saving or reading configuration.",
+            Title = "游戏目录权限不足",
+            Description = $"游戏目录 {path} 可能没有写入权限，游戏可能无法保存设置、无法存档，或因读取配置失败而启动异常。",
             SolutionType = SolutionType.ManualFix,
-            SolutionInstructions = "Run the game as administrator, or move the game to a folder with proper permissions (e.g., outside Program Files).",
+            SolutionInstructions = "两种处理方式：① 右键游戏主程序 →「以管理员身份运行」；"
+                                + "② 把游戏移到 Program Files 之外（例如 D:\\Games\\）后重新扫描。"
+                                + "Galbox 不代你移动游戏目录、也不会改 ACL：那属于系统级改动，必须由你确认。",
             AutoFixAvailable = false,
             ContextData = new Dictionary<string, object>
             {

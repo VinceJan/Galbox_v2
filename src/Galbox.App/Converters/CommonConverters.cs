@@ -918,3 +918,73 @@ public class DefaultScrapingSourceConverter : IValueConverter
         return "Bangumi";
     }
 }
+
+/// <summary>
+/// Shows the Chinese name of a severity. Accepts either an <see cref="Galbox.App.Services.ErrorSeverity"/>
+/// (a freshly detected finding) or its stored name (a row loaded from the ErrorRecords table).
+/// </summary>
+/// <remarks>
+/// The mapping itself lives in <see cref="Galbox.App.Models.DiagnosisText"/> so that the model, this
+/// converter and the acceptance check all read the same table.
+/// </remarks>
+public class ErrorSeverityDisplayConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        return value switch
+        {
+            Galbox.App.Services.ErrorSeverity severity => Galbox.App.Models.DiagnosisText.SeverityLabel(severity),
+            string stored => Galbox.App.Models.DiagnosisText.StoredSeverityLabel(stored),
+            _ => string.Empty
+        };
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Shows the Chinese name of a diagnosis category. Accepts either an
+/// <see cref="Galbox.App.Services.ErrorCategory"/> or its stored name.
+/// </summary>
+public class ErrorCategoryDisplayConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        return value switch
+        {
+            Galbox.App.Services.ErrorCategory category => Galbox.App.Models.DiagnosisText.CategoryLabel(category),
+            string stored => Galbox.App.Models.DiagnosisText.StoredCategoryLabel(stored),
+            _ => string.Empty
+        };
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Shows the Chinese name of a solution level. Accepts either a
+/// <see cref="Galbox.App.Services.SolutionType"/> or its stored name.
+/// </summary>
+public class ErrorSolutionTypeDisplayConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        return value switch
+        {
+            Galbox.App.Services.SolutionType solutionType => Galbox.App.Models.DiagnosisText.SolutionTypeLabel(solutionType),
+            string stored => Galbox.App.Models.DiagnosisText.StoredSolutionTypeLabel(stored),
+            _ => string.Empty
+        };
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}

@@ -120,4 +120,29 @@ public sealed partial class ErrorReportPage : Page
             ViewModel.AttemptFixCommand.Execute(error);
         }
     }
+
+    /// <summary>
+    /// Undoes one applied repair. Offered right next to the report of that repair, because both
+    /// repairs change something outside the library (a folder name, a registry value).
+    /// </summary>
+    private void OnUndoFixClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: Galbox.App.Models.GameHealthFixResult fix })
+        {
+            ViewModel.UndoFixCommand.Execute(fix);
+        }
+        else
+        {
+            ViewModel.UndoFixCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// Repairs every finding of the selected game that has a real repair
+    /// ("一键修复所有可自动修复的问题").
+    /// </summary>
+    private void OnFixAllClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.FixAllAutoFixableCommand.Execute(null);
+    }
 }

@@ -193,4 +193,15 @@ internal static class ReflectionBridge
 
     /// <summary>Reads a public integer property (0 when absent).</summary>
     internal static int Int(object? instance, string name) => Property(instance, name) as int? ?? 0;
+
+    /// <summary>Reads a public string collection property (empty when absent).</summary>
+    internal static List<string> Strings(object? instance, string name)
+    {
+        if (Property(instance, name) is System.Collections.IEnumerable items)
+        {
+            return items.OfType<string>().ToList();
+        }
+
+        return new List<string>();
+    }
 }

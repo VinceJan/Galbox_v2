@@ -298,6 +298,16 @@ public static class AcceptanceContainer
             "Galbox.Core.Community.IReservedFeatureCatalog",
             "Galbox.Core.Community.ReservedFeatureCatalog");
 
+        // Health repairs. The undo journal gets its own directory for the same reason the images do:
+        // a run must not read or write the journal of the real application, or an acceptance undo
+        // could reverse a repair the user performed in their own library.
+        var isolatedFixJournal = Path.Combine(dbDirectory, $"health-fixes-{Environment.ProcessId}");
+        RegisterIfPresent(
+            services,
+            "Galbox.App.Services.IGameHealthFixService",
+            "Galbox.App.Services.GameHealthFixService",
+            isolatedFixJournal);
+
         // Same validation switches as the shipping app. Without them the harness could happily
         // resolve a graph that the application itself refuses to start with - which is exactly
         // how five captive-dependency defects stayed hidden. A failure here is reported by the

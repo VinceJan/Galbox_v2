@@ -13,12 +13,18 @@
         <!-- Register Converters -->
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
         <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
         <converters:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
         <converters:EmptyStringToBooleanConverter x:Key="EmptyStringToBooleanConverter"/>
         <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter"/>
+        <!-- Chinese labels for the enum names stored in the ErrorRecords table. The mapping itself
+             lives in Models\DiagnosisText.cs, so the model and this page cannot drift apart. -->
+        <converters:ErrorSeverityDisplayConverter x:Key="ErrorSeverityDisplayConverter"/>
+        <converters:ErrorCategoryDisplayConverter x:Key="ErrorCategoryDisplayConverter"/>
+        <converters:ErrorSolutionTypeDisplayConverter x:Key="ErrorSolutionTypeDisplayConverter"/>
 
         <Style x:Key="ErrorCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
             <Setter Property="Margin" Value="0,0,0,12"/>
@@ -142,9 +148,14 @@
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Severity}" FontWeight="SemiBold" HorizontalAlignment="Right"/>
-                                            <TextBlock Text="{Binding Category}" FontSize="{StaticResource FontSizeSmall}"
+                                            <TextBlock Text="{Binding Severity, Converter={StaticResource ErrorSeverityDisplayConverter}}"
+                                                       FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding Category, Converter={StaticResource ErrorCategoryDisplayConverter}}"
+                                                       FontSize="{StaticResource FontSizeSmall}"
                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding SolutionType, Converter={StaticResource ErrorSolutionTypeDisplayConverter}}"
+                                                       FontSize="{StaticResource FontSizeSmall}"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Right"/>
                                             <TextBlock Text="{Binding DetectedTime, Converter={StaticResource DateTimeFormatConverter}}"
                                                        FontSize="{StaticResource FontSizeSmall}"
                                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Right"/>
@@ -216,6 +227,38 @@
                                     Text="{x:Bind ViewModel.SelectedGame.DisplayName, Mode=OneWay, TargetNullValue='未选择游戏'}"
                                     FontWeight="SemiBold"/>
 
+                                <!-- 修复结果与撤销：一次修复改了用户的目录或注册表，必须能就地撤销 -->
+                                <Border
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                    CornerRadius="8" Padding="12"
+                                    Visibility="{x:Bind ViewModel.AppliedFixes.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="本次修复" FontWeight="SemiBold"/>
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.AppliedFixes, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Spacing="2" Margin="0,0,0,8">
+                                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+                                                        <ItemsControl ItemsSource="{Binding Notes}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                                               FontSize="{StaticResource FontSizeSmall}"
+                                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <Button
+                                                            Content="撤销这次修复"
+                                                            Click="OnUndoFixClick"
+                                                            Tag="{Binding}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- Filters -->
                                 <StackPanel Orientation="Horizontal" Spacing="12">
                                     <ComboBox
@@ -231,6 +274,12 @@
                                         DisplayMemberPath="DisplayName"
                                         SelectionChanged="OnCategoryFilterChanged"/>
                                 </StackPanel>
+
+                                <!-- 规格 §3.5 的「一键修复所有问题」：只修可自动修复的项，并如实说明剩下的 -->
+                                <Button
+                                    Content="{x:Bind ViewModel.FixAllButtonText, Mode=OneWay}"
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Click="OnFixAllClick"/>
 
                                 <ItemsControl ItemsSource="{x:Bind ViewModel.FilteredErrors, Mode=OneWay}">
                                     <ItemsControl.ItemTemplate>
@@ -255,21 +304,32 @@
                                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                                Visibility="{Binding SolutionInstructions, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
 
+                                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                                        <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                                                CornerRadius="4" Padding="8,2">
+                                                            <TextBlock Text="{Binding SolutionTypeDisplay}" FontSize="{StaticResource FontSizeSmall}"/>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding SolutionTypeDescription}" VerticalAlignment="Center"
+                                                                   FontSize="{StaticResource FontSizeSmall}"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                    </StackPanel>
+
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <Button
-                                                            Content="标记已解决"
-                                                            Click="OnMarkResolvedClick"
-                                                            Tag="{Binding}"/>
+                                                            Content="一键修复"
+                                                            Style="{StaticResource AccentButtonStyle}"
+                                                            Click="OnAttemptFixClick"
+                                                            Tag="{Binding}"
+                                                            Visibility="{Binding AutoFixAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                                         <Button
                                                             Content="下载所需组件"
                                                             Click="OnOpenDownloadUrlClick"
                                                             Tag="{Binding}"
                                                             Visibility="{Binding DownloadUrl, Converter={StaticResource NullToVisibilityConverter}}"/>
                                                         <Button
-                                                            Content="尝试自动修复"
-                                                            Click="OnAttemptFixClick"
-                                                            Tag="{Binding}"
-                                                            Visibility="{Binding AutoFixAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                            Content="标记已解决"
+                                                            Click="OnMarkResolvedClick"
+                                                            Tag="{Binding}"/>
                                                     </StackPanel>
                                                 </StackPanel>
                                             </Border>

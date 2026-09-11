@@ -102,7 +102,17 @@ internal static class Program
             new A66MoyuBrowserLaunchCheck(),
             new A67MoyuConditionalRequestCheck(),
 
-            // --- Reserved interfaces (A90+; A68-A89 belong to other work lines) ------------
+            // --- Game health diagnosis (A70+; A68-A69 belong to other work lines) ----------
+            // Real repair capability for the items that can be repaired automatically, an honest
+            // classification for the ones that cannot, and a Chinese diagnosis text. This is the
+            // "8 个诊断项全部标记为不可自动修复 + 文案未本地化" defect of the product spec.
+            new A70HealthDiagnosisCheck(),
+            new A71ChinesePathRenameCheck(),
+            new A72CompatibilityModeCheck(),
+            new A73AutoFixHonestyCheck(),
+            new A74DiagnosisLocalizationCheck(),
+
+            // --- Reserved interfaces (A90+; A75-A89 belong to other work lines) ------------
             // The two P2 features are specified as 第一版只预留接口、前端隐藏 (spec lines 173-174).
             // A90 pins the shape of the reserved layer, A91 proves the front end is actually hidden
             // (no navigation key, no page, no menu item, no button - the "假按钮" defect class of
