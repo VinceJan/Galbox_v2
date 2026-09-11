@@ -3,6 +3,7 @@ using Galbox.App.Services;
 using Galbox.App.ViewModels;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
+using Galbox.Data.Migrations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -168,32 +169,29 @@ public partial class App : Application
 
         try
         {
-            // Ensure database is created and migrated
+            // Create the database if needed and bring an existing one up to date through EF Core migrations.
+            // GalboxDatabaseInitializer handles the legacy databases that were created by EnsureCreated()
+            // (they have all the tables but no __EFMigrationsHistory) by stamping the baseline migration as
+            // already applied, so existing user data is never re-created or dropped.
             using var scope = Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
-            await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+            var dbLogger = Services.GetService<ILogger<App>>();
+            var dbResult = await GalboxDatabaseInitializer.InitializeAsync(
+                dbContext,
+                new DatabaseInitializationOptions { Logger = dbLogger }).ConfigureAwait(false);
 
-            // Add missing columns for EngineType if not exists (SQLite migration)
-            try
+            dbLogger?.LogInformation(
+                "Database initialization finished in mode {Mode} ({AppliedCount} migration(s) applied).",
+                dbResult.Mode,
+                dbResult.AppliedNow.Count);
+
+            if (!dbResult.SchemaReport.IsConsistent)
             {
-                // Check if EngineType column exists
-                var connection = dbContext.Database.GetDbConnection();
-                await connection.OpenAsync().ConfigureAwait(false);
-                using var command = connection.CreateCommand();
-                command.CommandText = "SELECT name FROM pragma_table_info('Games') WHERE name='EngineType'";
-                var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
-                if (result == null || result == DBNull.Value)
-                {
-                    // Column doesn't exist, add it
-                    command.CommandText = "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0";
-                    await command.ExecuteNonQueryAsync().ConfigureAwait(false);
-                }
-                await connection.CloseAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                // Migration failed, log but continue
-                System.Diagnostics.Debug.WriteLine($"Database migration warning: {ex.Message}");
+                // Not fatal, but the user must be able to find out about it: writing through a stale schema is
+                // the one situation that can lose data.
+                System.Diagnostics.Debug.WriteLine(
+                    "Database schema problems:" + Environment.NewLine +
+                    string.Join(Environment.NewLine, dbResult.SchemaReport.Problems()));
             }
 
             // Initialize services that require async initialization
