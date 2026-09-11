@@ -1,0 +1,699 @@
+====================================================================================================
+ GALBOX HEADLESS ACCEPTANCE RUN
+====================================================================================================
+ UTC started        : 2026-09-11 16:33:03Z
+ OS                 : Microsoft Windows 10.0.26200
+ Process arch       : X64
+ Runtime            : .NET 8.0.31
+ Executable         : E:\tmp\Galbox_patchui\tests\Galbox.Acceptance\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\Galbox.Acceptance.exe
+ Working directory  : E:\tmp\Galbox_patchui
+ Game folder        : D:\GAME\Dreamin'_Her (exists: True)
+ Scraping query     : "Dreamin' Her"
+ Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-30284\acceptance.db
+ Real app DB        : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (untouched)
+ Verbose logs       : False
+
+ Dependency-injection preflight (UI-free replica of App.xaml.cs ConfigureServices):
+   [OK]      IGameUtilityService      GameUtilityService
+   [OK]      ISaveManagementService   SaveManagementService
+   [OK]      IGameScrapingService     GameScrapingService
+   [OK]      IErrorCheckingService    ErrorCheckingService
+   [OK]      IScrapingCacheService    ScrapingCacheService
+   [OK]      IBangumiAuthService      BangumiAuthService
+   [OK]      IAutoScrapingService     AutoScrapingService
+   [OK]      IProcessMonitorService   ProcessMonitorService
+   [INFO]    INavigationService type present in Galbox.App assembly: True (intentionally not registered: it requires Microsoft.UI.Xaml.Controls)
+ Preflight failures : 0
+====================================================================================================
+
+####################################################################################################
+# [A0] Database isolation, schema creation and GameInfo round-trip
+####################################################################################################
+EXPECTED : fresh acceptance.db is (re)created, GameInfo persists and reads back identically, and a second reset proves the run is repeatable
+ACTUAL   : created=True, roundTrip=True, repeatable=True
+DETAILS  :
+  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-30284\acceptance.db
+  Real app DB path   : C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+  In isolation       : True
+  EnsureDeleted()    : False
+  EnsureCreated()    : True
+  DB file exists     : True (4096 bytes)
+  Tables created     : 12 [Characters, Documents, ErrorRecords, Games, MediaFiles, Patches, SaveBackups, SaveGroups, SaveNodes, Screenshots, UserSettings, sqlite_sequence]
+  --- game library state on the fresh database ---
+    total games        : 0
+    IsScraped == true  : 0
+    IsScraped == false : 0   (library is empty on a fresh DB)
+  --- inserted test game, read back with AsNoTracking ---
+    Id                 : 1
+    NameOriginal       : Dreamin' Her
+    InstallPath        : D:\GAME\Dreamin'_Her
+    MainExecutable     : D:\GAME\Dreamin'_Her\dreaminher.exe
+    IsScraped          : False
+    EngineType         : Unknown
+    DisplayName        : Dreamin' Her
+    AddedTime (UTC)    : 2026-09-11 16:33:04Z
+  --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
+    games after reset  : 0 (expected 0)
+    DB size after reset: 4096 bytes
+  --- re-seeded test game for later checks: Id=1 ---
+RESULT   : PASS  (1394 ms)
+
+####################################################################################################
+# [A1] FindExecutableInFolder picks the intended launcher
+####################################################################################################
+EXPECTED : Path.GetFileName(result) == dreaminher.exe
+ACTUAL   : dreaminher.exe
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Folder exists      : True
+  *.exe found        : 2
+    raw[0] (OS order, first is what the service returns): dreaminher-32.exe
+    raw[1] (OS order, first is what the service returns): dreaminher.exe
+  exe files (sorted) : dreaminher-32.exe, dreaminher.exe
+  Service result     : D:\GAME\Dreamin'_Her\dreaminher.exe
+  Service result name: dreaminher.exe
+    exists           : True
+    size             : 123392 bytes
+RESULT   : PASS  (16 ms)
+
+####################################################################################################
+# [A2] CalculateFolderSize reports the real folder size
+####################################################################################################
+EXPECTED : > 900.00 MB (943718400 bytes)
+ACTUAL   : 1079379981 bytes (1.005 GB)
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Service result     : 1079379981 bytes (1.005 GB)
+  Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
+  Deviation          : 0 bytes (0%)
+RESULT   : PASS  (116 ms)
+
+####################################################################################################
+# [A3] DetectSaveLocationAsync finds the Ren'Py save folder
+####################################################################################################
+EXPECTED : Success == true, EngineType == Renpy, a detected path ending in 'saves', and a non-empty save-file list
+ACTUAL   : Success=true, EngineType=Renpy, PrimarySavePath=(null), AlternativePaths=1, SaveFiles=12
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.NameCn    : (null)
+  GameInfo.NameOriginal : Dreamin' Her
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.EngineType (stored, pre-detection) : Unknown
+  Expected engine    : Renpy
+  Detector folder key: Dreamin'_Her
+  AppData Roaming    : C:\Users\Jiang\AppData\Roaming
+  AppData folders matching 'Dreamin'_Her' / 'Dreamin'_Her-*' : 0
+  game\saves folder exists            : True
+  game\saves *.save file count        : 12
+  --- DetectSaveLocationAsync result (raw) ---
+  Success            : True
+  EngineType         : Renpy
+  PrimarySavePath    : (null)
+  AlternativePaths   : 1
+    alt[0]          : D:\GAME\Dreamin'_Her\game\saves (exists: True)
+  SaveFiles          : 12
+    D:\GAME\Dreamin'_Her\game\saves\1-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\1-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-10-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-2-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-3-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-4-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-6-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-7-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-8-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-9-LT1.save
+  ErrorMessage       : (null)
+  ExtendedInfo       : 1 entries
+    GameName = Dreamin'_Her
+RESULT   : PASS  (7 ms)
+
+####################################################################################################
+# [A4] CheckGameAsync runs without internal failure
+####################################################################################################
+EXPECTED : call returns a list, no internal ERROR is logged, and every item has a title, category and severity (0 items is a valid result)
+ACTUAL   : 0 finding(s), 0 row(s) persisted
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.NameOriginal : Dreamin' Her
+  Findings           : 0
+  (no issues reported - this is a valid outcome for an English-path Ren'Py game)
+  ErrorRecords rows persisted for this game: 0
+RESULT   : PASS  (29 ms)
+
+####################################################################################################
+# [A5] SearchGameAsync returns live results from the four sources
+####################################################################################################
+EXPECTED : at least one source returns >= 1 item AND ScrapingResult.BestMatch != null
+ACTUAL   : HasResults=true, BestMatch=Bangumi, total items=6
+DETAILS  :
+  Query string       : "Dreamin' Her"
+  Persistent cache   : DISABLED for this run (guarantees a live network query)
+  HttpClient timeout : 30s per request, as configured by the container
+  Total elapsed      : 1369 ms
+  SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
+  HasResults         : True
+  BestMatch          : Bangumi (4 items)
+  Result.Errors      : 0
+  
+  ================ SOURCE: Bangumi ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 976
+    Items               : 4
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : 309736
+          TitleCn       : Dreamin' Her -我梦见了她。-
+          TitleOriginal : Dreamin'Her  -僕は、彼女の夢を見る。-
+          Titles        : ["Dreamin'Her  -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。-"]
+          Rating        : 6.90
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+          ReleaseDate   : 2022-04-28
+          Developer     : LIFE0
+          Description   : 五十嵐蒼は疲れていた。
+母親の希望に合わせた受験勉強漬けの日々。
+趣味の小説もうまく書けない。
+自分の存在意義まで疑う高校３年生の夏。
+
+彼の癒やしは幼馴染の七瀬未来だけ。
+彼女と一緒にいられる時間が、
+唯一、蒼に安らぎをもたらしてくれていた。
+
+だが、そんな未来にすら理由もわからず拒絶され、
+絶望...
+      [1] IsBestMatch=False MatchScore=0
+          SourceId      : 534948
+          TitleCn       : 
+          TitleOriginal : ドリーミン・アワー
+          Titles        : ["ドリーミン・アワー"]
+          Rating        : (null)
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/cd/2c/534948_9663j.jpg
+          ReleaseDate   : 2025-01-25
+          Developer     : ツナ
+          Description   : 食べた夢の影響で姿が変わってしまう特異体質な
+夢魔幼なじみくんと日々会話する短編ノベルゲームです。
+わりと乙女向けで恋愛。基本優しい雰囲気、たまにシリアス。
+
+
+会話をすることで、
+ふたりのこれまで/これからが見えてくる…かもしれません。
+
+そうしたら、あとは選ぶだけです。
+      [2] IsBestMatch=False MatchScore=53.33
+          SourceId      : 683318
+          TitleCn       : 
+          TitleOriginal : The DREAMFIN PEAK
+          Titles        : ["The DREAMFIN PEAK"]
+          Rating        : (null)
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/ce/23/683318_Y3yb8.jpg
+          ReleaseDate   : (null)
+          Developer     : Levelonesucks
+          Description   : THE DREAMFIN PEAK is a short cozy game where you'll leap and latch through magic cliffs, then cast your rod to catch a fish.
+
+On paths untamed by feet before,...
+      [3] IsBestMatch=False MatchScore=23.33
+          SourceId      : 454778
+          TitleCn       : 
+          TitleOriginal : Touhou Artificial Dream in Arcadia
+          Titles        : ["Touhou Artificial Dream in Arcadia"]
+          Rating        : 7.30
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/79/a6/454778_q7r4x.jpg
+          ReleaseDate   : 2023-09-22
+          Developer     : Bar Holographic Otaku
+          Description   : Explore Gensokyo from an outsider's perspective in this old-school Touhou DRPG!
+Touhou Artificial Dream in Arcadia Steam charts, data, update history.
+  
+  ================ SOURCE: Vndb ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1299
+    Items               : 2
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : v28915
+          TitleCn       : Dreamin' Her -我梦见了她。-
+          TitleOriginal : Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-
+          Titles        : ["Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-" | "Dreamin' Her -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。-"]
+          Rating        : 77.30
+          CoverImageUrl : https://t.vndb.org/cv/01/84401.jpg
+          ReleaseDate   : 2022-04-28
+          Developer     : (null)
+          Description   : (null)
+      [1] IsBestMatch=False MatchScore=13.64
+          SourceId      : v50441
+          TitleCn       : (null)
+          TitleOriginal : Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop
+          Titles        : ["Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop" | "벚나무의 정령을 아이돌로 만드는 법" | "How to turn a Cherry tree spirit into an idol" | "桜の木の精霊をアイドルにする方法"]
+          Rating        : 60.60
+          CoverImageUrl : https://t.vndb.org/cv/58/111658.jpg
+          ReleaseDate   : 2024-03-22
+          Developer     : (null)
+          Description   : (null)
+  
+  ================ SOURCE: Ymgal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+  
+  ================ SOURCE: Cngal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 0
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+RESULT   : PASS  (1380 ms)
+
+####################################################################################################
+# [A6] Scraped metadata is complete enough to use
+####################################################################################################
+EXPECTED : the best-matching item has a non-empty title AND a non-empty cover image URL
+ACTUAL   : title=Dreamin' Her -我梦见了她。-, coverUrl=present
+DETAILS  :
+  Query              : "Dreamin' Her"
+  Total items across all sources: 6
+  
+  Per-source totals:
+    source   | items | TitleCn | TitleOriginal | Rating | CoverImageUrl
+    ---------+-------+---------+---------------+--------+--------------
+    Bangumi  |     4 |       1 |             4 |      2 |             4
+    Cngal    |     0 |       0 |             0 |      0 |             0
+    Vndb     |     2 |       1 |             2 |      2 |             2
+    Ymgal    |     0 |       0 |             0 |      0 |             0
+  
+  Per-item field presence:
+    [Bangumi] SourceId=309736 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。-
+        TitleOriginal : Dreamin'Her  -僕は、彼女の夢を見る。-
+        Rating        : 6.90
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+        Description   : 260 chars
+        Tags          : 15
+        Characters    : 0
+    [Bangumi] SourceId=534948 MatchScore=0 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : ドリーミン・アワー
+        Rating        : MISSING
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/cd/2c/534948_9663j.jpg
+        Description   : 145 chars
+        Tags          : 4
+        Characters    : 0
+    [Bangumi] SourceId=683318 MatchScore=53.33 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : The DREAMFIN PEAK
+        Rating        : MISSING
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/ce/23/683318_Y3yb8.jpg
+        Description   : 701 chars
+        Tags          : 0
+        Characters    : 0
+    [Bangumi] SourceId=454778 MatchScore=23.33 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Touhou Artificial Dream in Arcadia
+        Rating        : 7.30
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/79/a6/454778_q7r4x.jpg
+        Description   : 151 chars
+        Tags          : 10
+        Characters    : 0
+    [Vndb] SourceId=v28915 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。-
+        TitleOriginal : Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-
+        Rating        : 77.30
+        CoverImageUrl : https://t.vndb.org/cv/01/84401.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Vndb] SourceId=v50441 MatchScore=13.64 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop
+        Rating        : 60.60
+        CoverImageUrl : https://t.vndb.org/cv/58/111658.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+  
+  BestMatch structure (ScrapingResult.BestMatch is a SourceScrapingResult):
+    BestMatch.Source            : Bangumi
+    BestMatch.Items.Count       : 4
+    BestMatch.Items[0]          : SourceId=309736, TitleCn=Dreamin' Her -我梦见了她。-, TitleOriginal=Dreamin'Her  -僕は、彼女の夢を見る。-, MatchScore=90
+    item with IsBestMatch=true  : SourceId=309736, TitleCn=Dreamin' Her -我梦见了她。-, TitleOriginal=Dreamin'Her  -僕は、彼女の夢を見る。-, MatchScore=90
+  
+  Best-match row title present      : True
+  Best-match row cover URL present  : True
+RESULT   : PASS  (7 ms)
+
+####################################################################################################
+# [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+####################################################################################################
+EXPECTED : Bangumi and VNDB are both reachable AND both return >= 1 hit for this game when asked with a request shape they accept
+ACTUAL   : bangumiReachable=True, bangumiHasGame=True, vndbReachable=True, vndbHasGame=True
+DETAILS  :
+  --- HttpClient configuration built by the container ---
+    BangumiHttpClient  BaseAddress=https://api.bgm.tv/  Timeout=30s  UserAgent=Galbox/1.0
+    VndbHttpClient     BaseAddress=https://api.vndb.org/kana/  Timeout=30s  UserAgent=Galbox/1.0
+    YmgalHttpClient    BaseAddress=(null)  Timeout=30s  UserAgent=Galbox/1.0
+    CngalHttpClient    BaseAddress=(null)  Timeout=30s  UserAgent=Galbox/1.0
+  
+  === [2] traffic recorded from the application's own HttpClient pipelines ===
+      (captured by a transparent recording handler appended to each pipeline)
+  
+    --- BangumiHttpClient: 1 HTTP exchange(s) ---
+        POST https://api.bgm.tv/v0/search/subjects  ->  HTTP 200
+          request body : {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+          response top-level JSON keys : [data, total, limit, offset]
+          response body : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美 ... [TRUNCATED, total 8701 chars]
+  
+    --- VndbHttpClient: 1 HTTP exchange(s) ---
+        POST https://api.vndb.org/kana/vn  ->  HTTP 200
+          request body : {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, alttitle, titles{lang,title,official,main}, image.url, rating, released, length_minutes","results":10}
+          response top-level JSON keys : [more, results]
+          response body : {"more":false,"results":[{"alttitle":"Dreamin' Her -僕は、彼女の夢を見る。-","id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"released":"2022-04-28","title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"alttitle":"벚나무의 정령을 아이돌로 만드는 법","id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"released":"2024-03-22","title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title ... [TRUNCATED, total 896 chars]
+  
+    --- YmgalHttpClient: 0 HTTP exchange(s) ---
+        NO HTTP REQUEST WAS MADE by this client during A5.
+        A source that reports 0 items without issuing a request is a stub,
+        not a search that found nothing.
+  
+    --- CngalHttpClient: 0 HTTP exchange(s) ---
+        NO HTTP REQUEST WAS MADE by this client during A5.
+        A source that reports 0 items without issuing a request is a stub,
+        not a search that found nothing.
+  
+    --- interpretation ---
+    BangumiResponse readable by BangumiSearchResponse : True  (model binds [total, limit, offset, data])
+    VNDB app-shaped HTTP status                       : 200  (a non-200 is an app-side request bug)
+    ymgal requests issued during A5                   : 0
+    cngal requests issued during A5                   : 0
+  
+  === [3a] Bangumi, corrected request (v0 search API, matches the app's own model) ===
+    POST https://api.bgm.tv/v0/search/subjects
+    body: {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+    HTTP status : 200 
+    body        : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美しい海だった。\r\n薄桃色の砂浜に、一人の少女が佇んでいる。\r\n\r\n七瀬未来にそっくりな、夢の中の彼女――\r\n\r\n夢が、現実を侵していく……","name":"Dreamin'Her  -僕は、彼女の夢を見る。-","name_cn":"Dreamin' Her -我梦见了她。-","tags":[{"name":"Galgame","count":210,"total_coun ... [TRUNCATED, total 8701 chars]
+    total reported by Bangumi : 4
+    first 'data[0]' : id=309736, name=Dreamin'Her  -僕は、彼女の夢を見る。-, name_cn=Dreamin' Her -我梦见了她。-
+  
+  === [3b] VNDB, corrected request (array filter + titles{...} sub-fields) ===
+    POST https://api.vndb.org/kana/vn
+    body: {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, titles{lang,title,official,main}, image.url, rating, length_minutes","results":10}
+    HTTP status : 200 
+    body        : {"more":false,"results":[{"id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title":"How to turn a Cherry tree spirit into an idol"},{"lang":"ja","main":false,"official":true,"title":"桜の木の精霊をアイドルにする方法"},{"lang":"ko","main":true,"official":true,"title":"벚나무의 정령을 아이돌로 만드는 법"}]}]}
+    count reported by VNDB    : (absent - kana API returns 'more'/'results' only)
+    results[] length          : 2
+    first 'results[0]' : id=v28915, title=Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-, rating=77.3
+  
+  --- verdict inputs ---
+    Bangumi reachable        : True (app traffic HTTP [200], corrected HTTP 200)
+    Bangumi holds this game  : True (total=4)
+    VNDB reachable           : True (corrected HTTP 200)
+    VNDB holds this game     : True (results[]=2)
+RESULT   : PASS  (2824 ms)
+
+####################################################################################################
+# [A8] Navigation, page and XAML resource completeness (no feature without a door)
+####################################################################################################
+EXPECTED : every navigation key resolves to an existing page, every DI-registered ViewModel is referenced by a view (or whitelisted with a reason), every page is reachable, every converter a view uses is registered, and every MainWindow menu item maps to a navigation key
+ACTUAL   : 8 navigation keys, 8 ViewModels, 8 views, 76 converter reference(s) all consistent
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_patchui
+  Views folder         : E:\tmp\Galbox_patchui\src\Galbox.App\Views (exists: True)
+  View XAML files      : 8
+  View code-behind files: 8
+  
+  --- A8.1 navigation keys -> page types ---
+    [OK]   Home             -> Galbox.App.Views.MainPage
+    [OK]   Library          -> Galbox.App.Views.LibraryPage
+    [OK]   SaveManager      -> Galbox.App.Views.SaveManagerPage
+    [OK]   PatchCenter      -> Galbox.App.Views.PatchCenterPage
+    [OK]   Settings         -> Galbox.App.Views.SettingsPage
+    [OK]   GameDetail       -> Galbox.App.Views.GameDetailPage
+    [OK]   ScrapingProgress -> Galbox.App.Views.ScrapingProgressPage
+    [OK]   ErrorReport      -> Galbox.App.Views.ErrorReportPage
+  
+  --- A8.2 ViewModels registered in App.xaml.cs -> view that references them ---
+    Registered ViewModels: 8
+    [OK]   ErrorReportViewModel       referenced by: ErrorReportPage.xaml.cs
+    [OK]   GameDetailViewModel        referenced by: GameDetailPage.xaml.cs
+    [OK]   LibraryViewModel           referenced by: LibraryPage.xaml.cs
+    [OK]   MainViewModel              referenced by: MainPage.xaml.cs
+    [OK]   PatchCenterViewModel       referenced by: PatchCenterPage.xaml.cs
+    [OK]   SaveManagerViewModel       referenced by: SaveManagerPage.xaml.cs
+    [OK]   ScrapingProgressViewModel  referenced by: ScrapingProgressPage.xaml.cs
+    [OK]   SettingsViewModel          referenced by: SettingsPage.xaml.cs
+  
+  --- A8.3 every page in Views/ is reachable ---
+    [OK]   ErrorReportPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   GameDetailPage           navigationKey=True, explicitNavigateTo=True
+    [OK]   LibraryPage              navigationKey=True, explicitNavigateTo=True
+    [OK]   MainPage                 navigationKey=True, explicitNavigateTo=True
+    [OK]   PatchCenterPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   SaveManagerPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   ScrapingProgressPage     navigationKey=True, explicitNavigateTo=True
+    [OK]   SettingsPage             navigationKey=True, explicitNavigateTo=True
+  
+  --- A8.4 converters referenced by a view are registered ---
+    App.xaml resource keys: 11
+    [OK]   ErrorReportPage.xaml       7 converter reference(s), all registered
+    [OK]   GameDetailPage.xaml        12 converter reference(s), all registered
+    [OK]   LibraryPage.xaml           9 converter reference(s), all registered
+    [OK]   MainPage.xaml              9 converter reference(s), all registered
+    [OK]   PatchCenterPage.xaml       13 converter reference(s), all registered
+    [OK]   SaveManagerPage.xaml       9 converter reference(s), all registered
+    [OK]   ScrapingProgressPage.xaml  4 converter reference(s), all registered
+    [OK]   SettingsPage.xaml          13 converter reference(s), all registered
+    Total converter references checked: 76
+  
+  --- A8.5 MainWindow.xaml menu items -> navigation keys ---
+    [OK]   menu Tag 'ErrorReport' -> ErrorReportPage
+    [OK]   menu Tag 'Home' -> MainPage
+    [OK]   menu Tag 'Library' -> LibraryPage
+    [OK]   menu Tag 'PatchCenter' -> PatchCenterPage
+    [OK]   menu Tag 'SaveManager' -> SaveManagerPage
+    [OK]   menu Tag 'ScrapingProgress' -> ScrapingProgressPage
+  
+  Sub-check failures : 0
+RESULT   : PASS  (117 ms)
+
+####################################################################################################
+# [A9] The GUI application opens a window while scrape-cache data is present
+####################################################################################################
+EXPECTED : with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s
+ACTUAL   : window present: MainWindowHandle=0x15D0AC2 ("WinUI Desktop"), startup log reports completion, pid alive after 2084 ms
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_patchui
+  Application          : E:\tmp\Galbox_patchui\src\Galbox.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Application built    : 2026-09-11 16:32:54Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 16:32:16Z (src/Galbox.App, obj/bin excluded)
+  Cache precondition  : 2 existing search_*.json file(s), left untouched:
+      search_dreamin'_her.json (11859 bytes)
+      search_sabbatofthewitch.json (1640 bytes)
+  Cache directory      : C:\Users\Jiang\AppData\Local\Galbox\ScrapingCache
+  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (exists: True, bytes before launch: 171855)
+  Launched             : pid 35908
+  Alive when measured  : True (measured before the cleanup kill)
+  MainWindowHandle     : 0x15D0AC2 (non-zero)
+  Visible top-level windows owned by the process: 1
+  Elapsed              : 2084 ms (timeout 30s)
+  Exited before window : False
+  Cache files now      : 2 search_*.json
+  --- startup log lines written by this launch (12) ---
+       and activated: handle=0xAC018C
+      2026-09-12 00:33:09.299 [tid:1] Process monitor: started=True, registered=1/1
+      2026-09-12 00:33:09.300 [tid:1] OnLaunched: startup sequence completed
+      2026-09-12 00:33:09.576 [tid:1] DI container built (ValidateScopes=true, ValidateOnBuild=true)
+      2026-09-12 00:33:09.647 [tid:1] OnLaunched: startup sequence begins
+      2026-09-12 00:33:10.299 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+      2026-09-12 00:33:10.370 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+      2026-09-12 00:33:10.621 [tid:1] BangumiAuthService initialized
+      2026-09-12 00:33:10.702 [tid:1] ScrapingCacheService initialized (entries: 2)
+      2026-09-12 00:33:11.052 [tid:1] Main window created and activated: handle=0x15D0AC2
+      2026-09-12 00:33:11.067 [tid:1] Process monitor: started=True, registered=1/1
+      2026-09-12 00:33:11.068 [tid:1] OnLaunched: startup sequence completed
+  Window title         : "WinUI Desktop"
+  Window is the startup-failure dialog: False
+  Startup log says     : completed=True, failed=False
+RESULT   : PASS  (2212 ms)
+
+####################################################################################################
+# [A30] Patch centre wiring: DI resolves IPatchEngine / ILocalPatchService and the ViewModel is bound to it
+####################################################################################################
+EXPECTED : IPatchEngine resolves from the root container to a real PatchInstaller; ILocalPatchService resolves from the root container; both are singletons (identical instance inside a scope); PatchCenterViewModel's constructor takes ILocalPatchService; the file-picker extension list only contains formats the engine can extract
+ACTUAL   : IPatchEngine=PatchInstaller, ILocalPatchService=LocalPatchService, ViewModel bound=True, failure(s)=0
+DETAILS  :
+  --- A30.1 IPatchEngine from the root container ---
+    [OK]   IPatchEngine -> Galbox.Core.Patches.PatchInstaller
+  
+  --- A30.2 ILocalPatchService from the root container ---
+    [OK]   ILocalPatchService -> Galbox.App.Services.LocalPatchService
+  
+  --- A30.3 lifetime: a scope must not produce a second engine ---
+    root == scopeA == scopeB : True
+    [OK]   singleton, so the ledger scan state is shared as intended
+  
+  --- A30.4 PatchCenterViewModel constructor dependencies ---
+    ctor(IDbContextFactory`1, INavigationService, ILogger`1, ILocalPatchService)
+    [OK]   the ViewModel takes ILocalPatchService
+  
+  --- A30.5 file-picker extensions vs extractable container kinds ---
+    engine extractable kinds : Zip, Rar, SevenZip, Tar, Gzip
+    picker extensions        : .zip, .7z, .rar, .tar, .gz, .tgz
+    [OK]   .zip offered
+    [OK]   .7z offered
+    [OK]   .rar offered
+RESULT   : PASS  (5 ms)
+
+####################################################################################################
+# [A31] Local patch round trip through the patch centre: preview -> install -> bytes change -> rollback -> byte identical
+####################################################################################################
+EXPECTED : the patch package is inspected and previewed with the overwrite/new/rejected sets kept apart; an unconfirmed conflict blocks the install and changes nothing; a confirmed install succeeds with every per-file operation reported as Ok and the target bytes really replaced; the rollback reports ByteIdenticalToPreInstall and the game tree matches the pre-install snapshot file for file
+ACTUAL   : preview/install/rollback all behaved: bytes really replaced, rollback byte identical, ViewModel path identical
+DETAILS  :
+  Scratch root      : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-9713b55a534d4bd1bb9dc9fec903cb12
+  Game root         : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-9713b55a534d4bd1bb9dc9fec903cb12\game
+  Patch package     : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-9713b55a534d4bd1bb9dc9fec903cb12\patch.zip (288 bytes)
+  Game id (ledger)  : acceptance-a31-07beef7c
+  Pre-install files : 3
+      data\keep.dat = 99015d7108d15b80...
+      data\original.txt = 603cd45e07b0af40...
+      game.exe = 187314d0d3bdfdcc...
+  
+  === Phase 1: through ILocalPatchService (the UI's door) ===
+  Inspect           : kind=Zip, format=zip, entries=2, files=2, encoding=Utf8 (auto=True), sha256=f22481b7d804cb07..., extractable=True
+  Preview id        : 20260911T163311404Z-3c82dbd2
+  Summary           : create=1, overwrite=0, conflict=1, unchanged=0, rejected=0, bytesToWrite=44, bytesToBackup=27
+      [Conflict ] data\original.txt  (provenance=UnknownOrigin) The target exists with different content and neither the ledger nor the caller can explain where it came from (often a hand-installed patch).
+      [Create   ] data\newfile.txt  (provenance=NotPresent) Target does not exist yet.
+  
+  Install (unconfirmed) : success=False, blockingConflicts=1, errors=1
+      blocked: data\original.txt
+      game tree changed by the blocked install: no
+  
+  Install (confirmed)   : success=True, installId=20260911T163311506Z-d8c4e0f5, created=1, overwritten=1, bytesWritten=44, bytesBackedUp=27, rollbackAvailable=True
+      operations (2):
+        [Ok    ] Conflict  data\original.txt (backup: files\data\original.txt)
+        [Ok    ] Create    data\newfile.txt
+      progress reports  : 4
+        phase backup   completed=0/1 fraction=0.00
+        phase write    completed=1/2 fraction=0.50
+        phase verify   completed=2/2 fraction=1.00
+      ledger manifest   : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patchdata\patchbak\acceptance-a31-07beef7c\20260911T163311506Z-d8c4e0f5\manifest.json
+      in-game manifest  : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-9713b55a534d4bd1bb9dc9fec903cb12\game\.galbox\patch-manifest.json
+  
+  data/original.txt now: "patched script v2 - 汉化"
+  data/newfile.txt now : exists=True
+  
+  Status after install  : Installed / evidence=Fact / scope=GalboxLedger
+      explanation       : Installed by Galbox on 2026-09-11 16:33:11Z: all 2 recorded file(s) still match the hashes written at install time.
+      verified files    : 2 (changed: 0)
+  Rollback candidates   : 1
+      20260911T163311506Z-d8c4e0f5 status=Committed files=2 name=A31 合成补丁
+  
+  Rollback              : success=True, nothingToDo=False, restored=1, deleted=1, skipped=0, byteIdentical=True
+        [Restored              ] data\original.txt byteIdentical=True
+        [Deleted               ] data\newfile.txt byteIdentical=False
+      game tree identical to the pre-install snapshot: YES
+  Status after rollback : RolledBack / evidence=Fact
+  
+  === Phase 2: through the real PatchCenterViewModel ===
+    ViewModel         : Galbox.App.ViewModels.PatchCenterViewModel (resolved with ILocalPatchService from the container)
+    SelectPatchArchive: returned=True
+      ArchiveInfo     : zip, 2 file(s), encoding=Utf8
+      Preview         : 2 entry/entries, rejected=0
+      display sets    : overwrite=0, create=1, conflict=1, unchanged=0, rejected=0
+    Install (unconfirmed): returned=False, game tree changed=no
+    ConfirmAllConflicts : confirmed=1
+    Install (confirmed) : returned=True, success=True, operations=2, failed=0
+      progress        : 1 (已完成)
+      data/original.txt now: "patched script v2 - 汉化"
+      game tree diffs : 2
+        CHANGED     : data\original.txt (603cd45e07b0 -> a992832e1da3)
+        NEW         : data\newfile.txt
+    Rollback            : returned=True, success=True, byteIdentical=True, restored=1, deleted=1
+      game tree identical to the pre-install snapshot: YES
+    Status ledger       : RolledBack / evidence=Fact / headline=已回滚：patch。
+  
+  Scratch kept for inspection: C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\roundtrip-9713b55a534d4bd1bb9dc9fec903cb12
+RESULT   : PASS  (620 ms)
+
+####################################################################################################
+# [A32] Refused patch content stays visible: Zip Slip entries and save-type packages are refused, reported and written nowhere
+####################################################################################################
+EXPECTED : the Zip Slip entry is listed in the preview's rejected set with PatchSecurityCode.ParentTraversal and a human readable reason, never counted as an overwrite/create, and the file it targets is never created outside the game root; a package declared as save data is refused with PatchPreviewAttempt.Succeeded=false and a non-empty message plus remedy that the ViewModel surfaces instead of reporting success
+ACTUAL   : every refused entry/package was reported with a reason and nothing was written outside the game root
+DETAILS  :
+  Scratch root      : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-bb74668146c6432a8c8d1de1c82d23b8
+  Game root         : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-bb74668146c6432a8c8d1de1c82d23b8\game
+  Hostile package   : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-bb74668146c6432a8c8d1de1c82d23b8\evil.zip
+  Escape target     : C:\Users\Jiang\AppData\Local\Temp\Galbox\acceptance-patches\reject-bb74668146c6432a8c8d1de1c82d23b8\escaped.txt (exists before: False)
+  
+  === 1. Zip Slip entry in the patch package ===
+  Inspect           : kind=Zip, fileEntries=2
+  Preview           : entries=1, rejected=1
+  Summary           : create=1, overwrite=0, conflict=0, rejected=1
+    entries that would be written:
+      [Create   ] data\newfile.txt
+    entries that will never be written:
+      [rejected] raw='..\escaped.txt' code=ParentTraversal reason='..' segment escapes the destination root (Zip Slip). Raw name: '..\escaped.txt'.
+  
+  Install           : success=True, created=1, operations=1
+      [Ok    ] data\newfile.txt
+  Escape target exists after install: False
+  Files written directly into the scratch root: none
+  
+  === 2. Package declared as save data ===
+  Preview           : succeeded=False, code=SaveTypePatch
+      message       : This resource is declared as a save-data patch (type 'save'), so it must not be laid over the game directory. Full-CG / clear saves belong to save management, where they are copied into a save folder and backed up.
+      remedy        : Open the save manager and import the archive there instead.
+  
+  === 3. The same refusals as the patch centre page shows them ===
+    SelectPatchArchive: returned=True
+      display sets    : overwrite=0, create=1, conflict=0, unchanged=0, rejected=1
+      rejection message: 
+    save-like package  : returned=False, rejection="The archive looks like save data rather than an overlay patch. 3/3 entries look like save data (e.g. save\save01.sav, save\save02.sav, save\global.sav). Overlaying save files onto the game directory would overwrite the user's own progress, so the install is refused.", preview=null
+SERVICE LOG (3 record(s), WARNING and above):
+  [Warning] Galbox.App.Services.LocalPatchService: Patch package refused: SaveTypePatch - This resource is declared as a save-data patch (type 'save'), so it must not be laid over the game directory. Full-CG / clear saves belong to save management, where they are copied into a save folder and backed up.
+  [Warning] Galbox.App.Services.LocalPatchService: Patch package refused: SaveLikeContent - The archive looks like save data rather than an overlay patch. 3/3 entries look like save data (e.g. save\save01.sav, save\save02.sav, save\global.sav). Overlaying save files onto the game directory would overwrite the user's own progress, so the install is refused.
+  [Warning] Galbox.App.ViewModels.PatchCenterViewModel: Patch preview refused: SaveLikeContent - The archive looks like save data rather than an overlay patch. 3/3 entries look like save data (e.g. save\save01.sav, save\save02.sav, save\global.sav). Overlaying save files onto the game directory would overwrite the user's own progress, so the install is refused.
+RESULT   : PASS  (114 ms)
+
+====================================================================================================
+ ACCEPTANCE SUMMARY
+====================================================================================================
+ ID   STATUS        TIME  CHECK
+----------------------------------------------------------------------------------------------------
+ A0   PASS       1394 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   PASS         16 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS        116 ms  CalculateFolderSize reports the real folder size
+ A3   PASS          7 ms  DetectSaveLocationAsync finds the Ren'Py save folder
+ A4   PASS         29 ms  CheckGameAsync runs without internal failure
+ A5   PASS       1380 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       2824 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+ A8   PASS        117 ms  Navigation, page and XAML resource completeness (no feature without a door)
+ A9   PASS       2212 ms  The GUI application opens a window while scrape-cache data is present
+ A30  PASS          5 ms  Patch centre wiring: DI resolves IPatchEngine / ILocalPatchService and the ViewModel is bound to it
+ A31  PASS        620 ms  Local patch round trip through the patch centre: preview -> install -> bytes change -> rollback -> byte identical
+ A32  PASS        114 ms  Refused patch content stays visible: Zip Slip entries and save-type packages are refused, reported and written nowhere
+----------------------------------------------------------------------------------------------------
+ PASSED : 13
+ FAILED : 0
+ ERRORS : 0
+ TOTAL  : 13
+
+ EXIT CODE: 0  (all checks PASS)
+ DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-30284\acceptance.db
+ GAME     : D:\GAME\Dreamin'_Her
+====================================================================================================
