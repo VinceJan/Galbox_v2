@@ -1,0 +1,29 @@
+.symfix E:\tmp\symcache
+.reload
+sxe -c "g" eh
+sxe -c "g" clr
+sxe -c "g" 40000015
+sxe -c "g" c000027b
+sxe -c "g" 0
+.echo ########## CLAIMED: process frozen at entry ##########
+.echo --- native stacks of every thread (pre-crash baseline) ---
+~*k 40
+.echo ########## RESUME: probe will drive navigation now ##########
+g
+.echo ########## STOPPED (2nd chance) ##########
+.exr -1
+.ecxr
+.echo --- faulting thread native stack ---
+k 100
+.echo --- all threads ---
+~*k 60
+.echo --- managed exception ---
+.loadby sos coreclr
+!pe
+.echo --- managed stacks all threads ---
+~*e !clrstack
+.echo --- unhandled exception objects on heap ---
+!dumpheap -type System.Exception -stat
+.echo ########## END ##########
+.logclose
+q

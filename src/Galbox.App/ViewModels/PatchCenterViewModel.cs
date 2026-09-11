@@ -28,6 +28,30 @@ public partial class PatchCenterViewModel : ObservableObject
     private readonly ILogger<PatchCenterViewModel> _logger;
 
     /// <summary>
+    /// The DispatcherQueue of the UI thread, captured once while this ViewModel is being built on
+    /// the UI thread.
+    /// </summary>
+    /// <remarks>
+    /// THREAD AFFINITY. <c>DispatcherQueue.GetForCurrentThread()</c> answers with the queue of the
+    /// CALLING thread and returns null on a thread-pool thread. The background paths below used to
+    /// call it from a pool thread, so it always came back null and every "UI update" they made
+    /// landed on the thread pool instead:
+    ///
+    ///   * <c>ObservableCollection&lt;T&gt;.Clear()/Add()</c> raises CollectionChanged, which the
+    ///     XAML item controls have subscribed to (they are bound to these collections).
+    ///   * A raised PropertyChanged is delivered through
+    ///     <c>ABI.System.ComponentModel.PropertyChangedEventHandler.NativeDelegateWrapper</c>, which
+    ///     has to create the WinRT PropertyChangedEventArgs - activation that needs the thread to
+    ///     have joined an apartment. The pool thread has not, so it throws InvalidCastException
+    ///     ("不支持此接口", E_NOINTERFACE) and COMException, and the process dies.
+    ///
+    /// Capturing the queue here is possible because a page's ViewModel is resolved in the page
+    /// constructor, which the Frame runs on the UI thread. (ScrapingProgressViewModel already
+    /// captures the queue the same way; these two paths simply missed it.)
+    /// </remarks>
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue? _uiDispatcher;
+
+    /// <summary>
     /// Whether the page is loading data.
     /// </summary>
     [ObservableProperty]
@@ -131,6 +155,11 @@ public partial class PatchCenterViewModel : ObservableObject
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        // Captured on the UI thread (see the field's remarks). Null only if something ever
+        // constructs this ViewModel off the UI thread - in which case the callers below keep their
+        // previous behaviour instead of silently dropping updates.
+        _uiDispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
     }
 
     /// <summary>
@@ -368,8 +397,9 @@ public partial class PatchCenterViewModel : ObservableObject
     {
         if (value != null)
         {
-            // Get the dispatcher from the App's main window
-            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            // The captured UI queue, NOT GetForCurrentThread(): this method is reached from
+            // LoadDataAsync and from the item-click handler, but the work below runs on the pool.
+            var dispatcher = _uiDispatcher;
             if (dispatcher == null)
             {
                 // Fallback: just run directly if no dispatcher
@@ -422,8 +452,10 @@ public partial class PatchCenterViewModel : ObservableObject
                     .ConfigureAwait(false);
             }
 
-            // Get dispatcher for UI thread updates
-            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            // Get dispatcher for UI thread updates. This method is also entered from the pool
+            // (OnSelectedGameChanged -> Task.Run), where GetForCurrentThread() is null and the
+            // "fallback" below would mutate bound collections from a non-UI thread.
+            var dispatcher = _uiDispatcher;
 
             if (dispatcher != null)
             {

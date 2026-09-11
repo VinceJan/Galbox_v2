@@ -1,0 +1,451 @@
+
+Microsoft (R) Windows Debugger Version 10.0.17763.132 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Users\Jiang\AppData\Local\CrashDumps\Galbox.App.exe.29716.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+Symbol search path is: srv*
+Executable search path is: 
+Windows 10 Version 26200 MP (16 procs) Free x64
+Product: WinNt, suite: SingleUserTS Personal
+26100.1.amd64fre.ge_release.240331-1435
+Machine Name:
+Debug session time: Sat Sep 12 00:16:57.000 2026 (UTC + 8:00)
+System Uptime: 0 days 3:59:41.372
+Process Uptime: 0 days 0:00:22.000
+................................................................
+................................................................
+................................................................
+..................................
+Loading unloaded module list
+....
+This dump file has an exception of interest stored in it.
+The stored exception information can be accessed via .ecxr.
+(7414.7eec): Unknown exception - code c000027b (first/second chance not available)
+KERNELBASE!RaiseFailFastException+0x188:
+00007ffd`c73da1a8 0f1f440000      nop     dword ptr [rax+rax]
+0:000> .symfix E:\tmp\symcache
+0:000> .reload
+................................................................
+................................................................
+................................................................
+..................................
+Loading unloaded module list
+....
+0:000> .ecxr
+rax=00000039385ea2b0 rbx=00000039385ea890 rcx=00000039385ea2b0
+rdx=00000039385ea760 rsi=00007ffdc7d68b01 rdi=00000039385ea2b0
+rip=00007ffdc73da1a8 rsp=00000039385ea1d0 rbp=00000039385ea2d0
+ r8=0000000000000000  r9=00000039385ea720 r10=00007ffdc70c0000
+r11=00007ffdc71adf45 r12=ffffffffffffffff r13=0000000000000000
+r14=0000000000000001 r15=0000000000000002
+iopl=0         nv up ei pl nz na po nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000204
+KERNELBASE!RaiseFailFastException+0x188:
+00007ffd`c73da1a8 0f1f440000      nop     dword ptr [rax+rax]
+0:000> !analyze -v
+*******************************************************************************
+*                                                                             *
+*                        Exception Analysis                                   *
+*                                                                             *
+*******************************************************************************
+
+*** WARNING: Unable to verify checksum for Galbox.App.exe
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for nvwgf2umx.dll - 
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for wetype_tip.dll - 
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for wetype_tip_core.dll - 
+DEBUG_FLR_EXCEPTION_CODE(80004003) and the ".exr -1" ExceptionCode(c000027b) don't match
+GetUrlPageData2 (WinHttp) failed: 12002.
+
+KEY_VALUES_STRING: 1
+
+
+STACKHASH_ANALYSIS: 1
+
+TIMELINE_ANALYSIS: 1
+
+Timeline: !analyze.Start
+    Name: <blank>
+    Time: 2026-09-11T16:21:44.189Z
+    Diff: 287189 mSec
+
+Timeline: Dump.Current
+    Name: <blank>
+    Time: 2026-09-11T16:16:57.0Z
+    Diff: 0 mSec
+
+Timeline: Process.Start
+    Name: <blank>
+    Time: 2026-09-11T16:16:35.0Z
+    Diff: 22000 mSec
+
+Timeline: OS.Boot
+    Name: <blank>
+    Time: 2026-09-11T12:17:16.0Z
+    Diff: 14381000 mSec
+
+
+DUMP_CLASS: 2
+
+DUMP_QUALIFIER: 400
+
+CONTEXT:  (.ecxr)
+rax=00000039385ea2b0 rbx=00000039385ea890 rcx=00000039385ea2b0
+rdx=00000039385ea760 rsi=00007ffdc7d68b01 rdi=00000039385ea2b0
+rip=00007ffdc73da1a8 rsp=00000039385ea1d0 rbp=00000039385ea2d0
+ r8=0000000000000000  r9=00000039385ea720 r10=00007ffdc70c0000
+r11=00007ffdc71adf45 r12=ffffffffffffffff r13=0000000000000000
+r14=0000000000000001 r15=0000000000000002
+iopl=0         nv up ei pl nz na po nc
+cs=0033  ss=002b  ds=002b  es=002b  fs=0053  gs=002b             efl=00000204
+KERNELBASE!RaiseFailFastException+0x188:
+00007ffd`c73da1a8 0f1f440000      nop     dword ptr [rax+rax]
+Resetting default scope
+
+FAULTING_IP: 
+Microsoft_UI_Xaml!FailFastWithStowedExceptions+59
+00007ffc`fba23385 488b5c2430      mov     rbx,qword ptr [rsp+30h]
+
+EXCEPTION_RECORD:  (.exr -1)
+ExceptionAddress: 00007ffcfba23385 (Microsoft_UI_Xaml!FailFastWithStowedExceptions+0x0000000000000059)
+   ExceptionCode: c000027b
+  ExceptionFlags: 00000001
+NumberParameters: 2
+   Parameter[0]: 0000021253f7ad70
+   Parameter[1]: 0000000000000002
+
+DEFAULT_BUCKET_ID:  STOWED_EXCEPTION_NOSOS
+
+BUGCHECK_STR:  STOWED_EXCEPTION_NOSOS
+
+ERROR_CODE: (NTSTATUS) 0xc000027b - <Unable to get error code text>
+
+EXCEPTION_CODE: (HRESULT) 0x80004003 (2147500035) - <Unable to get error code text>
+
+EXCEPTION_CODE_STR:  80004003
+
+EXCEPTION_PARAMETER1:  0000021253f7ad70
+
+EXCEPTION_PARAMETER2:  0000000000000002
+
+WATSON_BKT_PROCSTAMP:  6a870000
+
+WATSON_BKT_PROCVER:  1.0.0.0
+
+PROCESS_VER_PRODUCT:  Galbox.App
+
+WATSON_BKT_MODULE:  Microsoft.UI.Xaml.dll
+
+WATSON_BKT_MODSTAMP:  a252a1e7
+
+WATSON_BKT_MODOFFSET:  3a3385
+
+WATSON_BKT_MODVER:  3.1.6.0
+
+MODULE_VER_PRODUCT:  Windows App SDK
+
+BUILD_VERSION_STRING:  26100.1.amd64fre.ge_release.240331-1435
+
+MODLIST_WITH_TSCHKSUM_HASH:  0560867c65c154a74bcd4eb9cf619b4779e9cf11
+
+MODLIST_SHA1_HASH:  6fa17a4209efd284247c1675c3d1b8d4018a7444
+
+NTGLOBALFLAG:  0
+
+PROCESS_BAM_CURRENT_THROTTLED: 0
+
+PROCESS_BAM_PREVIOUS_THROTTLED: 0
+
+APPLICATION_VERIFIER_FLAGS:  0
+
+PRODUCT_TYPE:  1
+
+SUITE_MASK:  784
+
+DUMP_FLAGS:  20094
+
+DUMP_TYPE:  1
+
+PROCESS_NAME:  unknown
+
+ANALYSIS_SESSION_HOST:  JANTX
+
+ANALYSIS_SESSION_TIME:  09-12-2026 00:21:44.0189
+
+ANALYSIS_VERSION: 10.0.17763.132 amd64fre
+
+MANAGED_CODE: 1
+
+MANAGED_ENGINE_MODULE:  coreclr
+
+THREAD_ATTRIBUTES: 
+LAST_CONTROL_TRANSFER:  from 00007ffdc7c42189 to 00007ffdc73da1a8
+
+FAULTING_THREAD:  ffffffff
+
+THREAD_SHA1_HASH_MOD_FUNC:  e9222d40dc3e93bb348165fbd1b7bfae4c996765
+
+THREAD_SHA1_HASH_MOD_FUNC_OFFSET:  357de5b0d966c1893b49f6e27fb0692578c8afe4
+
+OS_LOCALE:  CHS
+
+ADDITIONAL_DEBUG_TEXT:  SOS.DLL is not loaded for managed code. Analysis might be incomplete
+
+PRIMARY_PROBLEM_CLASS:  STOWED_EXCEPTION
+
+PROBLEM_CLASSES: 
+
+    ID:     [0n258]
+    Type:   [STOWED_EXCEPTION]
+    Class:  Primary
+    Scope:  DEFAULT_BUCKET_ID (Failure Bucket ID prefix)
+            BUCKET_ID
+    Name:   Add
+    Data:   Omit
+    PID:    [Unspecified]
+    TID:    [Unspecified]
+    Frame:  [0]
+
+    ID:     [0n251]
+    Type:   [NOSOS]
+    Class:  Addendum
+    Scope:  DEFAULT_BUCKET_ID (Failure Bucket ID prefix)
+            BUCKET_ID
+    Name:   Add
+    Data:   Omit
+    PID:    [Unspecified]
+    TID:    [Unspecified]
+    Frame:  [0]
+
+STACK_TEXT:  
+00000039`385ea1d0 00007ffd`c73da1a8 KERNELBASE!RaiseFailFastException+0x188
+00000039`385ea7b0 00007ffd`c7c42189 combase!RoFailFastWithErrorContextInternal2+0x4a9
+00000039`385ea9d0 00007ffc`fba23385 Microsoft_UI_Xaml!FailFastWithStowedExceptions+0x59
+00000039`385eaa00 00007ffc`fbe6517a Microsoft_UI_Xaml!DirectUI::ErrorHelper::ProcessUnhandledError+0x102
+00000039`385eaa60 00007ffc`fbe64a7e Microsoft_UI_Xaml!DirectUI::FinalUnhandledErrorDetectedRegistration::OnFinalUnhandledErrorDetected+0xce
+00000039`385eaaf0 00007ffd`b5804129 twinapi_appcore!Windows::Internal::Details::GitInvokeHelper<Windows::Foundation::IEventHandler<Windows::ApplicationModel::Core::UnhandledErrorDetectedEventArgs * __ptr64>,Windows::Internal::GitPtr,2>::Invoke+0x59
+00000039`385eab20 00007ffd`b5804169 twinapi_appcore!Windows::ApplicationModel::Core::UnhandledErrorInvokeHelper::Invoke+0x19
+00000039`385eab50 00007ffd`b57f5457 twinapi_appcore!Microsoft::WRL::InvokeTraits<2>::InvokeDelegates<<lambda_e478ebca019219710ec18bdfd8216607>,Windows::Foundation::IEventHandler<Windows::ApplicationModel::Core::UnhandledErrorDetectedEventArgs * __ptr64> >+0x57
+00000039`385eab90 00007ffd`b57e1968 twinapi_appcore!Microsoft::WRL::EventSource<Windows::Foundation::IEventHandler<Windows::ApplicationModel::Core::UnhandledErrorDetectedEventArgs * __ptr64>,Microsoft::WRL::InvokeModeOptions<2> >::DoInvoke<<lambda_e478ebca019219710ec18bdfd8216607> >+0x78
+00000039`385eabd0 00007ffd`b57b2bb9 twinapi_appcore!Microsoft::WRL::EventSource<Windows::Foundation::IEventHandler<Windows::ApplicationModel::Core::UnhandledErrorDetectedEventArgs * __ptr64>,Microsoft::WRL::InvokeModeOptions<2> >::InvokeAll<std::nullptr_t,Windows::ApplicationModel::Core::UnhandledErrorDetectedEventArgs * __ptr64>+0x29
+00000039`385eac20 00007ffd`b57b29b6 twinapi_appcore!Windows::ApplicationModel::Core::CoreApplication::ForwardLocalError+0x76
+00000039`385eac70 00007ffd`b57b28d6 twinapi_appcore!Windows::ApplicationModel::Core::CoreApplicationFactory::ForwardLocalError+0x116
+00000039`385eacb0 00007ffd`c7c6c555 combase!CallErrorForwarder+0x181
+00000039`385ead40 00007ffc`fbe653df Microsoft_UI_Xaml!DirectUI::ErrorHelper::ReportUnhandledError+0xd3
+00000039`385eadd0 00007ffc`fb95c877 Microsoft_UI_Xaml!DirectUI::DXamlCore::FireEvent+0x26e447
+00000039`385eae80 00007ffc`fb6ee2de Microsoft_UI_Xaml!CCoreServices::CLR_FireEvent+0x12e
+00000039`385eaf10 00007ffc`fb6ee19d Microsoft_UI_Xaml!CommonBrowserHost::CLR_FireEvent+0x1d
+00000039`385eaf50 00007ffc`fb853773 Microsoft_UI_Xaml!CControlBase::ScriptCallback+0xf3
+00000039`385eafe0 00007ffc`fb794623 Microsoft_UI_Xaml!CXcpDispatcher::OnScriptCallback+0x113
+00000039`385eb0b0 00007ffc`fb79440c Microsoft_UI_Xaml!CXcpDispatcher::OnWindowMessage+0x48
+00000039`385eb0e0 00007ffc`fb794369 Microsoft_UI_Xaml!CXcpDispatcher::ProcessMessage+0x2d
+00000039`385eb110 00007ffc`fb793dc8 Microsoft_UI_Xaml!CXcpBrowserHost::SyncScriptCallbackRequest+0x88
+00000039`385eb190 00007ffc`fb6ba894 Microsoft_UI_Xaml!CEventManager::RaiseHelper+0x1c4
+00000039`385eb230 00007ffc`fb6b8e3c Microsoft_UI_Xaml!CEventManager::Raise+0x21c
+00000039`385eb360 00007ffc`fb690aaf Microsoft_UI_Xaml!CFrameworkElement::RaiseLoadingEventIfNeeded+0x8f
+00000039`385eb3c0 00007ffc`fb69265e Microsoft_UI_Xaml!CFrameworkElement::MeasureCore+0xce
+00000039`385eb4e0 00007ffc`fb6c95fa Microsoft_UI_Xaml!CUIElement::MeasureInternal+0x4ba
+00000039`385eb620 00007ffc`fb6c9047 Microsoft_UI_Xaml!CUIElement::Measure+0x407
+00000039`385eb730 00007ffc`fb7a3198 Microsoft_UI_Xaml!CContentPresenter::MeasureOverride+0x98
+00000039`385eb790 00007ffc`fb6927f2 Microsoft_UI_Xaml!CFrameworkElement::MeasureCore+0x262
+00000039`385eb8b0 00007ffc`fb6c95fa Microsoft_UI_Xaml!CUIElement::MeasureInternal+0x4ba
+00000039`385eb9f0 00007ffc`fb6c9047 Microsoft_UI_Xaml!CUIElement::Measure+0x407
+00000039`385ebb00 00007ffc`fb6c7fe6 Microsoft_UI_Xaml!CControl::MeasureOverride+0x36
+00000039`385ebb40 00007ffc`fb74154a Microsoft_UI_Xaml!CFrameworkElement::MeasureOverrideForPInvoke+0x16
+00000039`385ebb70 00007ffc`fb7414fe Microsoft_UI_Xaml!CoreImports::FrameworkElement_MeasureOverride+0x56
+00000039`385ebbc0 00007ffc`fb741475 Microsoft_UI_Xaml!DirectUI::FrameworkElement::MeasureOverrideImpl+0x49
+00000039`385ebc10 00007ffc`fb7413f0 Microsoft_UI_Xaml!DirectUI::FrameworkElementGenerated::MeasureOverride+0x70
+00000039`385ebc70 00007ffc`fb741327 Microsoft_UI_Xaml!DirectUI::ContentControl::MeasureOverride+0xa7
+00000039`385ebce0 00007ffc`fb77a185 Microsoft_UI_Xaml!DirectUI::FrameworkElementGenerated::MeasureOverrideProtected+0x65
+00000039`385ebd30 00007ffc`fb77a021 Microsoft_UI_Xaml!DirectUI::FrameworkElement::MeasureOverrideFromCore+0x111
+00000039`385ebde0 00007ffc`fb6929fa Microsoft_UI_Xaml!CFrameworkElement::MeasureCore+0x46a
+00000039`385ebf00 00007ffc`fb6c95fa Microsoft_UI_Xaml!CUIElement::MeasureInternal+0x4ba
+00000039`385ec040 00007ffc`fb6c9047 Microsoft_UI_Xaml!CUIElement::Measure+0x407
+00000039`385ec150 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec260 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec370 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec480 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec590 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec6a0 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec7b0 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec8c0 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ec9d0 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ecae0 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ecbf0 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ecd00 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ece10 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ecf20 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ed030 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ed140 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ed250 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ed360 00007ffc`fb6c8fec Microsoft_UI_Xaml!CUIElement::Measure+0x3ac
+00000039`385ed470 00007ffc`fb6ce42e Microsoft_UI_Xaml!CLayoutManager::UpdateLayout+0x6ee
+00000039`385ed640 00007ffc`fb6cd2cb Microsoft_UI_Xaml!CCoreServices::NWDrawTree+0x27b
+00000039`385ed7d0 00007ffc`fb686925 Microsoft_UI_Xaml!CCoreServices::NWDrawMainTree+0xd1
+00000039`385ed880 00007ffc`fb6866fd Microsoft_UI_Xaml!CWindowRenderTarget::Draw+0x71
+00000039`385ed8c0 00007ffc`fb686638 Microsoft_UI_Xaml!CXcpBrowserHost::OnTick+0x58
+00000039`385ed900 00007ffc`fb793d0e Microsoft_UI_Xaml!CXcpDispatcher::Tick+0x8e
+00000039`385ed950 00007ffc`fb794b4c Microsoft_UI_Xaml!CXcpDispatcher::OnReentrancyProtectedWindowMessage+0x90
+00000039`385ed9c0 00007ffc`fb79423d Microsoft_UI_Xaml!CXcpDispatcher::MessageTimerCallback+0x5d
+00000039`385eda40 00007ffc`fb89a67d Microsoft_UI_Xaml!Microsoft::WRL::Details::DelegateArgTraits<long (__cdecl ABI::Windows::Foundation::ITypedEventHandler_impl<ABI::Windows::Foundation::Internal::AggregateType<ABI::Microsoft::UI::Dispatching::DispatcherQueueTimer *,ABI::Microsoft::UI::Dispatching::IDispatcherQueueTimer *>,IInspectable *>::*)+0xd
+00000039`385eda70 00007ffd`193f80e7 CoreMessagingXP!Microsoft::WRL::Details::DelegateArgTraits<long (__cdecl Windows::Foundation::ITypedEventHandler_impl<Windows::Foundation::Internal::AggregateType<Microsoft::UI::Dispatching::DispatcherQueueTimer * __ptr64,Microsoft::UI::Dispatching::IDispatcherQueueTimer * __ptr64>,IInspectable * __ptr64>::*)+0x87
+00000039`385edab0 00007ffd`193f346f CoreMessagingXP!Microsoft::WRL::InvokeTraits<-2>::InvokeDelegates<<lambda_1e854da9c9ccd42f6138c3b007a32877>,Windows::Foundation::ITypedEventHandler<Microsoft::UI::Dispatching::DispatcherQueueTimer * __ptr64,IInspectable * __ptr64> >+0x83
+00000039`385edb10 00007ffd`193f8583 CoreMessagingXP!Microsoft::UI::Dispatching::DispatcherQueueTimer::TimerCallback+0xf3
+00000039`385edb70 00007ffd`193a0b0d CoreMessagingXP!CFlat::SehSafe::Execute<<lambda_a81ff790741c2a62f2197c2561f5fe49> >+0x21
+00000039`385edba0 00007ffd`193a4b66 CoreMessagingXP!Microsoft::CoreUI::ActionCallback::ImportAdapter$+0x66
+00000039`385edbe0 00007ffd`19390ea9 CoreMessagingXP!Microsoft::CoreUI::Dispatch::TimeoutManager::Callback_OnDispatch+0x1a9
+00000039`385edca0 00007ffd`1937c990 CoreMessagingXP!Microsoft::CoreUI::Dispatch::Dispatcher::Callback_DispatchNextItem+0x1bc
+00000039`385edd40 00007ffd`1937c6fd CoreMessagingXP!Microsoft::CoreUI::Dispatch::Dispatcher::Callback_DispatchLoop+0x1b9
+00000039`385ede00 00007ffd`1936fecc CoreMessagingXP!Microsoft::CoreUI::Dispatch::EventLoop::Callback_RunCoreLoop+0x164
+00000039`385ede60 00007ffd`19372d72 CoreMessagingXP!Microsoft::CoreUI::Dispatch::UserAdapter::DrainCoreMessagingQueue+0x15a
+00000039`385edf20 00007ffd`193730e8 CoreMessagingXP!Microsoft::CoreUI::Dispatch::UserAdapter::OnUserDispatch+0x98
+00000039`385edf70 00007ffd`193b37d3 CoreMessagingXP!Microsoft::CoreUI::Dispatch::UserAdapter::DoWork+0xa7
+00000039`385edfd0 00007ffd`193b3966 CoreMessagingXP!Microsoft::CoreUI::Dispatch::UserAdapter::HandleDispatchNotifyMessage+0x132
+00000039`385ee030 00007ffd`193b3ede CoreMessagingXP!Microsoft::CoreUI::Dispatch::UserAdapter::WindowProc+0x5e
+00000039`385ee060 00007ffd`c85052c6 user32!UserCallWinProcCheckWow+0x356
+00000039`385ee1c0 00007ffd`c8504b4c user32!DispatchClientMessage+0x9c
+00000039`385ee220 00007ffd`c852f673 user32!_fnDWORD+0x33
+00000039`385ee280 00007ffd`c9e04de4 ntdll!KiUserCallbackDispatcherContinue+0x0
+00000039`385ee308 00007ffd`c7091344 win32u!NtUserGetMessage+0x14
+00000039`385ee310 00007ffd`c8522812 user32!GetMessageW+0x22
+00000039`385ee370 00007ffc`fb8266b4 Microsoft_UI_Xaml!DirectUI::FrameworkApplication::RunDesktopWindowMessageLoop+0x3c
+00000039`385ee3f0 00007ffc`fb82756c Microsoft_UI_Xaml!DirectUI::FrameworkApplication::StartDesktop+0x20c
+00000039`385ee490 00007ffc`fb82674f Microsoft_UI_Xaml!DirectUI::FrameworkApplicationFactory::Start+0x5f
+00000039`385ee4e0 00007ffc`a1489175 unknown!unknown+0x0
+00000039`385ee630 00007ffc`a1487adc unknown!unknown+0x0
+00000039`385ee670 00007ffc`a1486de8 unknown!unknown+0x0
+00000039`385ee7d0 00007ffd`00fff063 coreclr!CallDescrWorkerInternal+0x83
+00000039`385ee810 00007ffd`00eea17a coreclr!MethodDescCallSite::CallTargetWorker+0x2a6
+00000039`385ee950 00007ffd`00ea9da8 coreclr!RunMainInternal+0xb8
+00000039`385eea70 00007ffd`00f3d614 coreclr!RunMain+0xe0
+00000039`385eeb00 00007ffd`00f3ccef coreclr!Assembly::ExecuteMainMethod+0x1ab
+00000039`385eedd0 00007ffd`00f3d946 coreclr!CorHost2::ExecuteAssembly+0x246
+00000039`385eeee0 00007ffd`00fdafce coreclr!coreclr_execute_assembly+0xde
+00000039`385eef80 00007ffd`013a15ca hostpolicy!run_app_for_context+0x5ea
+00000039`385ef0b0 00007ffd`013a186c hostpolicy!run_app+0x3c
+00000039`385ef0f0 00007ffd`013a27e1 hostpolicy!corehost_main+0x171
+00000039`385ef1f0 00007ffd`5970d56b hostfxr!execute_app+0x2bb
+00000039`385ef280 00007ffd`5971029c hostfxr!`anonymous namespace'::read_config_and_execute+0xac
+00000039`385ef380 00007ffd`59712676 hostfxr!fx_muxer_t::handle_exec_host_command+0x1d6
+00000039`385ef430 00007ffd`5971079d hostfxr!fx_muxer_t::execute+0x2ad
+00000039`385ef560 00007ffd`59708998 hostfxr!hostfxr_main_startupinfo+0xa8
+00000039`385ef660 00007ff7`6c2afeac Galbox_App_exe!exe_start+0x7fc
+00000039`385ef810 00007ff7`6c2b0316 Galbox_App_exe!wmain+0x156
+00000039`385ef890 00007ff7`6c2b1a58 Galbox_App_exe!__scrt_common_main_seh+0x10c
+00000039`385ef8d0 00007ffd`c816cd87 kernel32!BaseThreadInitThunk+0x17
+00000039`385ef900 00007ffd`c9d4caec ntdll!RtlUserThreadStart+0x2c
+
+
+STACK_COMMAND:  *** Stowed Exception v2 ***; .exr -1; dpp 0x21253f7ad70 L0x2; dt 0x212000ec0b8 combase!STOWED_EXCEPTION_INFORMATION_V2 -r; dps 0x21253f7acb0 L0x2; *** Nested 'LEO1' @ 0x21205240C48 ***; *** NOSOS *** ; ** Pseudo Context ** StowedPseudo ** Value: 25c7ef1c9c0 *
+
+THREAD_SHA1_HASH_MOD:  ad20de24faba5ca3efbdc37e5cc6d34fe613672b
+
+FOLLOWUP_IP: 
+Microsoft_UI_Xaml!FailFastWithStowedExceptions+59
+00007ffc`fba23385 488b5c2430      mov     rbx,qword ptr [rsp+30h]
+
+FAULT_INSTR_CODE:  245c8b48
+
+FAULTING_SOURCE_LINE:  C:\__w\1\s\dxaml\xcp\components\base\ErrorContext.cpp
+
+FAULTING_SOURCE_FILE:  C:\__w\1\s\dxaml\xcp\components\base\ErrorContext.cpp
+
+FAULTING_SOURCE_LINE_NUMBER:  1508
+
+SYMBOL_STACK_INDEX:  2
+
+SYMBOL_NAME:  Microsoft_UI_Xaml!FailFastWithStowedExceptions+59
+
+FOLLOWUP_NAME:  MachineOwner
+
+MODULE_NAME: Microsoft_UI_Xaml
+
+IMAGE_NAME:  Microsoft.UI.Xaml.dll
+
+DEBUG_FLR_IMAGE_TIMESTAMP:  0
+
+BUCKET_ID:  STOWED_EXCEPTION_NOSOS_Microsoft_UI_Xaml!FailFastWithStowedExceptions+59
+
+FAILURE_EXCEPTION_CODE:  80004003
+
+FAILURE_IMAGE_NAME:  Microsoft.UI.Xaml.dll
+
+BUCKET_ID_IMAGE_STR:  Microsoft.UI.Xaml.dll
+
+FAILURE_MODULE_NAME:  Microsoft_UI_Xaml
+
+BUCKET_ID_MODULE_STR:  Microsoft_UI_Xaml
+
+FAILURE_FUNCTION_NAME:  FailFastWithStowedExceptions
+
+BUCKET_ID_FUNCTION_STR:  FailFastWithStowedExceptions
+
+BUCKET_ID_OFFSET:  59
+
+BUCKET_ID_MODTIMEDATESTAMP:  0
+
+BUCKET_ID_MODCHECKSUM:  e7021e
+
+BUCKET_ID_MODVER_STR:  3.1.6.0
+
+BUCKET_ID_PREFIX_STR:  STOWED_EXCEPTION_NOSOS_
+
+FAILURE_PROBLEM_CLASS:  STOWED_EXCEPTION
+
+FAILURE_SYMBOL_NAME:  Microsoft.UI.Xaml.dll!FailFastWithStowedExceptions
+
+FAILURE_BUCKET_ID:  STOWED_EXCEPTION_NOSOS_80004003_Microsoft.UI.Xaml.dll!FailFastWithStowedExceptions
+
+WATSON_STAGEONE_URL:  http://watson.microsoft.com/StageOne/unknown/1.0.0.0/6a870000/Microsoft.UI.Xaml.dll/3.1.6.0/a252a1e7/80004003/003a3385.htm?Retriage=1
+
+TARGET_TIME:  2026-09-11T16:16:57.000Z
+
+OSBUILD:  26200
+
+OSSERVICEPACK:  9444
+
+SERVICEPACK_NUMBER: 0
+
+OS_REVISION: 0
+
+OSPLATFORM_TYPE:  x64
+
+OSNAME:  Windows 10
+
+OSEDITION:  Windows 10 WinNt SingleUserTS Personal
+
+USER_LCID:  0
+
+OSBUILD_TIMESTAMP:  2003-05-22 21:22:26
+
+BUILDDATESTAMP_STR:  240331-1435
+
+BUILDLAB_STR:  ge_release
+
+BUILDOSVER_STR:  10.0.26100.1.amd64fre.ge_release.240331-1435
+
+ANALYSIS_SESSION_ELAPSED_TIME:  d2dd
+
+ANALYSIS_SOURCE:  UM
+
+FAILURE_ID_HASH_STRING:  um:stowed_exception_nosos_80004003_microsoft.ui.xaml.dll!failfastwithstowedexceptions
+
+FAILURE_ID_HASH:  {cb47482b-e695-20af-e0c3-d68f26ed74f6}
+
+Followup:     MachineOwner
+---------
+
+0:000> q
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'

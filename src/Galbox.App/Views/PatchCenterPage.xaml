@@ -50,6 +50,23 @@
         <SolidColorBrush x:Key="OtherPatchColor" Color="{StaticResource TextFillColorSecondary}"/>
 
         <!-- Patch Details Flyout -->
+        <!--
+            The detail text is NOT {x:Bind}-ed here on purpose.
+
+            A compiled binding whose target lives inside a <Flyout> resource is a crash trap on
+            this page. WinUI raises FrameworkElement.Loading over the page's staged element tree
+            BEFORE the flyout's content has been attached, the generated bindings object answers
+            that event with Initialize() -> Update(), and Update() walks every binding step -
+            including this TextBlock. The element reference captured in Connect() is still null at
+            that moment, so XamlBindingSetters.Set_...TextBlock_Text dereferences null and throws
+            NullReferenceException from inside a XAML callback. WinUI turns that into a stowed
+            exception, and the next notification turns it into 0xC000027B (STATUS_STOWED_EXCEPTION)
+            - i.e. the whole process dies. It is not a navigation bug: navigating quickly only
+            decides which page is live when the broken callback lands.
+
+            The text is written imperatively in ShowPatchDetailsFlyout instead, which can only run
+            after the flyout - and therefore the TextBlock - actually exists.
+        -->
         <Flyout x:Key="PatchDetailsFlyoutKey"
             Placement="Bottom"
             ShouldConstrainToRootBounds="False">
@@ -65,7 +82,7 @@
                         FontSize="18"
                         FontWeight="Bold"/>
                     <TextBlock
-                        Text="{x:Bind ViewModel.PatchDetailContent, Mode=OneWay}"
+                        x:Name="PatchDetailText"
                         TextWrapping="Wrap"
                         FontSize="14"/>
                 </StackPanel>

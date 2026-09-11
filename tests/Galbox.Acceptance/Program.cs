@@ -57,7 +57,11 @@ internal static class Program
             new A6MetadataFieldsCheck(),
             new A7UpstreamContractCheck(),
             new A8NavigationPageCheck(),
-            new A9StartupWithCacheCheck()
+            new A9StartupWithCacheCheck(),
+            // A50+: appended after the existing baseline so no earlier check is renumbered or
+            // reordered. A50 locks the rapid-navigation crash (0xC000027B) that only appears when
+            // the navigation menu is switched back to back.
+            new A50RapidNavigationSurvivalCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));

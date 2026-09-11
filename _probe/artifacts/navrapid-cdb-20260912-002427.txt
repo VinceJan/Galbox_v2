@@ -1,0 +1,12 @@
+================================================================
+ RAPID NAVIGATION PROBE + LIVE DEBUGGER
+================================================================
+ started         : 2026-09-12 00:24:27Z
+ target switches : 200
+ pacing (StepMs) : 40
+ cdb log         : E:\tmp\Galbox_crash\_probe\artifacts\cdb-attached-20260912-002427.txt
+ report          : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-cdb-20260912-002427.txt
+ app pid         : 13876
+ window          : handle=7080246
+ cdb attached    : cdb pid=32592
+FATAL: <2 nav items

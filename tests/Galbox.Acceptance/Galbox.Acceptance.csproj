@@ -18,6 +18,20 @@
     <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
   </PropertyGroup>
 
+  <!-- A50 drives the real navigation menu through UI Automation, which lives in
+       System.Windows.Automation (UIAutomationClient / UIAutomationTypes). Those assemblies ship in
+       the Microsoft.WindowsDesktop.App shared framework, so the headless test host needs a
+       framework reference to it.
+
+       Deliberately NOT <UseWPF>true</UseWPF>: that switches the project to the WindowsDesktop SDK
+       flavour, which REPLACES the default implicit-using set and breaks the existing checks
+       (System.Net.Http, System.IO, ... disappear). A plain FrameworkReference only adds the
+       assemblies the compiler can see and leaves the rest of the project untouched. No WPF window
+       is ever created, and the shipping application is not affected at all. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Galbox.App\Galbox.App.csproj" />
   </ItemGroup>

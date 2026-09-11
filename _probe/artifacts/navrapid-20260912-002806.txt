@@ -1,0 +1,17 @@
+================================================================
+ GAlBOX RAPID NAVIGATION PROBE
+================================================================
+ started            : 2026-09-12 00:28:06Z
+ exe                : E:\tmp\Galbox_crash\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+ target switches    : 200
+ pacing (StepMs)    : 40
+ first-chance trace : False
+ report file        : E:\tmp\Galbox_crash\_probe\artifacts\navrapid-20260912-002806.txt
+ process            : pid=7328
+ window acquired after 2500 ms -> handle=11405446
+ nav item NOT FOUND : 主页
+ nav item NOT FOUND : 游戏库
+ nav item NOT FOUND : 存档管理
+ nav item NOT FOUND : 补丁中心
+ nav item NOT FOUND : Settings
+FATAL: fewer than 2 navigation items are reachable; the probe cannot stress navigation.

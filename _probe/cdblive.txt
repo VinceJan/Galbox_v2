@@ -1,0 +1,17 @@
+.symfix E:\tmp\symcache
+.reload /f
+sxe -c "g" eh
+sxe -c "g" clr
+sxe -c "g" 40000015
+g
+.echo ======== FAULT ========
+.ecxr
+~*k 40
+.echo ======== ANALYZE ========
+!analyze -v
+.echo ======== CLR ========
+.loadby sos clr
+!pe
+!clrstack
+.logclose
+q

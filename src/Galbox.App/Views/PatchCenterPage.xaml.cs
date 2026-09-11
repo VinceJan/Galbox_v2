@@ -75,9 +75,18 @@ public sealed partial class PatchCenterPage : Page
     /// <summary>
     /// Shows patch details flyout when clicking Details button.
     /// </summary>
+    /// <remarks>
+    /// PatchDetailText is filled here rather than through an {x:Bind} in the XAML (see the comment
+    /// on &lt;Flyout x:Key="PatchDetailsFlyoutKey"&gt;): a compiled binding inside a Flyout resource
+    /// is walked by the generated bindings object while the flyout content is still unattached, and
+    /// the resulting NullReferenceException terminates the process with 0xC000027B. Writing the
+    /// text at show time cannot hit that window, because fetching the flyout from Resources forces
+    /// its content to be created.
+    /// </remarks>
     public void ShowPatchDetailsFlyout(FrameworkElement target)
     {
         var flyout = (Flyout)Resources["PatchDetailsFlyoutKey"];
+        PatchDetailText.Text = ViewModel.PatchDetailContent ?? string.Empty;
         flyout.ShowAt(target);
     }
 
