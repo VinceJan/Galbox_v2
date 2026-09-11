@@ -70,15 +70,51 @@
 
 **合并要求**：`Program.cs` 里的检查数组**只做追加**，不得重排或改动 A0–A9 的顺序与内容。
 
-#### 3.2 合并顺序（冲突从少到多）
-1. `feat/patch-center-ui`（新增文件为主）
-2. `feat/save-node-ui`（新增文件为主）
-3. `merge/all-features`（已知冲突：`Galbox.sln`、`App.xaml.cs`）
-4. `feat/distributable-packaging`（已知冲突：`Galbox.App.csproj`、`Program.cs`）
-5. `docs/delivery`（文档，几乎无冲突）
-6. `feat/honest-ui-tests`（测试项目，几乎无冲突）
+#### 3.2 合并进度与顺序
 
-**预期冲突文件**：`Galbox.sln`、`tests\Galbox.Acceptance\Program.cs`、`src\Galbox.App\App.xaml.cs`、`src\Galbox.App\Galbox.App.csproj`、`src\Galbox.App\Program.cs`、`src\Galbox.App\Views\PatchCenterPage.xaml`
+**已完成合并**（`release/1.0.0` @ `88d9798`，零冲突，19/19 PASS 已独立复验）：
+`merge/all-features` · `feat/distributable-packaging` · `docs/delivery` · `wip/2026-04-16-fixes`（观感批次）
+
+**待合并**（编号即建议顺序，冲突从少到多）：
+1. `feat/patch-center-ui`（补丁中心界面，A30–A32）
+2. `feat/metadata-sources`（ymgal/cngal，A40–A42）
+3. `fix/rapid-navigation-crash`（导航崩溃，A50+）
+4. `feat/moyu-source`（moyu.moe 合规源，A60+）
+5. `feat/save-node-ui`（存档节点界面，A10）
+6. `feat/health-diagnosis`（健康诊断，A70+）
+7. `feat/honest-ui-tests`（测试诚实性，几乎无冲突）
+
+**预期冲突文件**：`Galbox.sln`、`tests\Galbox.Acceptance\Program.cs`、`src\Galbox.App\App.xaml.cs`、`src\Galbox.App\Galbox.App.csproj`、`src\Galbox.App\Program.cs`
+
+#### 3.3 最高危文件：`src\Galbox.App\App.xaml.cs`
+
+**多方都会改这个文件的 DI 注册区**，是收尾时最可能冲突的地方。已知改动方：
+
+| 来源 | 改了什么 | 状态 |
+|---|---|---|
+| 观感与数据安全批次 | +18 行：`IGameImageService`（Singleton）、`IGameDeletionService`（Singleton）、命名 HttpClient `"ImageDownload"`；`AutoScrapingService` 构造器 +1 参数 | ✅ 已合并 |
+| 补丁中心线 | +12 行：`AddGalboxPatches()` + `ILocalPatchService`（Singleton） | 🔄 在途 |
+| 元数据源线 | 有修改（新增 `MetadataSourceOptions` 凭据配置） | 🔄 在途 |
+| moyu 源线 / 健康诊断线 | 预计会加 | 🔄 在途 |
+
+**合并原则**：
+1. 这些改动**互不矛盾**，都是往 `ConfigureServices` 里追加注册 —— **取并集即可**
+2. **必须逐一核对生存期**：本仓库出过 `Cannot consume scoped service from singleton` 导致启动崩溃。新注册若依赖 `DbContext`，**必须走 `IDbContextFactory`**，不能直接注入 `GalboxDbContext`
+3. **合并后必须实机启动一次**（`MainWindowHandle` 非 0）。DI 错误只在这里暴露 —— `Program.cs` 里已开 `ValidateScopes=true` / `ValidateOnBuild=true`，容器构建时就会报错
+
+#### 3.4 尚未派发：流程图追踪与社区成就（P2 预留接口）
+
+**目标与规格都要求它们**，但规格明确写的是 **"第一版只预留接口，前端隐藏"**（`Galbox-产品知识总纲.md:173-174`）。
+
+**当前真实状态**：`src/` 全目录搜索 `Achievement|Flowchart|成就|流程图` —— **零命中**。也就是说**连接口都没预留**，比规格要求还缺一层。
+
+**待资源腾出后派发**，范围严格限定为"预留"：
+- 定义接口与数据模型（流程图节点/边；成就定义/解锁记录）
+- **前端隐藏**：加功能开关，默认关闭，界面上不出现入口
+- **不得**实现需要服务端的能力，也不得放"点了没反应"的占位按钮
+- 补验收检查，断言"接口存在"且"前端默认隐藏"
+
+> 记录理由（不是遗忘）：当前已有 8 条工作线并行，可用内存约 1 GB。此项是 P2 最低优先级，**等前面的线落地再派**，避免把资源摊得更薄。
 
 ### 步骤 4：打包 ✅ 技术路径已打通
 - **正式方案**（已独立验证）：`dotnet publish` 产物，**自包含 168.5 MB，用户机器无需预装 .NET**
