@@ -19,6 +19,8 @@ It exists because "it compiles" was being treated as "it works".
 | A5 | **Live scraping.** `IGameScrapingService.SearchGameAsync` across the four sources; per source it prints success, error message, raw exception, hit count, elapsed time and the matched titles. |
 | A6 | Whether the A5 hits are *usable* metadata: title, rating, cover URL presence per item, plus the per-source totals. |
 | A7 | Upstream contract probe. Prints the traffic the application's **own** HttpClient pipelines produced during A5 (recorded by a transparent handler, so no request literals to go stale), then issues a *corrected* request to the same upstreams to prove whether a scraping failure lives in Galbox or upstream. Also dumps each typed `HttpClient`'s `BaseAddress`. |
+| A8 | Navigation / page / XAML completeness — the regression guard for "implemented but no door": every navigation key resolves to an existing page type, every ViewModel registered in `App.xaml.cs` is referenced by a view under `Views/`, every page is reachable, every converter a view uses is registered, and every `MainWindow.xaml` menu `Tag` is a known key. Source-level on purpose: a runtime test can never see a missing XAML file. |
+| A9 | The only check that starts the shipping GUI. With at least one `search_*.json` file in `%LocalAppData%\Galbox\ScrapingCache`, `Galbox.App.exe` must stay alive and own a visible top-level window within 30 s (`MainWindowHandle` cross-checked with an `EnumWindows` scan); on failure the newest startup-log lines are attached. It exists because the worst defect so far — a thread-affinity `COMException` that left a live process with no window — was invisible to every headless check. |
 
 Exit code: `0` when every check passes, `1` when anything fails or errors.
 
