@@ -1,3 +1,6 @@
+> ⚠️ **本文档已过时，仅作历史存档保留。** 它包含未实现的 Release 链接、安装步骤与许可证声明。
+> 项目现状与真实功能清单请以仓库根目录的 [README.md](../README.md) 为准。
+
 # Galbox
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

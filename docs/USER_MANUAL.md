@@ -1,3 +1,8 @@
+> ⚠️ **本文档已过时，仅作历史存档保留。**
+> 它由早期版本生成，其中描述的部分功能（补丁下载/卸载、部分设置项的行为等）在当前代码中并不存在，
+> 且不再随代码维护。请以 [README.md](../README.md)、[docs/USER-MANUAL.md](USER-MANUAL.md)、
+> [docs/DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) 与 [CHANGELOG.md](../CHANGELOG.md) 为准。
+
 # Galbox 用户手册
 
 欢迎使用 Galbox！本手册将帮助您快速了解和掌握 Galbox 的各项功能。
