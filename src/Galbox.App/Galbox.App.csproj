@@ -112,7 +112,14 @@
   <Target Name="_CollectAppPriInputs">
     <ItemGroup>
       <_AppPriXbf Include="$(OutDir)**\*.xbf" Exclude="$(OutDir)Microsoft.UI.Xaml\**\*.xbf;$(OutDir)publish\**\*.xbf;$(PublishDir)**\*.xbf" />
-      <_AppPriFrameworkPri Include="$(OutDir)*.pri" Exclude="$(OutDir)resources.pri" />
+      <!-- Framework PRIs are merged only for the self-contained deployment: that is the case in
+           which the framework package is deliberately NOT referenced and the app has to carry the
+           Microsoft.UI.Xaml resource map itself. In a framework-dependent build the runtime comes
+           from the installed package and supplies its own resources.
+           The condition also keeps a framework-dependent build from picking up the .pri files a
+           previous self-contained build left behind in the shared output folder. -->
+      <_AppPriFrameworkPri Condition="'$(WindowsAppSDKSelfContained)' == 'true'"
+                           Include="$(OutDir)*.pri" Exclude="$(OutDir)resources*.pri" />
     </ItemGroup>
   </Target>
 
@@ -127,6 +134,11 @@
          and every localisation satellite. -->
     <RemoveDir Directories="$(_AppPriStagingDir)" />
     <MakeDir Directories="$(_AppPriStagingDir)" />
+    <!-- Drop per-language satellites an older build may have produced in the output folder. -->
+    <ItemGroup>
+      <_StaleAppPriSatellite Include="$(OutDir)resources.language-*.pri" />
+    </ItemGroup>
+    <Delete Files="@(_StaleAppPriSatellite)" ContinueOnError="true" />
     <Copy SourceFiles="@(_AppPriXbf)"
           DestinationFiles="@(_AppPriXbf->'$(_AppPriStagingDir)%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="false" />
@@ -134,9 +146,46 @@
           DestinationFiles="@(_AppPriFrameworkPri->'$(_AppPriStagingDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="false" />
 
-    <Exec Command="&quot;$(MakePriExePath)&quot; createconfig /cf &quot;$(_AppPriConfigFile)&quot; /dq $(AppPriDefaultLanguage) /pv 10.0.0 /o"
-          WorkingDirectory="$(MSBuildProjectDirectory)"
-          StandardOutputImportance="low" />
+    <!--
+      The index configuration is written out explicitly instead of using
+      "makepri createconfig", because the generated default carries
+
+          <packaging><autoResourcePackage qualifier="Language"/>...</packaging>
+
+      which makes MakePri split the index into one satellite file per language
+      (resources.pri + ~79 resources.language-XX.pri). Only the main file would then contain
+      resources, and every framework string would fall back to the neutral English one - the WinUI
+      built-in "Settings" navigation item rendered as "Settings" instead of the user's language.
+      Omitting <packaging> keeps a single self-contained index that still carries every language
+      qualifier that was merged in from the framework PRIs.
+    -->
+    <ItemGroup>
+      <_AppPriConfigLine Include="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;yes&quot;?&gt;" />
+      <_AppPriConfigLine Include="&lt;resources targetOsVersion=&quot;10.0.0&quot; majorVersion=&quot;1&quot;&gt;" />
+      <_AppPriConfigLine Include="  &lt;index root=&quot;\&quot; startIndexAt=&quot;\&quot;&gt;" />
+      <_AppPriConfigLine Include="    &lt;default&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;Language&quot; value=&quot;$(AppPriDefaultLanguage)&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;Contrast&quot; value=&quot;standard&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;Scale&quot; value=&quot;100&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;HomeRegion&quot; value=&quot;001&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;TargetSize&quot; value=&quot;256&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;LayoutDirection&quot; value=&quot;LTR&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;Theme&quot; value=&quot;dark&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;AlternateForm&quot; value=&quot;&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;DXFeatureLevel&quot; value=&quot;DX9&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;Configuration&quot; value=&quot;&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;DeviceFamily&quot; value=&quot;Universal&quot;/&gt;" />
+      <_AppPriConfigLine Include="      &lt;qualifier name=&quot;Custom&quot; value=&quot;&quot;/&gt;" />
+      <_AppPriConfigLine Include="    &lt;/default&gt;" />
+      <_AppPriConfigLine Include="    &lt;indexer-config type=&quot;folder&quot; foldernameAsQualifier=&quot;true&quot; filenameAsQualifier=&quot;true&quot; qualifierDelimiter=&quot;.&quot;/&gt;" />
+      <_AppPriConfigLine Include="    &lt;indexer-config type=&quot;resw&quot; convertDotsToSlashes=&quot;true&quot; initialPath=&quot;&quot;/&gt;" />
+      <_AppPriConfigLine Include="    &lt;indexer-config type=&quot;resjson&quot; initialPath=&quot;&quot;/&gt;" />
+      <_AppPriConfigLine Include="    &lt;indexer-config type=&quot;PRI&quot;/&gt;" />
+      <_AppPriConfigLine Include="  &lt;/index&gt;" />
+      <_AppPriConfigLine Include="&lt;/resources&gt;" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_AppPriConfigFile)" Lines="@(_AppPriConfigLine)" Overwrite="true" Encoding="UTF-8" />
+
     <Exec Command="&quot;$(MakePriExePath)&quot; new /pr &quot;$(_AppPriStagingDirArg)&quot; /cf &quot;$(_AppPriConfigFile)&quot; /of &quot;$(AppPriOutputFile)&quot; /o"
           WorkingDirectory="$(MSBuildProjectDirectory)"
           StandardOutputImportance="low" />
