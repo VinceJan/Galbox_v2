@@ -19,7 +19,7 @@ public partial class App : Application
     /// <summary>
     /// The service provider for dependency injection.
     /// </summary>
-    public static IServiceProvider Services { get; private set; }
+    public static IServiceProvider Services { get; private set; } = null!;
 
     /// <summary>
     /// The main window instance.
@@ -59,11 +59,21 @@ public partial class App : Application
         });
 
         // HTTP Client Wrappers for APIs
+        // Note: Named HttpClient "BangumiAuth" must be registered BEFORE IBangumiAuthService factory
+        services.AddHttpClient("BangumiAuth")
+            .ConfigureHttpClient(client =>
+            {
+                client.BaseAddress = new Uri("https://api.bgm.tv/");
+                client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+
         services.AddHttpClient<BangumiHttpClient>()
             .ConfigureHttpClient(client =>
             {
                 client.BaseAddress = new Uri("https://api.bgm.tv/");
                 client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
 
         services.AddHttpClient<VndbHttpClient>()
@@ -71,18 +81,23 @@ public partial class App : Application
             {
                 client.BaseAddress = new Uri("https://api.vndb.org/kana/");
                 client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
 
         services.AddHttpClient<YmgalHttpClient>()
             .ConfigureHttpClient(client =>
             {
+                // BaseAddress to be configured when API implementation is complete
                 client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
 
         services.AddHttpClient<CngalHttpClient>()
             .ConfigureHttpClient(client =>
             {
+                // BaseAddress to be configured when API implementation is complete
                 client.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
 
         // API Clients
@@ -99,11 +114,22 @@ public partial class App : Application
 
         // Enhanced Scraping Services
         services.AddSingleton<IAutoScrapingService, AutoScrapingService>();
-        services.AddSingleton<IBangumiAuthService, BangumiAuthService>();
+
+        // BangumiAuthService - uses "BangumiAuth" HttpClient registered above
+        services.AddSingleton<IBangumiAuthService>(sp =>
+        {
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var httpClient = httpClientFactory.CreateClient("BangumiAuth");
+            return new BangumiAuthService(sp, sp.GetRequiredService<ILogger<BangumiAuthService>>(), httpClient);
+        });
+
         services.AddSingleton<IScrapingCacheService, ScrapingCacheService>();
 
         // Error Checking Service
         services.AddSingleton<IErrorCheckingService, ErrorCheckingService>();
+
+        // Game Utility Service
+        services.AddSingleton<IGameUtilityService, GameUtilityService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();
@@ -142,10 +168,33 @@ public partial class App : Application
 
         try
         {
-            // Ensure database is created
+            // Ensure database is created and migrated
             using var scope = Services.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<GalboxDbContext>();
             await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+
+            // Add missing columns for EngineType if not exists (SQLite migration)
+            try
+            {
+                // Check if EngineType column exists
+                var connection = dbContext.Database.GetDbConnection();
+                await connection.OpenAsync().ConfigureAwait(false);
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT name FROM pragma_table_info('Games') WHERE name='EngineType'";
+                var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+                if (result == null || result == DBNull.Value)
+                {
+                    // Column doesn't exist, add it
+                    command.CommandText = "ALTER TABLE Games ADD COLUMN EngineType INTEGER NOT NULL DEFAULT 0";
+                    await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+                }
+                await connection.CloseAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Migration failed, log but continue
+                System.Diagnostics.Debug.WriteLine($"Database migration warning: {ex.Message}");
+            }
 
             // Initialize services that require async initialization
             var bangumiAuthService = Services.GetService<IBangumiAuthService>() as BangumiAuthService;

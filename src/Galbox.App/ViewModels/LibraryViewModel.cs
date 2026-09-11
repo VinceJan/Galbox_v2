@@ -14,10 +14,11 @@ namespace Galbox.App.ViewModels;
 /// ViewModel for the Library/Game Library Page.
 /// Supports table/list view toggle, search, and filtering.
 /// </summary>
-public partial class LibraryViewModel : ObservableObject
+public partial class LibraryViewModel : ObservableObject, IDisposable
 {
     private readonly GalboxDbContext _dbContext;
     private readonly INavigationService _navigationService;
+    private readonly IGameUtilityService _gameUtilityService;
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly IServiceProvider _serviceProvider;
     private Process? _runningProcess;
@@ -26,6 +27,11 @@ public partial class LibraryViewModel : ObservableObject
     /// Semaphore for thread-safe database operations during quick launch.
     /// </summary>
     private readonly SemaphoreSlim _quickLaunchLock = new(1, 1);
+
+    /// <summary>
+    /// Flag to track whether the object has been disposed.
+    /// </summary>
+    private bool _disposed;
 
     /// <summary>
     /// Whether the page is loading data.
@@ -106,11 +112,13 @@ public partial class LibraryViewModel : ObservableObject
     public LibraryViewModel(
         GalboxDbContext dbContext,
         INavigationService navigationService,
+        IGameUtilityService gameUtilityService,
         ILogger<LibraryViewModel> logger,
         IServiceProvider serviceProvider)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+        _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
@@ -159,7 +167,7 @@ public partial class LibraryViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading library data");
-            ErrorMessage = $"Failed to load games: {ex.Message}";
+            ErrorMessage = $"加载游戏失败：{ex.Message}";
         }
         finally
         {
@@ -318,7 +326,7 @@ public partial class LibraryViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(folderPath) || !System.IO.Directory.Exists(folderPath))
         {
-            ErrorMessage = "Invalid folder path";
+            ErrorMessage = "无效的文件夹路径";
             return;
         }
 
@@ -331,22 +339,25 @@ public partial class LibraryViewModel : ObservableObject
             // Find executable if not provided
             if (string.IsNullOrWhiteSpace(executablePath))
             {
-                executablePath = FindExecutableInFolder(folderPath);
+                executablePath = _gameUtilityService.FindExecutableInFolder(folderPath);
             }
 
             if (string.IsNullOrWhiteSpace(executablePath))
             {
-                ErrorMessage = "No executable file found in the folder";
+                ErrorMessage = "文件夹中没有找到可执行文件";
                 return;
             }
 
             // Calculate folder size
-            var folderSize = CalculateFolderSize(folderPath);
+            var folderSize = _gameUtilityService.CalculateFolderSize(folderPath);
+
+            // Use folder name as game name (better for most games)
+            var folderName = System.IO.Path.GetFileName(folderPath.TrimEnd(System.IO.Path.DirectorySeparatorChar));
 
             // Create game entry
             var game = new GameInfo
             {
-                NameOriginal = System.IO.Path.GetFileNameWithoutExtension(executablePath),
+                NameOriginal = folderName, // Use folder name instead of exe name
                 InstallPath = folderPath,
                 MainExecutable = executablePath,
                 AddedTime = DateTime.UtcNow,
@@ -355,13 +366,17 @@ public partial class LibraryViewModel : ObservableObject
                 IsScraped = false
             };
 
+            // Detect engine type
+            game.EngineType = EngineSaveDetector.DetectEngineType(game);
+            _logger.LogInformation("Detected engine type: {EngineType} for game: {GameName}", game.EngineType, game.NameOriginal);
+
             // Check if game already exists
             var existingGame = await _dbContext.Games
                 .FirstOrDefaultAsync(g => g.InstallPath == folderPath);
 
             if (existingGame != null)
             {
-                ErrorMessage = "This game folder is already in the library";
+                ErrorMessage = "该游戏文件夹已在游戏库中";
                 return;
             }
 
@@ -376,7 +391,7 @@ public partial class LibraryViewModel : ObservableObject
             // Reapply filters
             ApplyFilters();
 
-            SuccessMessage = $"Added '{game.DisplayName}' to library";
+            SuccessMessage = $"已将 '{game.DisplayName}' 添加到游戏库 (引擎: {game.EngineType})";
             _logger.LogInformation("Added new game: {GameName} from {FolderPath}", game.DisplayName, folderPath);
 
             // Clear success message after delay
@@ -386,7 +401,7 @@ public partial class LibraryViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error adding game from {FolderPath}", folderPath);
-            ErrorMessage = $"Failed to add game: {ex.Message}";
+            ErrorMessage = $"添加游戏失败：{ex.Message}";
         }
         finally
         {
@@ -395,52 +410,118 @@ public partial class LibraryViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Finds an executable file in a folder.
+    /// Scans a folder for games and adds them to the library.
     /// </summary>
-    private string? FindExecutableInFolder(string folderPath)
+    /// <param name="rootFolder">The root folder to scan for games.</param>
+    /// <returns>The number of games found and added.</returns>
+    public async Task<int> ScanFolderAsync(string rootFolder)
     {
-        // Priority order: .exe files that look like game executables
-        var exeFiles = System.IO.Directory.GetFiles(folderPath, "*.exe", System.IO.SearchOption.TopDirectoryOnly);
-
-        // Filter out common non-game executables
-        var gameExecutables = exeFiles.Where(f =>
+        if (string.IsNullOrWhiteSpace(rootFolder) || !System.IO.Directory.Exists(rootFolder))
         {
-            var name = System.IO.Path.GetFileNameWithoutExtension(f).ToLowerInvariant();
-            // Exclude common utility/setup files
-            return !name.Contains("setup") &&
-                   !name.Contains("install") &&
-                   !name.Contains("uninstall") &&
-                   !name.Contains("config") &&
-                   !name.Contains("launcher") &&
-                   !name.Contains("patch") &&
-                   !name.StartsWith("readme") &&
-                   !name.Contains("update");
-        }).ToList();
-
-        // If no good candidates, use first exe
-        if (gameExecutables.Count == 0 && exeFiles.Length > 0)
-        {
-            return exeFiles[0];
-        }
-
-        return gameExecutables.FirstOrDefault();
-    }
-
-    /// <summary>
-    /// Calculates the total size of a folder.
-    /// </summary>
-    private long CalculateFolderSize(string folderPath)
-    {
-        try
-        {
-            var dirInfo = new System.IO.DirectoryInfo(folderPath);
-            return dirInfo.EnumerateFiles("*", System.IO.SearchOption.AllDirectories)
-                .Sum(file => file.Length);
-        }
-        catch
-        {
+            ErrorMessage = "无效的文件夹路径";
             return 0;
         }
+
+        IsLoading = true;
+        ErrorMessage = null;
+        SuccessMessage = null;
+
+        int addedCount = 0;
+        int skippedCount = 0;
+
+        try
+        {
+            // Get all subdirectories that might contain games
+            var subdirectories = System.IO.Directory.GetDirectories(rootFolder, "*", System.IO.SearchOption.TopDirectoryOnly);
+
+            foreach (var subDir in subdirectories)
+            {
+                try
+                {
+                    // Check if this directory contains an executable (potential game)
+                    var exeFiles = System.IO.Directory.GetFiles(subDir, "*.exe", System.IO.SearchOption.TopDirectoryOnly);
+                    if (exeFiles.Length == 0)
+                    {
+                        // Skip directories without exe files
+                        skippedCount++;
+                        continue;
+                    }
+
+                    // Find the best executable
+                    var executablePath = _gameUtilityService.FindExecutableInFolder(subDir);
+                    if (string.IsNullOrWhiteSpace(executablePath))
+                    {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    // Check if game already exists
+                    var existingGame = await _dbContext.Games
+                        .FirstOrDefaultAsync(g => g.InstallPath == subDir);
+                    if (existingGame != null)
+                    {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    // Calculate folder size
+                    var folderSize = _gameUtilityService.CalculateFolderSize(subDir);
+                    var folderName = System.IO.Path.GetFileName(subDir.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+
+                    // Create game entry
+                    var game = new GameInfo
+                    {
+                        NameOriginal = folderName,
+                        InstallPath = subDir,
+                        MainExecutable = executablePath,
+                        AddedTime = DateTime.UtcNow,
+                        UpdatedTime = DateTime.UtcNow,
+                        SizeBytes = folderSize,
+                        IsScraped = false
+                    };
+
+                    // Detect engine type
+                    game.EngineType = EngineSaveDetector.DetectEngineType(game);
+                    _logger.LogInformation("Detected engine type: {EngineType} for game: {GameName}", game.EngineType, game.NameOriginal);
+
+                    // Add to database
+                    _dbContext.Games.Add(game);
+                    await _dbContext.SaveChangesAsync();
+
+                    // Add to collections
+                    AllGames.Add(game);
+                    addedCount++;
+
+                    _logger.LogInformation("Scanned and added game: {GameName} (Engine: {EngineType})", game.DisplayName, game.EngineType);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to scan folder: {Folder}", subDir);
+                    skippedCount++;
+                }
+            }
+
+            TotalGamesCount = AllGames.Count;
+            ApplyFilters();
+
+            SuccessMessage = $"扫描完成：添加 {addedCount} 个游戏，跳过 {skippedCount} 个文件夹";
+            _logger.LogInformation("Folder scan completed: {Added} games added, {Skipped} skipped from {RootFolder}", addedCount, skippedCount, rootFolder);
+
+            // Clear success message after delay
+            await Task.Delay(5000);
+            SuccessMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error scanning folder {RootFolder}", rootFolder);
+            ErrorMessage = $"扫描失败：{ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+
+        return addedCount;
     }
 
     /// <summary>
@@ -457,13 +538,13 @@ public partial class LibraryViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(game.MainExecutable))
         {
-            ErrorMessage = "No executable path for this game";
+            ErrorMessage = "该游戏没有可执行文件路径";
             return;
         }
 
         if (!System.IO.File.Exists(game.MainExecutable))
         {
-            ErrorMessage = "Executable file not found";
+            ErrorMessage = "未找到可执行文件";
             return;
         }
 
@@ -539,7 +620,7 @@ public partial class LibraryViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error quick launching game: {GameName}", game.DisplayName);
-            ErrorMessage = $"Failed to launch: {ex.Message}";
+            ErrorMessage = $"启动失败：{ex.Message}";
         }
         finally
         {
@@ -553,12 +634,12 @@ public partial class LibraryViewModel : ObservableObject
     public static string GetGameStatus(GameInfo game)
     {
         if (game.LaunchCount == 0)
-            return "Never Played";
+            return "从未游玩";
         if (game.TotalPlayTimeSeconds > 3600)
-            return "Completed";
+            return "已完成";
         if (game.LastSessionTime.HasValue && game.LastSessionTime >= DateTime.UtcNow.AddDays(-7))
-            return "Playing";
-        return "Played";
+            return "正在游玩";
+        return "已游玩";
     }
 
     /// <summary>
@@ -579,6 +660,42 @@ public partial class LibraryViewModel : ObservableObject
         };
 
         SortOption = newSort;
+    }
+
+    /// <summary>
+    /// Releases all resources used by the LibraryViewModel.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // Dispose the semaphore
+        _quickLaunchLock.Dispose();
+
+        // Dispose any running process
+        if (_runningProcess != null)
+        {
+            try
+            {
+                if (!_runningProcess.HasExited)
+                {
+                    _runningProcess.Kill();
+                }
+                _runningProcess.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing running process");
+            }
+            _runningProcess = null;
+        }
+
+        _logger.LogInformation("LibraryViewModel disposed");
     }
 }
 

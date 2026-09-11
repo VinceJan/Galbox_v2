@@ -361,7 +361,7 @@ public class ScrapingCacheService : IScrapingCacheService
         };
 
         _searchCache[key] = entry;
-        SaveCacheToFileAsync("search", key, entry);
+        SaveCacheToFileFireAndForget("search", key, entry);
 
         _logger.LogDebug("Cached search result for: {GameName}, expires at {ExpiresAt}", gameName, expiresAt);
     }
@@ -388,7 +388,7 @@ public class ScrapingCacheService : IScrapingCacheService
         };
 
         _detailsCache[key] = entry;
-        SaveCacheToFileAsync("details", key, entry);
+        SaveCacheToFileFireAndForget("details", key, entry);
 
         _logger.LogDebug("Cached details for: {Source} {SourceId}, expires at {ExpiresAt}", source, sourceId, expiresAt);
     }
@@ -608,7 +608,7 @@ public class ScrapingCacheService : IScrapingCacheService
         }
     }
 
-    private async void SaveCacheToFileAsync<T>(string type, string key, T entry)
+    private async Task SaveCacheToFileAsync<T>(string type, string key, T entry)
     {
         try
         {
@@ -623,6 +623,15 @@ public class ScrapingCacheService : IScrapingCacheService
         {
             _logger.LogWarning(ex, "Failed to save cache file for {Type} {Key}", type, key);
         }
+    }
+
+    /// <summary>
+    /// Saves cache entry to file asynchronously (fire-and-forget).
+    /// Errors are logged but not thrown to avoid disrupting main operation.
+    /// </summary>
+    private void SaveCacheToFileFireAndForget<T>(string type, string key, T entry)
+    {
+        _ = SaveCacheToFileAsync(type, key, entry);
     }
 
     private void DeleteCacheFile(string type, string key)

@@ -4,6 +4,21 @@ using Microsoft.EntityFrameworkCore;
 namespace Galbox.Data.Entities;
 
 /// <summary>
+/// Game engine types supported by Galbox.
+/// </summary>
+public enum GameEngineType
+{
+    Unknown = 0,
+    Renpy = 1,
+    Krkr = 2,
+    Tyrano = 3,
+    Vnm = 4,
+    Unity = 5,
+    RpgMaker = 6,
+    Other = 7
+}
+
+/// <summary>
 /// Represents a game in the library.
 /// </summary>
 [Index(nameof(NameCn))]
@@ -152,6 +167,11 @@ public class GameInfo
     /// Size of the game in bytes.
     /// </summary>
     public long SizeBytes { get; set; }
+
+    /// <summary>
+    /// Detected game engine type.
+    /// </summary>
+    public GameEngineType EngineType { get; set; } = GameEngineType.Unknown;
 
     /// <summary>
     /// Collection of characters associated with the game.

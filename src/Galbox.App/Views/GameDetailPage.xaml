@@ -28,15 +28,7 @@
         <converters:BooleanToIconConverter x:Key="BooleanToIconConverter"/>
         <converters:EmptyStringToBooleanConverter x:Key="EmptyStringToBooleanConverter"/>
 
-        <!-- Styles -->
-        <Style x:Key="AccentButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="{ThemeResource SystemAccentColor}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-
+        <!-- Styles - Local styles only, global styles defined in App.xaml -->
         <Style x:Key="TagButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}"/>
@@ -46,17 +38,8 @@
             <Setter Property="Margin" Value="2"/>
         </Style>
 
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="12"/>
+        <Style x:Key="GameDetailCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
             <Setter Property="Margin" Value="0,8"/>
-        </Style>
-
-        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,8,0,4"/>
         </Style>
     </Page.Resources>
 
@@ -86,7 +69,7 @@
 
         <!-- Error Message -->
         <InfoBar
-            Title="Error"
+            Title="错误"
             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
             Severity="Error"
             IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -107,7 +90,7 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Cover Image (Vertical Poster) -->
+                    <!-- Cover Image (Vertical Poster) - Responsive sizing -->
                     <Border
                         Grid.Column="0"
                         Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
@@ -115,8 +98,10 @@
                         Padding="0">
                         <Image
                             Source="{x:Bind ViewModel.CoverImagePath, Mode=OneWay, Converter={StaticResource PathToImageConverter}}"
-                            Width="200"
-                            Height="300"
+                            MinWidth="150"
+                            MaxWidth="250"
+                            MinHeight="200"
+                            MaxHeight="350"
                             Stretch="UniformToFill"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"/>
@@ -192,7 +177,7 @@
                                 <Button.Content>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <FontIcon FontSize="16" Glyph="&#xE768;"/>
-                                        <TextBlock Text="Launch"/>
+                                        <TextBlock Text="启动"/>
                                     </StackPanel>
                                 </Button.Content>
                             </Button>
@@ -200,7 +185,7 @@
                             <!-- Multi-launch Dropdown -->
                             <DropDownButton
                                 Grid.Column="1"
-                                Content="Alternative"
+                                Content="其他方式"
                                 Visibility="{x:Bind ViewModel.Executables.Count, Mode=OneWay, Converter={StaticResource CountThresholdToVisibilityConverter}, ConverterParameter=1}">
                                 <DropDownButton.Flyout>
                                     <MenuFlyout Placement="BottomEdgeAlignedRight" x:Name="AlternativeExecutablesMenu"/>
@@ -210,7 +195,7 @@
 
                         <!-- Running Status -->
                         <InfoBar
-                            Title="Game Running"
+                            Title="游戏正在运行"
                             Severity="Informational"
                             IsOpen="{x:Bind ViewModel.IsRunning, Mode=OneWay}"
                             Margin="0,8,0,0"/>
@@ -223,7 +208,7 @@
                             <ToggleButton.Content>
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <FontIcon FontSize="16" Glyph="&#xE191;"/>
-                                    <TextBlock Text="Favorite"/>
+                                    <TextBlock Text="收藏"/>
                                 </StackPanel>
                             </ToggleButton.Content>
                         </ToggleButton>
@@ -231,9 +216,9 @@
                 </Grid>
 
                 <!-- Description -->
-                <Border Style="{StaticResource CardStyle}" Visibility="{x:Bind ViewModel.Description, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}">
+                <Border Style="{StaticResource GameDetailCardStyle}" Visibility="{x:Bind ViewModel.Description, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}">
                     <StackPanel>
-                        <TextBlock Text="Description" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="简介" Style="{StaticResource SectionHeaderStyle}"/>
                         <TextBlock
                             Text="{x:Bind ViewModel.Description, Mode=OneWay}"
                             TextWrapping="Wrap"
@@ -245,7 +230,7 @@
                 <!-- Characters Section -->
                 <Border Style="{StaticResource CardStyle}" Visibility="{x:Bind ViewModel.Characters.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
                     <StackPanel>
-                        <TextBlock Text="Characters" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="角色" Style="{StaticResource SectionHeaderStyle}"/>
                         <ItemsRepeater
                             ItemsSource="{x:Bind ViewModel.Characters, Mode=OneWay}"
                             MaxHeight="120">
@@ -276,7 +261,7 @@
                             </ItemsRepeater.ItemTemplate>
                         </ItemsRepeater>
                         <Button
-                            Content="Show All Characters"
+                            Content="显示全部角色"
                             Command="{x:Bind ViewModel.ShowAllCharactersCommand}"
                             Visibility="{x:Bind ViewModel.HasMoreCharacters, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
                             Margin="0,8,0,0"/>
@@ -286,7 +271,7 @@
                 <!-- Play Statistics -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
-                        <TextBlock Text="Play Statistics" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="游玩统计" Style="{StaticResource SectionHeaderStyle}"/>
                         <Grid ColumnSpacing="24">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -300,15 +285,15 @@
                             </Grid.RowDefinitions>
 
                             <!-- Play Time -->
-                            <TextBlock Grid.Column="0" Grid.Row="0" Text="Play Time:" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="0" Grid.Row="0" Text="游玩时间：" FontWeight="SemiBold"/>
                             <TextBlock Grid.Column="0" Grid.Row="1" Text="{x:Bind ViewModel.FormattedPlayTime, Mode=OneWay}" Margin="0,4,0,0"/>
 
                             <!-- Launch Count -->
-                            <TextBlock Grid.Column="1" Grid.Row="0" Text="Launches:" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="1" Grid.Row="0" Text="启动次数：" FontWeight="SemiBold"/>
                             <TextBlock Grid.Column="1" Grid.Row="1" Text="{x:Bind ViewModel.LaunchCount, Mode=OneWay}" Margin="0,4,0,0"/>
 
                             <!-- Last Session -->
-                            <TextBlock Grid.Column="2" Grid.Row="0" Text="Last Session:" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="2" Grid.Row="0" Text="最后游玩：" FontWeight="SemiBold"/>
                             <TextBlock
                                 Grid.Column="2"
                                 Grid.Row="1"
@@ -317,7 +302,7 @@
                                 Visibility="{x:Bind ViewModel.LastSessionTime, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}"/>
 
                             <!-- Game Size -->
-                            <TextBlock Grid.Column="3" Grid.Row="0" Text="Size:" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="3" Grid.Row="0" Text="大小：" FontWeight="SemiBold"/>
                             <TextBlock Grid.Column="3" Grid.Row="1" Text="{x:Bind ViewModel.FormattedSize, Mode=OneWay}" Margin="0,4,0,0"/>
                         </Grid>
                     </StackPanel>
@@ -326,7 +311,7 @@
                 <!-- Documents Section -->
                 <Border Style="{StaticResource CardStyle}" Visibility="{x:Bind ViewModel.Documents.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
                     <StackPanel>
-                        <TextBlock Text="Documents" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="文档" Style="{StaticResource SectionHeaderStyle}"/>
                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.Documents, Mode=OneWay}">
                             <ItemsRepeater.Layout>
                                 <StackLayout Orientation="Vertical" Spacing="8"/>
@@ -358,7 +343,7 @@
                 <!-- Screenshots Section -->
                 <Border Style="{StaticResource CardStyle}" Visibility="{x:Bind ViewModel.Screenshots.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
                     <StackPanel>
-                        <TextBlock Text="Screenshots" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="截图" Style="{StaticResource SectionHeaderStyle}"/>
 
                         <!-- Main Preview -->
                         <Image
@@ -397,7 +382,7 @@
                 <!-- Media Files Section (Music/Video) -->
                 <Border Style="{StaticResource CardStyle}" Visibility="{x:Bind ViewModel.MediaFiles.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}">
                     <StackPanel>
-                        <TextBlock Text="Media Files" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="媒体文件" Style="{StaticResource SectionHeaderStyle}"/>
                         <ItemsRepeater ItemsSource="{x:Bind ViewModel.MediaFiles, Mode=OneWay}">
                             <ItemsRepeater.Layout>
                                 <StackLayout Orientation="Vertical" Spacing="8"/>
@@ -439,11 +424,11 @@
                 <!-- Save Backups Section -->
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
-                        <TextBlock Text="Save Backups" Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="存档备份" Style="{StaticResource SectionHeaderStyle}"/>
 
                         <!-- Create Backup Button -->
                         <Button
-                            Content="Create Backup"
+                            Content="创建备份"
                             Command="{x:Bind ViewModel.CreateSaveBackupCommand}"
                             Style="{StaticResource AccentButtonStyle}"
                             Margin="0,0,0,12"/>
@@ -478,14 +463,14 @@
 
                                         <Button
                                             Grid.Column="1"
-                                            Content="Restore"
+                                            Content="恢复"
                                             Command="{Binding ViewModel.RestoreSaveBackupCommand, ElementName=RootGrid}"
                                             CommandParameter="{Binding}"
                                             CornerRadius="4"/>
 
                                         <Button
                                             Grid.Column="2"
-                                            Content="Delete"
+                                            Content="删除"
                                             CornerRadius="4"/>
                                     </Grid>
                                 </DataTemplate>
@@ -494,7 +479,7 @@
 
                         <!-- No Backups Message -->
                         <TextBlock
-                            Text="No save backups available"
+                            Text="暂无存档备份"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             Visibility="{x:Bind ViewModel.SaveBackups.Count, Mode=OneWay, Converter={StaticResource InverseCountToVisibilityConverter}}"/>
                     </StackPanel>

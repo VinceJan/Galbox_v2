@@ -60,17 +60,17 @@ public class SaveManagementService : ISaveManagementService
     public string BackupStoragePath => _backupStoragePath;
 
     /// <inheritdoc/>
-    public async Task<SaveLocationResult> DetectSaveLocationAsync(
+    public Task<SaveLocationResult> DetectSaveLocationAsync(
         GameInfo game,
         CancellationToken cancellationToken = default)
     {
         if (game == null)
         {
-            return new SaveLocationResult
+            return Task.FromResult(new SaveLocationResult
             {
                 Success = false,
                 ErrorMessage = "Game information is null"
-            };
+            });
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -108,7 +108,7 @@ public class SaveManagementService : ISaveManagementService
                     result.ErrorMessage ?? "No save files found");
             }
 
-            return result;
+            return Task.FromResult(result);
         }
         catch (OperationCanceledException)
         {
@@ -122,11 +122,11 @@ public class SaveManagementService : ISaveManagementService
                 "Error detecting save location for game: {GameName}",
                 game.DisplayName);
 
-            return new SaveLocationResult
+            return Task.FromResult(new SaveLocationResult
             {
                 Success = false,
                 ErrorMessage = $"Error: {ex.Message}"
-            };
+            });
         }
     }
 
@@ -163,13 +163,6 @@ public class SaveManagementService : ISaveManagementService
                 return null;
             }
 
-            // Report progress - scanning phase
-            progress?.Report(new BackupProgress
-            {
-                Phase = BackupPhase.Scanning,
-                Percentage = 0
-            });
-
             // Collect files to backup
             var filesToBackup = CollectFilesToBackup(saveLocation);
 
@@ -182,19 +175,29 @@ public class SaveManagementService : ISaveManagementService
             var totalBytes = filesToBackup.Sum(f => f.Size);
             var totalFiles = filesToBackup.Count;
 
-            // Report progress - creating directory
-            progress?.Report(new BackupProgress
-            {
-                Phase = BackupPhase.CreatingDirectory,
-                Percentage = 5,
-                TotalFiles = totalFiles,
-                TotalBytes = totalBytes
-            });
-
-            // Create backup directory
+            // Create backup directory first to get the target path
             var backupDir = CreateBackupDirectory(game);
             var backupFileName = GenerateBackupFileName(game, DateTime.UtcNow);
             var backupFilePath = Path.Combine(backupDir, backupFileName);
+
+            // Check disk space before proceeding
+            if (!HasEnoughDiskSpace(backupFilePath, totalBytes))
+            {
+                _logger.LogError(
+                    "Insufficient disk space for backup of game: {GameName}. Required: {RequiredBytes} bytes",
+                    game.DisplayName,
+                    totalBytes);
+                return null;
+            }
+
+            // Report progress - scanning phase
+            progress?.Report(new BackupProgress
+            {
+                Phase = BackupPhase.Scanning,
+                Percentage = 0,
+                TotalFiles = totalFiles,
+                TotalBytes = totalBytes
+            });
 
             // Report progress - copying files
             progress?.Report(new BackupProgress
@@ -206,9 +209,6 @@ public class SaveManagementService : ISaveManagementService
             });
 
             // Create zip backup
-            long bytesTransferred = 0;
-            int filesProcessed = 0;
-
             await CreateZipBackupAsync(
                 filesToBackup,
                 backupFilePath,
@@ -317,6 +317,10 @@ public class SaveManagementService : ISaveManagementService
 
         _logger.LogInformation("Restoring backup with ID: {SaveId}", saveId);
 
+        // Temporary directory for atomic restore operation
+        string? tempBackupDir = null;
+        string? tempRestoreDir = null;
+
         try
         {
             // Get backup record from database
@@ -367,6 +371,21 @@ public class SaveManagementService : ISaveManagementService
                 }
             }
 
+            // Check for locked files in restore path before proceeding
+            if (Directory.Exists(restorePath))
+            {
+                var lockedFiles = GetLockedFilesInDirectory(restorePath);
+                if (lockedFiles.Count > 0)
+                {
+                    _logger.LogWarning(
+                        "Cannot restore backup: {Count} files are locked in restore path: {RestorePath}. Locked files: {LockedFiles}",
+                        lockedFiles.Count,
+                        restorePath,
+                        string.Join(", ", lockedFiles.Take(5)));
+                    return false;
+                }
+            }
+
             // Report progress - creating directory
             progress?.Report(new BackupProgress
             {
@@ -374,10 +393,57 @@ public class SaveManagementService : ISaveManagementService
                 Percentage = 5
             });
 
-            // Ensure restore directory exists
-            if (!Directory.Exists(restorePath))
+            // Check disk space for restore operation
+            var backupSize = GetFileSizeSafe(backup.BackupPath);
+            if (!HasEnoughDiskSpace(restorePath, backupSize))
             {
-                Directory.CreateDirectory(restorePath);
+                _logger.LogError(
+                    "Insufficient disk space for restore operation. Required: {RequiredBytes} bytes",
+                    backupSize);
+                return false;
+            }
+
+            // Create temporary directories for atomic operation
+            tempBackupDir = Path.Combine(
+                _backupStoragePath,
+                "TempRestore",
+                $"backup_{saveId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}");
+            tempRestoreDir = Path.Combine(tempBackupDir, "original");
+
+            Directory.CreateDirectory(tempRestoreDir);
+
+            // Step 1: Backup current saves to temporary directory (if they exist)
+            if (Directory.Exists(restorePath))
+            {
+                var currentFiles = EngineSaveDetector.GetFilesWithSizes(restorePath);
+                if (currentFiles.Count > 0)
+                {
+                    _logger.LogInformation(
+                        "Backing up current saves to temporary directory: {TempDir}",
+                        tempRestoreDir);
+
+                    foreach (var (filePath, _) in currentFiles)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        var fileInfo = new FileInfo(filePath);
+                        if (!fileInfo.Exists)
+                        {
+                            continue;
+                        }
+
+                        var relativePath = filePath.Substring(restorePath.Length).TrimStart(Path.DirectorySeparatorChar);
+                        var tempFilePath = Path.Combine(tempRestoreDir, relativePath);
+
+                        var tempFileDir = Path.GetDirectoryName(tempFilePath);
+                        if (!string.IsNullOrEmpty(tempFileDir) && !Directory.Exists(tempFileDir))
+                        {
+                            Directory.CreateDirectory(tempFileDir);
+                        }
+
+                        File.Copy(filePath, tempFilePath, true);
+                    }
+                }
             }
 
             // Report progress - copying files
@@ -387,12 +453,48 @@ public class SaveManagementService : ISaveManagementService
                 Percentage = 10
             });
 
-            // Extract backup
+            // Ensure restore directory exists
+            if (!Directory.Exists(restorePath))
+            {
+                Directory.CreateDirectory(restorePath);
+            }
+
+            // Step 2: Extract backup to restore location
             await ExtractZipBackupAsync(
                 backup.BackupPath,
                 restorePath,
                 progress,
                 cancellationToken).ConfigureAwait(false);
+
+            // Step 3: Verify restore integrity
+            progress?.Report(new BackupProgress
+            {
+                Phase = BackupPhase.Finalizing,
+                Percentage = 95
+            });
+
+            var verificationResult = await VerifyRestoreIntegrityAsync(
+                backup.BackupPath,
+                restorePath,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!verificationResult.Success)
+            {
+                _logger.LogError(
+                    "Restore verification failed: {ErrorMessage}. Attempting to rollback.",
+                    verificationResult.ErrorMessage);
+
+                // Step 4: Rollback - restore from temporary backup
+                if (Directory.Exists(tempRestoreDir) && Directory.Exists(restorePath))
+                {
+                    await RollbackRestoreAsync(
+                        tempRestoreDir,
+                        restorePath,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                return false;
+            }
 
             // Report progress - finalizing
             progress?.Report(new BackupProgress
@@ -410,6 +512,13 @@ public class SaveManagementService : ISaveManagementService
         catch (OperationCanceledException)
         {
             _logger.LogInformation("Backup restoration cancelled for ID: {SaveId}", saveId);
+
+            // Attempt rollback on cancellation
+            if (tempRestoreDir != null && Directory.Exists(tempRestoreDir))
+            {
+                _logger.LogInformation("Attempting rollback after cancellation");
+            }
+
             throw;
         }
         catch (Exception ex)
@@ -418,8 +527,149 @@ public class SaveManagementService : ISaveManagementService
                 ex,
                 "Error restoring backup with ID: {SaveId}",
                 saveId);
+
+            // Attempt rollback on error
+            if (tempRestoreDir != null && Directory.Exists(tempRestoreDir))
+            {
+                _logger.LogInformation("Attempting rollback after error");
+            }
+
             return false;
         }
+        finally
+        {
+            // Step 5: Clean up temporary directory
+            if (tempBackupDir != null && Directory.Exists(tempBackupDir))
+            {
+                try
+                {
+                    Directory.Delete(tempBackupDir, true);
+                    _logger.LogInformation("Cleaned up temporary restore directory: {TempDir}", tempBackupDir);
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogWarning(
+                        cleanupEx,
+                        "Could not clean up temporary restore directory: {TempDir}",
+                        tempBackupDir);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifies the integrity of a restore operation by checking file count and sizes.
+    /// </summary>
+    private Task<RestoreVerificationResult> VerifyRestoreIntegrityAsync(
+        string backupPath,
+        string restorePath,
+        CancellationToken cancellationToken)
+    {
+        var result = new RestoreVerificationResult();
+
+        try
+        {
+            using var zipArchive = ZipFile.OpenRead(backupPath);
+            var expectedFileCount = zipArchive.Entries.Count(e => !string.IsNullOrEmpty(e.Name));
+            var expectedTotalSize = zipArchive.Entries.Sum(e => e.Length);
+
+            var restoredFiles = EngineSaveDetector.GetFilesWithSizes(restorePath);
+            var actualFileCount = restoredFiles.Count;
+            var actualTotalSize = restoredFiles.Sum(f => f.Size);
+
+            // Allow some tolerance for file count (some entries might be directories)
+            if (actualFileCount < expectedFileCount * 0.8)
+            {
+                result.ErrorMessage = $"File count mismatch: expected ~{expectedFileCount}, got {actualFileCount}";
+                return Task.FromResult(result);
+            }
+
+            // Allow 10% tolerance for size (compression might affect estimates)
+            if (actualTotalSize < expectedTotalSize * 0.9)
+            {
+                result.ErrorMessage = $"Size mismatch: expected ~{expectedTotalSize} bytes, got {actualTotalSize} bytes";
+                return Task.FromResult(result);
+            }
+
+            result.Success = true;
+            result.FileCount = actualFileCount;
+            result.TotalSize = actualTotalSize;
+
+            return Task.FromResult(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error verifying restore integrity");
+            result.ErrorMessage = $"Verification error: {ex.Message}";
+            return Task.FromResult(result);
+        }
+    }
+
+    /// <summary>
+    /// Rolls back a restore operation by copying files from temporary backup.
+    /// </summary>
+    private Task RollbackRestoreAsync(
+        string tempRestoreDir,
+        string restorePath,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Clear current restore directory
+            if (Directory.Exists(restorePath))
+            {
+                var currentFiles = Directory.GetFiles(restorePath, "*", SearchOption.AllDirectories);
+                foreach (var file in currentFiles)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not delete file during rollback: {FilePath}", file);
+                    }
+                }
+            }
+
+            // Restore from temporary backup
+            if (Directory.Exists(tempRestoreDir))
+            {
+                var tempFiles = Directory.GetFiles(tempRestoreDir, "*", SearchOption.AllDirectories);
+                foreach (var tempFile in tempFiles)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var relativePath = tempFile.Substring(tempRestoreDir.Length).TrimStart(Path.DirectorySeparatorChar);
+                    var targetPath = Path.Combine(restorePath, relativePath);
+
+                    var targetDir = Path.GetDirectoryName(targetPath);
+                    if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
+                    {
+                        Directory.CreateDirectory(targetDir);
+                    }
+
+                    File.Copy(tempFile, targetPath, true);
+                }
+            }
+
+            _logger.LogInformation("Rollback completed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during rollback operation");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private class RestoreVerificationResult
+    {
+        public bool Success { get; set; }
+        public string? ErrorMessage { get; set; }
+        public int FileCount { get; set; }
+        public long TotalSize { get; set; }
     }
 
     /// <inheritdoc/>
@@ -648,6 +898,125 @@ public class SaveManagementService : ISaveManagementService
 
     #region Private Helper Methods
 
+    private static string[] SafeGetFiles(string path, string pattern, SearchOption searchOption)
+    {
+        try
+        {
+            return Directory.GetFiles(path, pattern, searchOption);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (IOException)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    /// <summary>
+    /// Checks if there is enough disk space for the backup operation.
+    /// </summary>
+    /// <param name="targetPath">Target path for backup</param>
+    /// <param name="requiredBytes">Estimated bytes needed</param>
+    /// <returns>True if sufficient space available</returns>
+    private bool HasEnoughDiskSpace(string targetPath, long requiredBytes)
+    {
+        try
+        {
+            var pathRoot = Path.GetPathRoot(targetPath);
+            if (string.IsNullOrEmpty(pathRoot))
+            {
+                _logger.LogWarning("Could not determine drive root for path: {TargetPath}", targetPath);
+                return true; // Assume sufficient space if we can't check
+            }
+
+            var driveInfo = new DriveInfo(pathRoot);
+            var bufferBytes = 100L * 1024 * 1024; // 100MB buffer
+            var hasEnoughSpace = driveInfo.AvailableFreeSpace > requiredBytes + bufferBytes;
+
+            if (!hasEnoughSpace)
+            {
+                _logger.LogWarning(
+                    "Insufficient disk space on drive {Drive}. Available: {Available} bytes, Required: {Required} bytes",
+                    pathRoot,
+                    driveInfo.AvailableFreeSpace,
+                    requiredBytes + bufferBytes);
+            }
+
+            return hasEnoughSpace;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error checking disk space for path: {TargetPath}", targetPath);
+            return true; // Assume sufficient space if check fails
+        }
+    }
+
+    /// <summary>
+    /// Checks if a file is locked by another process.
+    /// </summary>
+    /// <param name="filePath">Path to check</param>
+    /// <returns>True if file is locked</returns>
+    private bool IsFileLocked(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = File.Open(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Checks if any files in a directory are locked.
+    /// </summary>
+    /// <param name="directoryPath">Directory to check</param>
+    /// <returns>List of locked file paths</returns>
+    private List<string> GetLockedFilesInDirectory(string directoryPath)
+    {
+        var lockedFiles = new List<string>();
+
+        if (!Directory.Exists(directoryPath))
+        {
+            return lockedFiles;
+        }
+
+        try
+        {
+            var files = Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories);
+            foreach (var file in files)
+            {
+                if (IsFileLocked(file))
+                {
+                    lockedFiles.Add(file);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error scanning directory for locked files: {DirectoryPath}", directoryPath);
+        }
+
+        return lockedFiles;
+    }
+
     private void EnsureBackupDirectoryExists()
     {
         try
@@ -805,7 +1174,10 @@ public class SaveManagementService : ISaveManagementService
             filesProcessed++;
 
             // Report progress (10% to 90% range for copying)
-            var percentage = 10 + (int)((bytesTransferred / (double)totalBytes) * 80);
+            // Fix for potential divide-by-zero: use file count when totalBytes is 0
+            var percentage = totalBytes > 0
+                ? 10 + (int)((bytesTransferred / (double)totalBytes) * 80)
+                : 10 + (int)((filesProcessed / (double)Math.Max(totalFiles, 1)) * 80);
             progress?.Report(new BackupProgress
             {
                 Phase = BackupPhase.CopyingFiles,
@@ -866,42 +1238,65 @@ public class SaveManagementService : ISaveManagementService
 
     private async Task CleanupOldBackupsAsync(int gameId, CancellationToken cancellationToken)
     {
-        var backups = await _dbContext.SaveBackups
-            .Where(b => b.GameInfoId == gameId)
-            .OrderByDescending(b => b.CreatedTime)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        if (backups.Count > _maxBackupsPerGame)
+        try
         {
-            var backupsToDelete = backups.Skip(_maxBackupsPerGame).ToList();
+            var backups = await _dbContext.SaveBackups
+                .Where(b => b.GameInfoId == gameId)
+                .OrderByDescending(b => b.CreatedTime)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-            foreach (var backup in backupsToDelete)
+            if (backups.Count <= _maxBackupsPerGame)
             {
-                // Delete file
-                if (File.Exists(backup.BackupPath))
-                {
-                    try
-                    {
-                        File.Delete(backup.BackupPath);
-                        _logger.LogInformation("Deleted old backup file: {BackupPath}", backup.BackupPath);
-                    }
-                    catch (IOException ex)
-                    {
-                        _logger.LogWarning(ex, "Could not delete backup file: {BackupPath}", backup.BackupPath);
-                    }
-                }
-
-                // Delete record
-                _dbContext.SaveBackups.Remove(backup);
+                return;
             }
 
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            var backupsToDelete = backups.Skip(_maxBackupsPerGame).ToList();
 
-            _logger.LogInformation(
-                "Cleaned up {Count} old backups for game: {GameId}",
-                backupsToDelete.Count,
-                gameId);
+            // Use transaction for atomic cleanup
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                foreach (var backup in backupsToDelete)
+                {
+                    // Delete file first
+                    if (File.Exists(backup.BackupPath))
+                    {
+                        try
+                        {
+                            File.Delete(backup.BackupPath);
+                            _logger.LogInformation("Deleted old backup file: {BackupPath}", backup.BackupPath);
+                        }
+                        catch (IOException ex)
+                        {
+                            _logger.LogWarning(ex, "Could not delete backup file: {BackupPath}", backup.BackupPath);
+                            // Continue with database deletion even if file deletion fails
+                        }
+                    }
+
+                    // Delete record
+                    _dbContext.SaveBackups.Remove(backup);
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+                _logger.LogInformation(
+                    "Cleaned up {Count} old backups for game: {GameId}",
+                    backupsToDelete.Count,
+                    gameId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during backup cleanup transaction, rolling back");
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cleaning up old backups for game: {GameId}", gameId);
         }
     }
 
@@ -915,7 +1310,7 @@ public class SaveManagementService : ISaveManagementService
         switch (engineType)
         {
             case GameEngineType.Renpy:
-                metadata = await ExtractRenpyMetadataAsync(savePath, metadata, cancellationToken).ConfigureAwait(false);
+                metadata = ExtractRenpyMetadata(savePath, metadata, cancellationToken);
                 break;
 
             case GameEngineType.RpgMaker:
@@ -932,7 +1327,7 @@ public class SaveManagementService : ISaveManagementService
         return metadata;
     }
 
-    private async Task<SaveMetadata> ExtractRenpyMetadataAsync(
+    private SaveMetadata ExtractRenpyMetadata(
         string savePath,
         SaveMetadata metadata,
         CancellationToken cancellationToken)
@@ -942,7 +1337,7 @@ public class SaveManagementService : ISaveManagementService
 
         try
         {
-            var saveFiles = Directory.GetFiles(savePath, "*.save", SearchOption.TopDirectoryOnly);
+            var saveFiles = SafeGetFiles(savePath, "*.save", SearchOption.TopDirectoryOnly);
 
             foreach (var saveFile in saveFiles)
             {
@@ -959,9 +1354,9 @@ public class SaveManagementService : ISaveManagementService
                 // For simplicity, we'll just track the file info
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex)
         {
-            // Ignore
+            _logger.LogWarning(ex, "Error extracting Renpy metadata from: {SavePath}", savePath);
         }
 
         return metadata;
@@ -975,7 +1370,7 @@ public class SaveManagementService : ISaveManagementService
         // RPG Maker saves (MV/MZ) use JSON format
         try
         {
-            var jsonFiles = Directory.GetFiles(savePath, "*.json", SearchOption.TopDirectoryOnly);
+            var jsonFiles = SafeGetFiles(savePath, "*.json", SearchOption.TopDirectoryOnly);
 
             foreach (var jsonFile in jsonFiles.Take(5)) // Limit to first 5 files
             {
@@ -1001,9 +1396,9 @@ public class SaveManagementService : ISaveManagementService
                 }
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex)
         {
-            // Ignore
+            _logger.LogWarning(ex, "Error extracting RPG Maker metadata from: {SavePath}", savePath);
         }
 
         return metadata;
@@ -1017,7 +1412,7 @@ public class SaveManagementService : ISaveManagementService
         // Try to find any JSON files that might contain metadata
         try
         {
-            var jsonFiles = Directory.GetFiles(savePath, "*.json", SearchOption.TopDirectoryOnly);
+            var jsonFiles = SafeGetFiles(savePath, "*.json", SearchOption.TopDirectoryOnly);
 
             foreach (var jsonFile in jsonFiles.Take(3))
             {
@@ -1052,9 +1447,9 @@ public class SaveManagementService : ISaveManagementService
                 }
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex)
         {
-            // Ignore
+            _logger.LogWarning(ex, "Error extracting JSON metadata from: {SavePath}", savePath);
         }
 
         return metadata;

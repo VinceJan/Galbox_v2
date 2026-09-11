@@ -28,24 +28,26 @@
         <converters:PatchStatusToVisibilityConverter x:Key="PatchStatusToVisibilityConverter"/>
         <converters:PatchTypeToColorConverter x:Key="PatchTypeToColorConverter"/>
 
-        <!-- Styles -->
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="12"/>
+        <!-- Styles - Local styles only, global styles defined in App.xaml -->
+        <Style x:Key="PatchCenterCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Margin" Value="0"/>
         </Style>
 
-        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+        <Style x:Key="PatchSectionHeaderStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="16"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
 
-        <!-- Patch Type Badge Colors -->
-        <SolidColorBrush x:Key="TranslationPatchColor" Color="#4CAF50"/>
-        <SolidColorBrush x:Key="FixPatchColor" Color="#2196F3"/>
-        <SolidColorBrush x:Key="AdultPatchColor" Color="#E91E63"/>
-        <SolidColorBrush x:Key="OtherPatchColor" Color="#9E9E9E"/>
+        <!-- Patch Type Badge Colors - Use semantic colors for theme support -->
+        <!-- Translation: Green (success) -->
+        <SolidColorBrush x:Key="TranslationPatchColor" Color="{StaticResource SystemAccentColor}"/>
+        <!-- Fix: Blue (info) -->
+        <SolidColorBrush x:Key="FixPatchColor" Color="{StaticResource SystemAccentColor}"/>
+        <!-- Adult: Pink/Magenta (accent) -->
+        <SolidColorBrush x:Key="AdultPatchColor" Color="{StaticResource SystemAccentColor}"/>
+        <!-- Other: Neutral gray -->
+        <SolidColorBrush x:Key="OtherPatchColor" Color="{StaticResource TextFillColorSecondary}"/>
 
         <!-- Patch Details Flyout -->
         <Flyout x:Key="PatchDetailsFlyoutKey"
@@ -59,7 +61,7 @@
                 MaxWidth="500">
                 <StackPanel Spacing="12">
                     <TextBlock
-                        Text="Patch Details"
+                        Text="补丁详情"
                         FontSize="18"
                         FontWeight="Bold"/>
                     <TextBlock
@@ -83,7 +85,7 @@
 
         <!-- Error Message -->
         <InfoBar
-            Title="Error"
+            Title="错误"
             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
             Severity="Error"
             IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -93,7 +95,7 @@
 
         <!-- Success Message -->
         <InfoBar
-            Title="Success"
+            Title="成功"
             Message="{x:Bind ViewModel.SuccessMessage, Mode=OneWay}"
             Severity="Success"
             IsOpen="{x:Bind ViewModel.SuccessMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -120,7 +122,7 @@
                 <!-- Title -->
                 <TextBlock
                     Grid.Column="0"
-                    Text="Patch Center"
+                    Text="补丁中心"
                     FontSize="24"
                     FontWeight="Bold"/>
 
@@ -138,7 +140,7 @@
                             Foreground="{ThemeResource SystemAccentColor}"
                             HorizontalAlignment="Center"/>
                         <TextBlock
-                            Text="Games Need Patches"
+                            Text="需要补丁的游戏"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Center"/>
@@ -151,7 +153,7 @@
                             Foreground="{ThemeResource SystemAccentColor}"
                             HorizontalAlignment="Center"/>
                         <TextBlock
-                            Text="Patches Installed"
+                            Text="已安装补丁"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Center"/>
@@ -165,7 +167,7 @@
                     Width="40"
                     Height="40"
                     Padding="0"
-                    ToolTipService.ToolTip="Refresh patches">
+                    ToolTipService.ToolTip="刷新补丁">
                     <FontIcon FontSize="16" Glyph="&#xE72C;"/>
                 </Button>
             </Grid>
@@ -173,12 +175,12 @@
             <!-- Main Two-Column Layout -->
             <Grid Grid.Row="1" ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="Auto" MinWidth="240" MaxWidth="320"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Left Column: Games List -->
-                <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                <Border Grid.Column="0" Style="{StaticResource PatchCenterCardStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -189,14 +191,14 @@
                         <!-- Games Header -->
                         <TextBlock
                             Grid.Row="0"
-                            Text="Games Needing Patches"
-                            Style="{StaticResource SectionHeaderStyle}"/>
+                            Text="需要补丁的游戏"
+                            Style="{StaticResource PatchSectionHeaderStyle}"/>
 
                         <!-- Search Box -->
                         <TextBox
                             Grid.Row="1"
                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                            PlaceholderText="Search games..."
+                            PlaceholderText="搜索游戏..."
                             CornerRadius="8"
                             Margin="0,0,0,8"/>
 
@@ -258,12 +260,12 @@
                             Spacing="8">
                             <FontIcon FontSize="48" Glyph="&#xE8FD;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock
-                                Text="No games in library"
+                                Text="游戏库中没有游戏"
                                 FontSize="14"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 HorizontalAlignment="Center"/>
                             <TextBlock
-                                Text="Add games to see available patches"
+                                Text="添加游戏以查看可用补丁"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                 HorizontalAlignment="Center"/>
@@ -272,7 +274,7 @@
                 </Border>
 
                 <!-- Right Column: Patches Panel -->
-                <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                <Border Grid.Column="1" Style="{StaticResource PatchCenterCardStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -293,22 +295,22 @@
                                 Grid.Column="0"
                                 FontSize="16"
                                 FontWeight="SemiBold">
-                                <Run Text="Available Patches for"/>
+                                <Run Text="可用补丁："/>
                                 <Run Text="{Binding SelectedGame.DisplayName}" Foreground="{ThemeResource SystemAccentColor}"/>
                             </TextBlock>
 
                             <!-- Patch Type Filter -->
                             <ComboBox
                                 Grid.Column="2"
-                                Header="Patch Type"
+                                Header="补丁类型"
                                 SelectedIndex="{x:Bind ViewModel.PatchTypeFilter, Converter={StaticResource PatchTypeFilterConverter}, Mode=TwoWay}"
                                 Width="120"
                                 HorizontalAlignment="Right">
-                                <ComboBoxItem Content="All"/>
-                                <ComboBoxItem Content="Translation"/>
-                                <ComboBoxItem Content="Fix"/>
-                                <ComboBoxItem Content="Adult"/>
-                                <ComboBoxItem Content="Other"/>
+                                <ComboBoxItem Content="全部"/>
+                                <ComboBoxItem Content="汉化"/>
+                                <ComboBoxItem Content="修复"/>
+                                <ComboBoxItem Content="成人"/>
+                                <ComboBoxItem Content="其他"/>
                             </ComboBox>
                         </Grid>
 
@@ -354,14 +356,14 @@
                                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                         Margin="0,4,0,0">
                                         <Run Text="{x:Bind ViewModel.AvailablePatchesCount, Mode=OneWay}"/>
-                                        <Run Text="patches available"/>
+                                        <Run Text="个可用补丁"/>
                                     </TextBlock>
                                 </StackPanel>
 
                                 <!-- Navigate to Game Button -->
                                 <Button
                                     Grid.Column="2"
-                                    Content="View Game"
+                                    Content="查看游戏"
                                     Command="{x:Bind ViewModel.NavigateToGameCommand}"
                                     CommandParameter="{Binding SelectedGame}"
                                     VerticalAlignment="Center"
@@ -377,7 +379,7 @@
                             VerticalAlignment="Center"
                             Margin="0,0,0,12">
                             <TextBlock
-                                Text="Select a game from the list to view available patches"
+                                Text="从列表中选择游戏以查看可用补丁"
                                 FontSize="14"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 HorizontalAlignment="Center"/>
@@ -465,7 +467,7 @@
                                                         <Button.Content>
                                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                                 <FontIcon FontSize="14" Glyph="&#xE896;"/>
-                                                                <TextBlock Text="Download"/>
+                                                                <TextBlock Text="下载"/>
                                                             </StackPanel>
                                                         </Button.Content>
                                                     </Button>
@@ -481,7 +483,7 @@
                                                         <Button.Content>
                                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                                 <FontIcon FontSize="14" Glyph="&#xE75C;"/>
-                                                                <TextBlock Text="Install"/>
+                                                                <TextBlock Text="安装"/>
                                                             </StackPanel>
                                                         </Button.Content>
                                                     </Button>
@@ -494,7 +496,7 @@
                                                         Visibility="{Binding Status, Converter={StaticResource PatchStatusToVisibilityConverter}, ConverterParameter=Installed}">
                                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                                             <FontIcon FontSize="14" Glyph="&#xE73E;" Foreground="White"/>
-                                                            <TextBlock Text="Installed" FontWeight="SemiBold" Foreground="White"/>
+                                                            <TextBlock Text="已安装" FontWeight="SemiBold" Foreground="White"/>
                                                         </StackPanel>
                                                     </Border>
 
@@ -508,7 +510,7 @@
                                                         <Button.Content>
                                                             <StackPanel Orientation="Horizontal" Spacing="4">
                                                                 <FontIcon FontSize="14" Glyph="&#xE946;"/>
-                                                                <TextBlock Text="Details"/>
+                                                                <TextBlock Text="详情"/>
                                                             </StackPanel>
                                                         </Button.Content>
                                                     </Button>
@@ -529,12 +531,12 @@
                             Spacing="8">
                             <FontIcon FontSize="48" Glyph="&#xE771;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock
-                                Text="No patches available"
+                                Text="暂无可用补丁"
                                 FontSize="14"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 HorizontalAlignment="Center"/>
                             <TextBlock
-                                Text="This game may not have any patches available"
+                                Text="该游戏可能没有可用的补丁"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                 HorizontalAlignment="Center"/>

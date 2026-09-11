@@ -8,9 +8,39 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Theme Colors -->
-            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#202020"/>
-            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#1C1C1C"/>
+            <!-- Theme Colors - Use system layer colors for proper theme support -->
+            <!-- CardBackgroundFillColorDefaultBrush uses LayerFillColorDefaultBrush for proper light/dark theme support -->
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="{StaticResource LayerFillColorDefault}" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="{StaticResource LayerFillColorAlt}" />
+
+            <!-- Semantic Font Size Resources for High DPI Support -->
+            <x:Double x:Key="FontSizeSmall">12</x:Double>
+            <x:Double x:Key="FontSizeNormal">14</x:Double>
+            <x:Double x:Key="FontSizeMedium">16</x:Double>
+            <x:Double x:Key="FontSizeLarge">18</x:Double>
+            <x:Double x:Key="FontSizeTitle">24</x:Double>
+            <x:Double x:Key="FontSizeHeader">28</x:Double>
+
+            <!-- Global Styles -->
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="12"/>
+            </Style>
+
+            <Style x:Key="AccentButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{ThemeResource SystemAccentColor}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Padding" Value="16,8"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="{StaticResource FontSizeMedium}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
 
             <!-- Converters registered in Page.Resources, not here -->
         </ResourceDictionary>

@@ -21,7 +21,7 @@
         <converters:PathToImageConverter x:Key="PathToImageConverter"/>
         <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter"/>
 
-        <!-- Styles -->
+        <!-- Styles - Local styles only, global styles defined in App.xaml -->
         <Style x:Key="QuickLaunchCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="12"/>
@@ -29,25 +29,22 @@
             <Setter Property="Margin" Value="0,0,0,16"/>
         </Style>
 
-        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+        <Style x:Key="MainPageSectionHeaderStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,16,0,8"/>
         </Style>
 
+        <!-- Responsive Game Card Style - Use MinWidth/MinHeight instead of fixed dimensions -->
         <Style x:Key="GameCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Width" Value="140"/>
-            <Setter Property="Height" Value="200"/>
+            <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="MinHeight" Value="160"/>
         </Style>
 
-        <Style x:Key="LaunchButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="{ThemeResource SystemAccentColor}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CornerRadius" Value="8"/>
+        <Style x:Key="LaunchButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
             <Setter Property="Padding" Value="16,10"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
     </Page.Resources>
 
@@ -63,7 +60,7 @@
 
         <!-- Error Message -->
         <InfoBar
-            Title="Error"
+            Title="错误"
             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
             Severity="Error"
             IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -78,19 +75,53 @@
             <StackPanel Orientation="Vertical" MaxWidth="1200" HorizontalAlignment="Center">
 
                 <!-- Page Header -->
-                <TextBlock
-                    Text="Welcome to Galbox"
-                    FontSize="24"
-                    FontWeight="Bold"
-                    Margin="0,0,0,8"/>
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <TextBlock
-                    FontSize="14"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Margin="0,0,0,16">
-                    <Run Text="{x:Bind ViewModel.TotalGamesCount, Mode=OneWay}"/>
-                    <Run Text="games in your library"/>
-                </TextBlock>
+                    <StackPanel Grid.Column="0" Orientation="Vertical">
+                        <TextBlock
+                            Text="欢迎使用 Galbox"
+                            FontSize="24"
+                            FontWeight="Bold"/>
+
+                        <TextBlock
+                            FontSize="14"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                            <Run Text="{x:Bind ViewModel.TotalGamesCount, Mode=OneWay}"/>
+                            <Run Text="个游戏在你的游戏库中"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Action Buttons -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                        <!-- Add Game Button -->
+                        <Button
+                            Click="OnAddGameClick"
+                            Style="{StaticResource AccentButtonStyle}"
+                            CornerRadius="8"
+                            Padding="16,10">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="16" Glyph="&#xE710;"/>
+                                <TextBlock Text="添加游戏" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Go to Library Button -->
+                        <Button
+                            Command="{x:Bind ViewModel.NavigateToLibraryCommand}"
+                            CornerRadius="8"
+                            Padding="12,10">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <FontIcon FontSize="16" Glyph="&#xE80A;"/>
+                                <TextBlock Text="游戏库"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
 
                 <!-- Quick Launch Section -->
                 <Border
@@ -103,13 +134,15 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Cover Image -->
+                        <!-- Cover Image - Responsive sizing -->
                         <Border
                             Grid.Column="0"
                             Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                             CornerRadius="8"
-                            Width="120"
-                            Height="180">
+                            MinWidth="80"
+                            MaxWidth="150"
+                            MinHeight="120"
+                            MaxHeight="200">
                             <Image
                                 Source="{Binding QuickLaunchGame.CoverImagePath, Mode=OneWay, Converter={StaticResource PathToImageConverter}}"
                                 Stretch="UniformToFill"
@@ -135,7 +168,7 @@
                                 FontSize="13"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Visibility="{Binding QuickLaunchGame.LastSessionTime, Mode=OneWay, Converter={StaticResource NullToVisibilityConverter}}">
-                                <Run Text="Last played: "/>
+                                <Run Text="上次游玩： "/>
                                 <Run Text="{Binding QuickLaunchGame.LastSessionTime, Mode=OneWay, Converter={StaticResource DateTimeFormatConverter}}"/>
                             </TextBlock>
                         </StackPanel>
@@ -149,7 +182,7 @@
                             Style="{StaticResource LaunchButtonStyle}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon FontSize="16" Glyph="&#xE768;"/>
-                                <TextBlock Text="Launch"/>
+                                <TextBlock Text="启动"/>
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -158,12 +191,12 @@
                 <!-- Currently Playing Section -->
                 <Grid>
                     <TextBlock
-                        Text="Currently Playing"
-                        Style="{StaticResource SectionHeaderStyle}"
+                        Text="正在游玩"
+                        Style="{StaticResource MainPageSectionHeaderStyle}"
                         Visibility="{x:Bind ViewModel.CurrentlyPlayingGames.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}"/>
 
                     <HyperlinkButton
-                        Content="See All"
+                        Content="查看全部"
                         HorizontalAlignment="Right"
                         Command="{x:Bind ViewModel.NavigateToCurrentlyPlayingCommand}"
                         Margin="0,16,0,8"
@@ -215,12 +248,12 @@
                 <!-- Favorites Section -->
                 <Grid>
                     <TextBlock
-                        Text="Favorites"
-                        Style="{StaticResource SectionHeaderStyle}"
+                        Text="收藏"
+                        Style="{StaticResource MainPageSectionHeaderStyle}"
                         Visibility="{x:Bind ViewModel.FavoriteGames.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}"/>
 
                     <HyperlinkButton
-                        Content="See All"
+                        Content="查看全部"
                         HorizontalAlignment="Right"
                         Command="{x:Bind ViewModel.NavigateToFavoritesCommand}"
                         Margin="0,16,0,8"
@@ -282,12 +315,12 @@
                 <!-- Recent Games Section -->
                 <Grid>
                     <TextBlock
-                        Text="Recently Played"
-                        Style="{StaticResource SectionHeaderStyle}"
+                        Text="最近游玩"
+                        Style="{StaticResource MainPageSectionHeaderStyle}"
                         Visibility="{x:Bind ViewModel.RecentGames.Count, Mode=OneWay, Converter={StaticResource CountToVisibilityConverter}}"/>
 
                     <HyperlinkButton
-                        Content="See All"
+                        Content="查看全部"
                         HorizontalAlignment="Right"
                         Command="{x:Bind ViewModel.NavigateToLibraryCommand}"
                         Margin="0,16,0,8"
@@ -344,12 +377,12 @@
                     Margin="32">
                     <FontIcon FontSize="48" Glyph="&#xE8FD;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     <TextBlock
-                        Text="No games in your library yet"
+                        Text="游戏库中还没有游戏"
                         FontSize="16"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         HorizontalAlignment="Center"/>
                     <Button
-                        Content="Add Games"
+                        Content="添加游戏"
                         Command="{x:Bind ViewModel.NavigateToLibraryCommand}"
                         HorizontalAlignment="Center"/>
                 </StackPanel>

@@ -24,10 +24,8 @@
         <converters:DateTimeFormatConverter x:Key="DateTimeFormatConverter"/>
         <converters:ByteSizeConverter x:Key="ByteSizeConverter"/>
 
-        <!-- Styles -->
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
-            <Setter Property="CornerRadius" Value="8"/>
+        <!-- Styles - Local styles only, global styles defined in App.xaml -->
+        <Style x:Key="SaveManagerCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
             <Setter Property="Padding" Value="12"/>
         </Style>
 
@@ -156,10 +154,10 @@
                             Background="{ThemeResource SystemAccentColor}"
                             CornerRadius="4"
                             Padding="12,6"
-                            ToolTipService.ToolTip="Restore this backup">
+                            ToolTipService.ToolTip="恢复此备份">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <FontIcon FontSize="12" Glyph="&#xE10E;"/>
-                                <TextBlock Text="Restore" FontSize="12"/>
+                                <TextBlock Text="恢复" FontSize="12"/>
                             </StackPanel>
                         </Button>
 
@@ -169,10 +167,10 @@
                             Background="{ThemeResource SystemControlBackgroundAccentBrush}"
                             CornerRadius="4"
                             Padding="12,6"
-                            ToolTipService.ToolTip="Quick switch - backup current and restore this">
+                            ToolTipService.ToolTip="快速切换 - 备份当前存档并恢复此备份">
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <FontIcon FontSize="12" Glyph="&#xE8AB;"/>
-                                <TextBlock Text="Quick Switch" FontSize="12"/>
+                                <TextBlock Text="快速切换" FontSize="12"/>
                             </StackPanel>
                         </Button>
 
@@ -182,7 +180,7 @@
                             Background="Transparent"
                             CornerRadius="4"
                             Padding="12,6"
-                            ToolTipService.ToolTip="Delete this backup">
+                            ToolTipService.ToolTip="删除此备份">
                             <FontIcon FontSize="12" Glyph="&#xE74D;" Foreground="{ThemeResource SystemErrorTextColor}"/>
                         </Button>
                     </StackPanel>
@@ -203,7 +201,7 @@
 
         <!-- Error Message -->
         <InfoBar
-            Title="Error"
+            Title="错误"
             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
             Severity="Error"
             IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -213,7 +211,7 @@
 
         <!-- Success Message -->
         <InfoBar
-            Title="Success"
+            Title="成功"
             Message="{x:Bind ViewModel.SuccessMessage, Mode=OneWay}"
             Severity="Success"
             IsOpen="{x:Bind ViewModel.SuccessMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -232,7 +230,7 @@
             Padding="24">
             <StackPanel Spacing="16" Width="300">
                 <TextBlock
-                    Text="Backup Operation"
+                    Text="备份操作"
                     FontSize="18"
                     FontWeight="Bold"
                     HorizontalAlignment="Center"/>
@@ -278,7 +276,7 @@
                 <!-- Title -->
                 <TextBlock
                     Grid.Column="0"
-                    Text="Save Manager"
+                    Text="存档管理"
                     FontSize="24"
                     FontWeight="Bold"/>
 
@@ -290,16 +288,16 @@
                     Margin="16,0,0,0"
                     VerticalAlignment="Center">
                     <Run Text="{x:Bind ViewModel.FilteredGamesCount, Mode=OneWay}"/>
-                    <Run Text="of"/>
+                    <Run Text="/"/>
                     <Run Text="{x:Bind ViewModel.TotalGamesCount, Mode=OneWay}"/>
-                    <Run Text="games"/>
+                    <Run Text="个游戏"/>
                 </TextBlock>
 
                 <!-- Search Box -->
                 <TextBox
                     Grid.Column="2"
                     Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                    PlaceholderText="Search games..."
+                    PlaceholderText="搜索游戏..."
                     Width="300"
                     CornerRadius="8"
                     HorizontalAlignment="Right"
@@ -310,8 +308,8 @@
                     <!-- Auto Backup Toggle -->
                     <ToggleSwitch
                         IsOn="{x:Bind ViewModel.AutoBackupEnabled, Mode=TwoWay}"
-                        OffContent="Auto-backup: Off"
-                        OnContent="Auto-backup: On"
+                        OffContent="自动备份：关"
+                        OnContent="自动备份：开"
                         Margin="0,0,8,0"/>
 
                     <!-- Refresh Button -->
@@ -320,7 +318,7 @@
                         Width="40"
                         Height="40"
                         Padding="0"
-                        ToolTipService.ToolTip="Refresh">
+                        ToolTipService.ToolTip="刷新">
                         <FontIcon FontSize="16" Glyph="&#xE72C;"/>
                     </Button>
                 </StackPanel>
@@ -329,14 +327,14 @@
             <!-- Two-Column Layout -->
             <Grid Grid.Row="2" ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280"/>
+                    <ColumnDefinition Width="Auto" MinWidth="240" MaxWidth="320"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Left: Game List -->
                 <Border
                     Grid.Column="0"
-                    Style="{StaticResource CardStyle}"
+                    Style="{StaticResource SaveManagerCardStyle}"
                     Padding="12">
                     <Grid RowSpacing="8">
                         <Grid.RowDefinitions>
@@ -347,7 +345,7 @@
                         <!-- Game List Header -->
                         <TextBlock
                             Grid.Row="0"
-                            Text="Games"
+                            Text="游戏列表"
                             FontSize="16"
                             FontWeight="SemiBold"/>
 
@@ -374,7 +372,7 @@
                 <!-- Right: Backup Details -->
                 <Border
                     Grid.Column="1"
-                    Style="{StaticResource CardStyle}"
+                    Style="{StaticResource SaveManagerCardStyle}"
                     Padding="16"
                     Visibility="{x:Bind ViewModel.HasSelectedGame, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid RowSpacing="16">
@@ -409,7 +407,7 @@
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center">
                                 <Run Text="{x:Bind ViewModel.SelectedGameBackupCount, Mode=OneWay}"/>
-                                <Run Text="backups"/>
+                                <Run Text="个备份"/>
                             </TextBlock>
 
                             <Button
@@ -417,7 +415,7 @@
                                 Click="OnClearSelectionClick"
                                 Background="Transparent"
                                 Padding="8"
-                                ToolTipService.ToolTip="Clear selection">
+                                ToolTipService.ToolTip="清除选择">
                                 <FontIcon FontSize="16" Glyph="&#xE711;"/>
                             </Button>
                         </Grid>
@@ -437,7 +435,7 @@
                                 <TextBox
                                     Grid.Column="0"
                                     Text="{x:Bind ViewModel.NewBackupDescription, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="Backup description (optional)..."
+                                    PlaceholderText="备份描述（可选）..."
                                     VerticalAlignment="Center"/>
 
                                 <Button
@@ -449,7 +447,7 @@
                                     IsEnabled="{x:Bind ViewModel.IsBackupInProgress, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <FontIcon FontSize="14" Glyph="&#xE74E;"/>
-                                        <TextBlock Text="Create Backup" FontSize="14"/>
+                                        <TextBlock Text="创建备份" FontSize="14"/>
                                     </StackPanel>
                                 </Button>
                             </Grid>
@@ -492,12 +490,12 @@
                                     Spacing="12">
                                     <FontIcon FontSize="48" Glyph="&#xE74E;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                     <TextBlock
-                                        Text="No backups for this game"
+                                        Text="此游戏暂无备份"
                                         FontSize="14"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                         HorizontalAlignment="Center"/>
                                     <TextBlock
-                                        Text="Create a backup to protect your save progress"
+                                        Text="创建备份以保护您的存档进度"
                                         FontSize="12"
                                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                         HorizontalAlignment="Center"/>
@@ -536,11 +534,11 @@
                                         FontWeight="SemiBold"/>
                                     <StackPanel Orientation="Horizontal" Spacing="16">
                                         <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run Text="Created: "/>
+                                            <Run Text="创建时间： "/>
                                             <Run Text="{Binding SelectedBackup.CreatedTime, Converter={StaticResource DateTimeFormatConverter}}"/>
                                         </TextBlock>
                                         <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                            <Run Text="Size: "/>
+                                            <Run Text="大小： "/>
                                             <Run Text="{Binding SelectedBackup.FormattedSize}"/>
                                         </TextBlock>
                                     </StackPanel>
@@ -558,7 +556,7 @@
                 <!-- Right: No Game Selected State -->
                 <Border
                     Grid.Column="1"
-                    Style="{StaticResource CardStyle}"
+                    Style="{StaticResource SaveManagerCardStyle}"
                     Padding="24"
                     Visibility="{x:Bind ViewModel.HasSelectedGame, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
                     <StackPanel
@@ -567,12 +565,12 @@
                         Spacing="16">
                         <FontIcon FontSize="64" Glyph="&#xE74E;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock
-                            Text="Select a game to manage its saves"
+                            Text="选择一个游戏以管理其存档"
                             FontSize="16"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Center"/>
                         <TextBlock
-                            Text="Click on a game from the list to view and manage its save backups"
+                            Text="点击游戏列表中的游戏以查看和管理其存档备份"
                             FontSize="14"
                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                             HorizontalAlignment="Center"
@@ -591,12 +589,12 @@
                 Spacing="16">
                 <FontIcon FontSize="48" Glyph="&#xE8FD;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 <TextBlock
-                    Text="No games in library"
+                    Text="游戏库中没有游戏"
                     FontSize="16"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     HorizontalAlignment="Center"/>
                 <TextBlock
-                    Text="Add games to your library to manage their save backups"
+                    Text="添加游戏到游戏库以管理其存档备份"
                     FontSize="14"
                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                     HorizontalAlignment="Center"/>

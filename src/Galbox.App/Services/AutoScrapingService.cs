@@ -253,12 +253,13 @@ public class AutoScrapingService : IAutoScrapingService
     }
 
     /// <inheritdoc />
-    public async Task<List<GameScrapingResult>> GetGamesNeedingReviewAsync()
+    public Task<List<GameScrapingResult>> GetGamesNeedingReviewAsync()
     {
-        return _gamesNeedingReview
+        return Task.FromResult(_gamesNeedingReview
             .Select(id => _results.TryGetValue(id, out var result) ? result : null)
             .Where(r => r != null)
-            .ToList()!;
+            .Select(r => r!)
+            .ToList());
     }
 
     /// <inheritdoc />

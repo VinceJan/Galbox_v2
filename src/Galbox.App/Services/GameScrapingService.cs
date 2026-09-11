@@ -38,8 +38,8 @@ public class GameScrapingService : IGameScrapingService
     // Thread-safe rate limiting using SemaphoreSlim
     private readonly SemaphoreSlim _bangumiRateLimitLock = new(1, 1);
     private readonly SemaphoreSlim _vndbRateLimitLock = new(1, 1);
-    private const int BangumiRateLimitMs = 500; // Bangumi has rate limits
-    private const int VndbRateLimitMs = 200;
+    private const int BangumiRateLimitMs = 200; // Bangumi official limit: 5 requests/second
+    private const int VndbRateLimitMs = 250; // VNDB recommended: 4 requests/second
     private DateTime _lastBangumiRequest = DateTime.MinValue;
     private DateTime _lastVndbRequest = DateTime.MinValue;
 

@@ -12,7 +12,7 @@ namespace Galbox.App.ViewModels;
 /// ViewModel for displaying scraping progress and batch results.
 /// Supports progress dialog with cancel option and per-game status display.
 /// </summary>
-public partial class ScrapingProgressViewModel : ObservableObject
+public partial class ScrapingProgressViewModel : ObservableObject, IDisposable
 {
     private readonly IAutoScrapingService _autoScrapingService;
     private readonly IGameScrapingService _gameScrapingService;
@@ -20,6 +20,16 @@ public partial class ScrapingProgressViewModel : ObservableObject
     private readonly DispatcherQueue? _dispatcherQueue;
 
     private CancellationTokenSource? _currentCts;
+
+    /// <summary>
+    /// Flag to track whether events have been unsubscribed.
+    /// </summary>
+    private bool _eventsSubscribed = true;
+
+    /// <summary>
+    /// Flag to track whether the object has been disposed.
+    /// </summary>
+    private bool _disposed;
 
     /// <summary>
     /// Creates a ScrapingProgressViewModel with injected dependencies.
@@ -37,9 +47,40 @@ public partial class ScrapingProgressViewModel : ObservableObject
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         // Subscribe to progress events
+        SubscribeEvents();
+    }
+
+    /// <summary>
+    /// Subscribes to scraping service events.
+    /// </summary>
+    private void SubscribeEvents()
+    {
+        if (_eventsSubscribed)
+        {
+            return;
+        }
+
         _autoScrapingService.ProgressChanged += OnProgressChanged;
         _autoScrapingService.GameCompleted += OnGameCompleted;
         _autoScrapingService.BatchCompleted += OnBatchCompleted;
+        _eventsSubscribed = true;
+    }
+
+    /// <summary>
+    /// Unsubscribes from scraping service events.
+    /// Call this when the ViewModel is no longer needed to prevent memory leaks.
+    /// </summary>
+    public void UnsubscribeEvents()
+    {
+        if (!_eventsSubscribed)
+        {
+            return;
+        }
+
+        _autoScrapingService.ProgressChanged -= OnProgressChanged;
+        _autoScrapingService.GameCompleted -= OnGameCompleted;
+        _autoScrapingService.BatchCompleted -= OnBatchCompleted;
+        _eventsSubscribed = false;
     }
 
     #region Observable Properties
@@ -200,7 +241,7 @@ public partial class ScrapingProgressViewModel : ObservableObject
     {
         if (gameIds == null || !gameIds.Any())
         {
-            ErrorMessage = "No games selected for scraping";
+            ErrorMessage = "未选择要刮削的游戏";
             return;
         }
 
@@ -224,7 +265,7 @@ public partial class ScrapingProgressViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Scraping failed: {ex.Message}";
+            ErrorMessage = "刮削失败：{ex.Message}";
             _logger.LogError(ex, "Batch scraping failed");
         }
         finally
@@ -246,6 +287,10 @@ public partial class ScrapingProgressViewModel : ObservableObject
             _autoScrapingService.StopScraping();
             _currentCts.Cancel();
             _logger.LogInformation("User cancelled scraping operation");
+
+            // Dispose the CancellationTokenSource
+            _currentCts.Dispose();
+            _currentCts = null;
         }
     }
 
@@ -342,7 +387,7 @@ public partial class ScrapingProgressViewModel : ObservableObject
     {
         if (SelectedGameForReview == null || SelectedMatch == null)
         {
-            ErrorMessage = "No game or metadata selected";
+            ErrorMessage = "未选择游戏或元数据";
             return;
         }
 
@@ -428,7 +473,7 @@ public partial class ScrapingProgressViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(gameName))
         {
-            ErrorMessage = "Please enter a game name to search";
+            ErrorMessage = "请输入游戏名称进行搜索";
             return;
         }
 
@@ -457,7 +502,7 @@ public partial class ScrapingProgressViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = "No matches found";
+                ErrorMessage = "未找到匹配项";
             }
         }
         catch (Exception ex)
@@ -614,6 +659,39 @@ public partial class ScrapingProgressViewModel : ObservableObject
         {
             return $"{(int)time.TotalHours}h {(int)time.Minutes}m";
         }
+    }
+
+    #endregion
+
+    #region IDisposable
+
+    /// <summary>
+    /// Releases all resources used by the ScrapingProgressViewModel.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // Unsubscribe from events
+        UnsubscribeEvents();
+
+        // Dispose CancellationTokenSource if exists
+        if (_currentCts != null)
+        {
+            if (!_currentCts.Token.IsCancellationRequested)
+            {
+                _currentCts.Cancel();
+            }
+            _currentCts.Dispose();
+            _currentCts = null;
+        }
+
+        _logger.LogInformation("ScrapingProgressViewModel disposed");
     }
 
     #endregion

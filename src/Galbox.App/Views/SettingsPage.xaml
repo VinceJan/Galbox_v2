@@ -19,10 +19,8 @@
         <converters:EmptyStringToBooleanConverter x:Key="EmptyStringToBooleanConverter"/>
         <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
 
-        <!-- Settings Card Style -->
-        <Style x:Key="SettingsCardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
-            <Setter Property="CornerRadius" Value="8"/>
+        <!-- Settings Card Style - inherits from global CardStyle -->
+        <Style x:Key="SettingsCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
             <Setter Property="Padding" Value="16"/>
             <Setter Property="Margin" Value="0,4,0,4"/>
         </Style>
@@ -43,6 +41,8 @@
         <converters:ScreenshotFormatConverter x:Key="ScreenshotFormatConverter"/>
         <converters:BossKeyModifierConverter x:Key="BossKeyModifierConverter"/>
         <converters:DefaultScrapingSourceConverter x:Key="DefaultScrapingSourceConverter"/>
+        <converters:SettingsScreenshotFormatToJpgVisibilityConverter x:Key="SettingsScreenshotFormatToJpgVisibilityConverter"/>
+        <converters:InverseCountToVisibilityConverter x:Key="InverseCountToVisibilityConverter"/>
     </Page.Resources>
 
     <Grid Padding="24">
@@ -50,7 +50,7 @@
             <StackPanel Spacing="8" MaxWidth="900" HorizontalAlignment="Center">
                 <!-- Page Header -->
                 <TextBlock
-                    Text="Settings"
+                    Text="设置"
                     FontSize="28"
                     FontWeight="Bold"
                     Margin="0,0,0,16"/>
@@ -66,7 +66,7 @@
 
                 <!-- Error Message -->
                 <InfoBar
-                    Title="Error"
+                    Title="错误"
                     Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
                     Severity="Error"
                     IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -75,7 +75,7 @@
 
                 <!-- Success Message -->
                 <InfoBar
-                    Title="Success"
+                    Title="成功"
                     Message="{x:Bind ViewModel.SuccessMessage, Mode=OneWay}"
                     Severity="Success"
                     IsOpen="{x:Bind ViewModel.SuccessMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -90,13 +90,13 @@
                     Margin="0,8,0,16">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <FontIcon FontSize="16" Glyph="&#xE74E;"/>
-                        <TextBlock Text="Save Settings"/>
+                        <TextBlock Text="保存设置"/>
                     </StackPanel>
                 </Button>
 
                 <!-- ==================== Scraping Settings ==================== -->
                 <TextBlock
-                    Text="Scraping Settings"
+                    Text="刮削设置"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <!-- Bangumi Source -->
@@ -109,7 +109,7 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="Bangumi" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Enable Bangumi as metadata source"
+                                Text="启用 Bangumi 作为元数据来源"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -129,7 +129,7 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="VNDB" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Enable VNDB as metadata source"
+                                Text="启用 VNDB 作为元数据来源"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -149,7 +149,7 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="ymgal" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Enable ymgal as metadata source"
+                                Text="启用 ymgal 作为元数据来源"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -169,7 +169,7 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="cngal" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Enable cngal as metadata source"
+                                Text="启用 cngal 作为元数据来源"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -182,9 +182,9 @@
                 <!-- Source Priority -->
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Source Priority" FontWeight="SemiBold"/>
+                        <TextBlock Text="来源优先级" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Order of sources to use when scraping (higher priority first)"
+                            Text="刮削时的来源顺序（优先级高的先使用）"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ListView
@@ -207,7 +207,7 @@
                                             Padding="0"
                                             Click="OnMoveSourceUpClick"
                                             Tag="{Binding}"
-                                            ToolTipService.ToolTip="Move up">
+                                            ToolTipService.ToolTip="上移">
                                             <FontIcon FontSize="12" Glyph="&#xE74A;"/>
                                         </Button>
                                         <TextBlock
@@ -221,7 +221,7 @@
                                             Padding="0"
                                             Click="OnMoveSourceDownClick"
                                             Tag="{Binding}"
-                                            ToolTipService.ToolTip="Move down">
+                                            ToolTipService.ToolTip="下移">
                                             <FontIcon FontSize="12" Glyph="&#xE74B;"/>
                                         </Button>
                                     </Grid>
@@ -239,9 +239,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Match Threshold" FontWeight="SemiBold"/>
+                            <TextBlock Text="匹配阈值" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Auto-accept scraped data when match percentage exceeds threshold"
+                                Text="匹配百分比超过阈值时自动接受刮削数据"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -250,7 +250,9 @@
                                 Value="{x:Bind ViewModel.MatchThreshold, Mode=TwoWay}"
                                 Minimum="50"
                                 Maximum="100"
-                                Width="120"
+                                MinWidth="100"
+                                MaxWidth="150"
+                                Width="Auto"
                                 StepFrequency="5"/>
                             <TextBlock
                                 Text="{x:Bind ViewModel.MatchThreshold, Mode=OneWay}"
@@ -268,9 +270,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Auto Scraping" FontWeight="SemiBold"/>
+                            <TextBlock Text="自动刮削" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Automatically scrape metadata when adding new games"
+                                Text="添加新游戏时自动刮削元数据"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -283,14 +285,14 @@
                 <!-- Bangumi Login -->
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="12">
-                        <TextBlock Text="Bangumi Login" FontWeight="SemiBold"/>
+                        <TextBlock Text="Bangumi 登录" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Login to Bangumi for better scraping results"
+                            Text="登录 Bangumi 以获得更好的刮削结果"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Login via OAuth" Click="OnBangumiLoginClick"/>
-                            <Button Content="Enter API Key" Click="OnBangumiApiKeyClick"/>
+                            <Button Content="OAuth 登录" Click="OnBangumiLoginClick"/>
+                            <Button Content="输入 API 密钥" Click="OnBangumiApiKeyClick"/>
                         </StackPanel>
                         <TextBlock
                             Text="{x:Bind ViewModel.BangumiUserId, Mode=OneWay}"
@@ -302,28 +304,30 @@
 
                 <!-- ==================== Launch Behavior ==================== -->
                 <TextBlock
-                    Text="Launch Behavior"
+                    Text="启动行为"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="When Launching a Game" FontWeight="SemiBold"/>
+                        <TextBlock Text="启动游戏时" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Behavior of the application when a game is launched"
+                            Text="启动游戏时应用的行为"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ComboBox
                             SelectedIndex="{x:Bind ViewModel.OnLaunchBehavior, Converter={StaticResource LaunchBehaviorConverter}, Mode=TwoWay}"
-                            Width="200"
+                            MinWidth="150"
+                            MaxWidth="250"
+                            Width="Auto"
                             HorizontalAlignment="Left">
-                            <ComboBoxItem Content="No Action"/>
-                            <ComboBoxItem Content="Minimize"/>
-                            <ComboBoxItem Content="Minimize to Tray"/>
-                            <ComboBoxItem Content="Exit Application"/>
+                            <ComboBoxItem Content="无操作"/>
+                            <ComboBoxItem Content="最小化"/>
+                            <ComboBoxItem Content="最小化到托盘"/>
+                            <ComboBoxItem Content="退出应用"/>
                         </ComboBox>
                         <!-- Warning for Exit App -->
                         <InfoBar
-                            Title="Warning"
+                            Title="警告"
                             Message="{x:Bind ViewModel.LaunchBehaviorWarning, Mode=OneWay}"
                             Severity="Warning"
                             IsOpen="{x:Bind ViewModel.LaunchBehaviorWarning, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -333,23 +337,25 @@
 
                 <!-- ==================== Exit Behavior ==================== -->
                 <TextBlock
-                    Text="Exit Behavior"
+                    Text="退出行为"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="When Game Exits" FontWeight="SemiBold"/>
+                        <TextBlock Text="游戏退出时" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Behavior of the application after a game process exits"
+                            Text="游戏进程退出后应用的行为"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ComboBox
                             SelectedIndex="{x:Bind ViewModel.OnExitBehavior, Converter={StaticResource ExitBehaviorConverter}, Mode=TwoWay}"
-                            Width="200"
+                            MinWidth="150"
+                            MaxWidth="250"
+                            Width="Auto"
                             HorizontalAlignment="Left">
-                            <ComboBoxItem Content="Maximize to Desktop"/>
-                            <ComboBoxItem Content="Stay in Tray"/>
-                            <ComboBoxItem Content="Minimize"/>
+                            <ComboBoxItem Content="恢复到桌面"/>
+                            <ComboBoxItem Content="保持在托盘"/>
+                            <ComboBoxItem Content="最小化"/>
                         </ComboBox>
                     </StackPanel>
                 </Border>
@@ -361,9 +367,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Auto Backup on Exit" FontWeight="SemiBold"/>
+                            <TextBlock Text="退出时自动备份" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Automatically backup game saves when the game exits"
+                                Text="游戏退出时自动备份存档"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -375,7 +381,7 @@
 
                 <!-- ==================== Boss Key Settings ==================== -->
                 <TextBlock
-                    Text="Boss Key Settings"
+                    Text="老板键设置"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
@@ -385,9 +391,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Enable Boss Key" FontWeight="SemiBold"/>
+                            <TextBlock Text="启用老板键" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Quickly hide all game windows with a hotkey"
+                                Text="使用热键快速隐藏所有游戏窗口"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -399,9 +405,9 @@
 
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="12">
-                        <TextBlock Text="Boss Key Combination" FontWeight="SemiBold"/>
+                        <TextBlock Text="老板键组合" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Set the hotkey combination for boss key"
+                            Text="设置老板键热键组合"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
 
@@ -415,10 +421,12 @@
 
                         <!-- Key Selection -->
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-                            <TextBlock Text="Key:" VerticalAlignment="Center"/>
+                            <TextBlock Text="键：" VerticalAlignment="Center"/>
                             <ComboBox
                                 SelectedItem="{x:Bind ViewModel.BossKeyKey, Mode=TwoWay}"
-                                Width="80"
+                                MinWidth="60"
+                                MaxWidth="100"
+                                Width="Auto"
                                 HorizontalAlignment="Left">
                                 <x:String>A</x:String>
                                 <x:String>B</x:String>
@@ -468,9 +476,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Minimize to Tray" FontWeight="SemiBold"/>
+                            <TextBlock Text="最小化到托盘" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Minimize the app to system tray when boss key is activated"
+                                Text="激活老板键时最小化应用到系统托盘"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -487,9 +495,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Show Notification" FontWeight="SemiBold"/>
+                            <TextBlock Text="显示通知" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Show a notification when boss key is activated"
+                                Text="激活老板键时显示通知"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -501,7 +509,7 @@
 
                 <!-- ==================== Save Path Settings ==================== -->
                 <TextBlock
-                    Text="Save Path Settings"
+                    Text="存档路径设置"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
@@ -511,9 +519,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Use Custom Backup Path" FontWeight="SemiBold"/>
+                            <TextBlock Text="使用自定义备份路径" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Use a custom path instead of the default app data folder"
+                                Text="使用自定义路径而不是默认应用数据文件夹"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -527,14 +535,14 @@
                     Style="{StaticResource SettingsCardStyle}"
                     Visibility="{x:Bind ViewModel.UseCustomBackupPath, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Backup Storage Path" FontWeight="SemiBold"/>
+                        <TextBlock Text="备份存储路径" FontWeight="SemiBold"/>
                         <TextBlock
                             Text="{x:Bind ViewModel.DefaultBackupPath, Mode=OneWay}"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             TextWrapping="Wrap"/>
                         <Button
-                            Content="Select Folder"
+                            Content="选择文件夹"
                             Click="OnSelectBackupPathClick"
                             Margin="0,8,0,0"/>
                     </StackPanel>
@@ -542,7 +550,7 @@
 
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Default Backup Path (App Data)" FontWeight="SemiBold"/>
+                        <TextBlock Text="默认备份路径（应用数据）" FontWeight="SemiBold"/>
                         <TextBlock
                             Text="{x:Bind ViewModel.AppDataPath, Mode=OneWay}"
                             FontSize="12"
@@ -550,7 +558,7 @@
                             IsTextSelectionEnabled="True"
                             TextWrapping="Wrap"/>
                         <Button
-                            Content="Open Data Folder"
+                            Content="打开数据文件夹"
                             Command="{x:Bind ViewModel.OpenDataFolderCommand}"
                             Margin="0,8,0,0"/>
                     </StackPanel>
@@ -558,7 +566,7 @@
 
                 <!-- ==================== Process Monitoring ==================== -->
                 <TextBlock
-                    Text="Process Monitoring"
+                    Text="进程监控"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
@@ -568,9 +576,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Advanced Monitoring" FontWeight="SemiBold"/>
+                            <TextBlock Text="高级监控" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Enable CPU/memory/GPU tracking for running games"
+                                Text="启用运行游戏的 CPU/内存/GPU 跟踪"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -587,9 +595,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Auto Screenshot on Exit" FontWeight="SemiBold"/>
+                            <TextBlock Text="退出时自动截图" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Automatically capture a screenshot when game exits"
+                                Text="游戏退出时自动截取屏幕截图"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -606,16 +614,18 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Monitoring Interval" FontWeight="SemiBold"/>
+                            <TextBlock Text="监控间隔" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="How often to check process state (in milliseconds)"
+                                Text="检查进程状态的频率（毫秒）"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
                             <TextBox
                                 Text="{x:Bind ViewModel.MonitoringIntervalMs, Mode=TwoWay}"
-                                Width="80"
+                                MinWidth="60"
+                                MaxWidth="100"
+                                Width="Auto"
                                 InputScope="Number"/>
                             <TextBlock Text="ms" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -624,14 +634,16 @@
 
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Screenshot Format" FontWeight="SemiBold"/>
+                        <TextBlock Text="截图格式" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Format for captured screenshots"
+                            Text="截取截图的格式"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ComboBox
                             SelectedIndex="{x:Bind ViewModel.ScreenshotFormat, Converter={StaticResource ScreenshotFormatConverter}, Mode=TwoWay}"
-                            Width="100"
+                            MinWidth="80"
+                            MaxWidth="120"
+                            Width="Auto"
                             HorizontalAlignment="Left">
                             <ComboBoxItem Content="PNG"/>
                             <ComboBoxItem Content="JPG"/>
@@ -648,9 +660,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="JPG Quality" FontWeight="SemiBold"/>
+                            <TextBlock Text="JPG 质量" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Quality level for JPG screenshots (1-100)"
+                                Text="JPG 截图的质量等级（1-100）"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -659,7 +671,9 @@
                                 Value="{x:Bind ViewModel.JpgQuality, Mode=TwoWay}"
                                 Minimum="1"
                                 Maximum="100"
-                                Width="100"
+                                MinWidth="80"
+                                MaxWidth="120"
+                                Width="Auto"
                                 StepFrequency="5"/>
                             <TextBlock
                                 Text="{x:Bind ViewModel.JpgQuality, Mode=OneWay}"
@@ -671,7 +685,7 @@
 
                 <!-- ==================== Appearance ==================== -->
                 <TextBlock
-                    Text="Appearance"
+                    Text="外观"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
@@ -681,19 +695,21 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Theme" FontWeight="SemiBold"/>
+                            <TextBlock Text="主题" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Application color theme"
+                                Text="应用颜色主题"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <ComboBox
                             Grid.Column="1"
                             SelectedIndex="{x:Bind ViewModel.Theme, Converter={StaticResource AppThemeConverter}, Mode=TwoWay}"
-                            Width="150">
-                            <ComboBoxItem Content="System Default"/>
-                            <ComboBoxItem Content="Light"/>
-                            <ComboBoxItem Content="Dark"/>
+                            MinWidth="120"
+                            MaxWidth="180"
+                            Width="Auto">
+                            <ComboBoxItem Content="系统默认"/>
+                            <ComboBoxItem Content="浅色"/>
+                            <ComboBoxItem Content="深色"/>
                         </ComboBox>
                     </Grid>
                 </Border>
@@ -705,19 +721,21 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Language" FontWeight="SemiBold"/>
+                            <TextBlock Text="语言" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Application display language"
+                                Text="应用显示语言"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <ComboBox
                             Grid.Column="1"
                             SelectedIndex="{x:Bind ViewModel.Language, Converter={StaticResource AppLanguageConverter}, Mode=TwoWay}"
-                            Width="150">
-                            <ComboBoxItem Content="Chinese (Simplified)"/>
-                            <ComboBoxItem Content="English"/>
-                            <ComboBoxItem Content="Japanese"/>
+                            MinWidth="120"
+                            MaxWidth="180"
+                            Width="Auto">
+                            <ComboBoxItem Content="简体中文"/>
+                            <ComboBoxItem Content="英文"/>
+                            <ComboBoxItem Content="日文"/>
                         </ComboBox>
                     </Grid>
                 </Border>
@@ -729,25 +747,27 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Library View Mode" FontWeight="SemiBold"/>
+                            <TextBlock Text="游戏库视图模式" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Default view mode for game library"
+                                Text="游戏库的默认视图模式"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <ComboBox
                             Grid.Column="1"
                             SelectedIndex="{x:Bind ViewModel.LibraryViewMode, Converter={StaticResource LibraryViewModeConverter}, Mode=TwoWay}"
-                            Width="150">
-                            <ComboBoxItem Content="Grid"/>
-                            <ComboBoxItem Content="Table"/>
+                            MinWidth="120"
+                            MaxWidth="180"
+                            Width="Auto">
+                            <ComboBoxItem Content="网格"/>
+                            <ComboBoxItem Content="表格"/>
                         </ComboBox>
                     </Grid>
                 </Border>
 
                 <!-- ==================== Library Settings ==================== -->
                 <TextBlock
-                    Text="Library Settings"
+                    Text="游戏库设置"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
@@ -757,9 +777,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Auto Scan on Startup" FontWeight="SemiBold"/>
+                            <TextBlock Text="启动时自动扫描" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Automatically scan for new games when app starts"
+                                Text="应用启动时自动扫描新游戏"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
@@ -776,15 +796,17 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Default Scraping Source" FontWeight="SemiBold"/>
+                            <TextBlock Text="默认刮削来源" FontWeight="SemiBold"/>
                             <TextBlock
-                                Text="Primary metadata source for game info"
+                                Text="游戏信息的主要元数据来源"
                                 FontSize="12"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <ComboBox
                             Grid.Column="1"
-                            Width="150"
+                            MinWidth="120"
+                            MaxWidth="180"
+                            Width="Auto"
                             SelectedIndex="{x:Bind ViewModel.DefaultScrapingSource, Mode=TwoWay, Converter={StaticResource DefaultScrapingSourceConverter}}">
                             <ComboBoxItem Content="Bangumi"/>
                             <ComboBoxItem Content="VNDB"/>
@@ -794,9 +816,98 @@
                     </Grid>
                 </Border>
 
+                <!-- Game Directories Management -->
+                <Border Style="{StaticResource SettingsCardStyle}">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="游戏目录" FontWeight="SemiBold"/>
+                                <TextBlock
+                                    Text="管理扫描游戏时使用的目录列表"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                            <Button
+                                Grid.Column="1"
+                                Click="OnAddGameDirectoryClick"
+                                Style="{StaticResource AccentButtonStyle}"
+                                CornerRadius="8"
+                                Padding="12,8">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <FontIcon FontSize="14" Glyph="&#xE710;"/>
+                                    <TextBlock Text="添加目录"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <!-- Directory List -->
+                        <ListView
+                            ItemsSource="{x:Bind ViewModel.GameDirectories, Mode=OneWay}"
+                            SelectedItem="{x:Bind ViewModel.SelectedDirectory, Mode=TwoWay}"
+                            SelectionMode="Single"
+                            Height="150"
+                            Margin="0,8,0,0">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnSpacing="12" Padding="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon
+                                            Grid.Column="0"
+                                            FontSize="16"
+                                            Glyph="&#xE8B7;"
+                                            Foreground="{ThemeResource SystemAccentColor}"/>
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            Text="{Binding}"
+                                            VerticalAlignment="Center"
+                                            TextTrimming="CharacterEllipsis"/>
+                                        <Button
+                                            Grid.Column="2"
+                                            Click="OnRemoveGameDirectoryClick"
+                                            DataContext="{Binding}"
+                                            Background="Transparent"
+                                            Padding="8"
+                                            ToolTipService.ToolTip="删除目录">
+                                            <FontIcon FontSize="12" Glyph="&#xE74D;" Foreground="{ThemeResource SystemErrorTextColor}"/>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <!-- Empty State -->
+                        <StackPanel
+                            Visibility="{x:Bind ViewModel.GameDirectories.Count, Mode=OneWay, Converter={StaticResource InverseCountToVisibilityConverter}}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Margin="24"
+                            Spacing="8">
+                            <FontIcon FontSize="32" Glyph="&#xE8B7;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock
+                                Text="没有设置游戏目录"
+                                FontSize="14"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                HorizontalAlignment="Center"/>
+                            <TextBlock
+                                Text="点击上方按钮添加游戏目录"
+                                FontSize="12"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- ==================== About ==================== -->
                 <TextBlock
-                    Text="About"
+                    Text="关于"
                     Style="{StaticResource SettingsSectionHeaderStyle}"/>
 
                 <Border Style="{StaticResource SettingsCardStyle}">
@@ -807,7 +918,7 @@
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock
-                            Text="A game library manager for visual novels and galgames."
+                            Text="一款用于视觉小说和 Galgame 的游戏库管理器。"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock
@@ -819,7 +930,7 @@
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <Button
-                            Content="View on GitHub"
+                            Content="在 GitHub 上查看"
                             Command="{x:Bind ViewModel.OpenGitHubCommand}"
                             Margin="0,8,0,0"/>
                     </StackPanel>
@@ -828,9 +939,9 @@
                 <!-- Database Info -->
                 <Border Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Database Location" FontWeight="SemiBold"/>
+                        <TextBlock Text="数据库位置" FontWeight="SemiBold"/>
                         <TextBlock
-                            Text="Where game data is stored"
+                            Text="游戏数据存储位置"
                             FontSize="12"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock

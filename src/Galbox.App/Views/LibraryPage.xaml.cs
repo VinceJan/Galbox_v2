@@ -24,11 +24,6 @@ public sealed partial class LibraryPage : Page
     public LibraryViewModel ViewModel { get; }
 
     /// <summary>
-    /// Currently hovered game for quick launch button.
-    /// </summary>
-    private GameInfo? _hoveredGame;
-
-    /// <summary>
     /// Creates a LibraryPage and obtains the ViewModel via DI.
     /// </summary>
     public LibraryPage()
@@ -129,6 +124,40 @@ public sealed partial class LibraryPage : Page
         catch (System.Exception ex)
         {
             ViewModel.ErrorMessage = $"Failed to add game: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Handles scan folder button click - opens folder picker for batch scan.
+    /// </summary>
+    private async void OnScanFolderClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Create folder picker
+            var folderPicker = new FolderPicker();
+            folderPicker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
+            folderPicker.FileTypeFilter.Add("*"); // Required for folder picker
+
+            // Get the window handle for the picker
+            var window = GetWindowForElement(this);
+            if (window != null)
+            {
+                // Initialize with window handle
+                var hWnd = window.As<IWindowNative>().WindowHandle;
+                InitializeWithWindow.Initialize(folderPicker, hWnd);
+
+                // Show picker
+                var folder = await folderPicker.PickSingleFolderAsync();
+                if (folder != null)
+                {
+                    await ViewModel.ScanFolderAsync(folder.Path);
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            ViewModel.ErrorMessage = $"Failed to scan folder: {ex.Message}";
         }
     }
 

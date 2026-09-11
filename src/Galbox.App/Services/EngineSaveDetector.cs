@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using Galbox.Data.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace Galbox.App.Services;
 
@@ -16,7 +17,13 @@ public static class EngineSaveDetector
     private static readonly string[] TyranoSavePatterns = { "*.sav", "*.json", "save*.dat" };
     private static readonly string[] VnmSavePatterns = { "*.sav", "*.json", "*.dat" };
     private static readonly string[] UnitySavePatterns = { "*.sav", "*.dat", "*.json", "*.prefs" };
-    private static readonly string[] RpgMakerSavePatterns = { "*.rvdata2", "*.rvdata", "*.lsd", "Save*.rgss*" };
+    private static readonly string[] RpgMakerSavePatterns = { "*.rvdata2", "*.rvdata", "*.rxdata", "*.lsd", "Save*.rgss*" };
+    private static readonly string[] RpgMakerDetectPatterns = { "*.rvdata2", "*.rvdata", "*.rxdata", "*.lsd" };
+
+    /// <summary>
+    /// Gets or sets the logger for diagnostic output.
+    /// </summary>
+    public static ILogger? Logger { get; set; }
 
     /// <summary>
     /// Detects the game engine type from the game's installation path and executable.
@@ -160,27 +167,20 @@ public static class EngineSaveDetector
         }
 
         // Check for .rpy files
-        try
+        var rpyFiles = SafeGetFiles(installPath, "*.rpy", SearchOption.TopDirectoryOnly);
+        if (rpyFiles.Length > 0)
         {
-            var rpyFiles = Directory.GetFiles(installPath, "*.rpy", SearchOption.TopDirectoryOnly);
+            return true;
+        }
+
+        var gameFolder = Path.Combine(installPath, "game");
+        if (Directory.Exists(gameFolder))
+        {
+            rpyFiles = SafeGetFiles(gameFolder, "*.rpy", SearchOption.TopDirectoryOnly);
             if (rpyFiles.Length > 0)
             {
                 return true;
             }
-
-            var gameFolder = Path.Combine(installPath, "game");
-            if (Directory.Exists(gameFolder))
-            {
-                rpyFiles = Directory.GetFiles(gameFolder, "*.rpy", SearchOption.TopDirectoryOnly);
-                if (rpyFiles.Length > 0)
-                {
-                    return true;
-                }
-            }
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Directory doesn't exist
         }
 
         return false;
@@ -195,17 +195,10 @@ public static class EngineSaveDetector
         }
 
         // Check for .xp3 archive files (Krkr signature)
-        try
+        var xp3Files = SafeGetFiles(installPath, "*.xp3", SearchOption.TopDirectoryOnly);
+        if (xp3Files.Length > 0)
         {
-            var xp3Files = Directory.GetFiles(installPath, "*.xp3", SearchOption.TopDirectoryOnly);
-            if (xp3Files.Length > 0)
-            {
-                return true;
-            }
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Directory doesn't exist
+            return true;
         }
 
         // Check for savedata folder
@@ -277,10 +270,17 @@ public static class EngineSaveDetector
         }
 
         // Check for_Data folder (Unity game data folder)
-        var dataFolders = Directory.GetDirectories(installPath, "*_Data", SearchOption.TopDirectoryOnly);
-        if (dataFolders.Length > 0)
+        try
         {
-            return true;
+            var dataFolders = Directory.GetDirectories(installPath, "*_Data", SearchOption.TopDirectoryOnly);
+            if (dataFolders.Length > 0)
+            {
+                return true;
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger?.LogWarning(ex, "Access denied when searching Unity data folders in: {Path}", installPath);
         }
 
         // Check for sharedassets.assets (Unity asset files)
@@ -291,15 +291,15 @@ public static class EngineSaveDetector
                 RecurseSubdirectories = true,
                 MaxRecursionDepth = 3
             };
-            var assetFiles = Directory.GetFiles(installPath, "sharedassets*.assets", enumerationOptions);
+            var assetFiles = SafeGetFiles(installPath, "sharedassets*.assets", enumerationOptions);
             if (assetFiles.Length > 0)
             {
                 return true;
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (UnauthorizedAccessException ex)
         {
-            // Ignore
+            Logger?.LogWarning(ex, "Access denied when searching Unity assets in: {Path}", installPath);
         }
 
         return false;
@@ -318,32 +318,21 @@ public static class EngineSaveDetector
             }
         }
 
-        // Check for RPG Maker VX Ace (Ruby-based)
-        try
+        // Check for RPG Maker VX Ace (.rvdata2), VX (.rvdata), XP (.rxdata), 2000/2003 (.lsd)
+        foreach (var pattern in RpgMakerDetectPatterns)
         {
-            var rvdataFiles = Directory.GetFiles(installPath, "*.rvdata2", SearchOption.TopDirectoryOnly);
-            if (rvdataFiles.Length > 0)
+            try
             {
-                return true;
+                var files = SafeGetFiles(installPath, pattern, SearchOption.TopDirectoryOnly);
+                if (files.Length > 0)
+                {
+                    return true;
+                }
             }
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Ignore
-        }
-
-        // Check for RPG Maker 2000/2003
-        try
-        {
-            var lsdFiles = Directory.GetFiles(installPath, "*.lsd", SearchOption.TopDirectoryOnly);
-            if (lsdFiles.Length > 0)
+            catch (Exception ex)
             {
-                return true;
+                Logger?.LogWarning(ex, "Error checking RPG Maker pattern: {Pattern}", pattern);
             }
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Ignore
         }
 
         return false;
@@ -358,16 +347,49 @@ public static class EngineSaveDetector
         var result = new SaveLocationResult { EngineType = GameEngineType.Renpy };
         var gameName = GetGameFolderName(game);
 
-        // Primary location: %APPDATA%/{GameName}/saves/
-        var appDataSavePath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            gameName,
-            "saves");
+        // Renpy saves can be in multiple locations:
+        // 1. %APPDATA%/{GameName}/saves/ (simple format)
+        // 2. %APPDATA%/{GameName}-{randomHash}/saves/ (common format for newer games)
+        // 3. game/saves/ in game folder (portable mode)
 
-        if (Directory.Exists(appDataSavePath))
+        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        // Primary location: search for matching folders in AppData
+        // Renpy games often use format: GameName-xxxxx where xxxxx is a random hash
+        try
         {
-            result.PrimarySavePath = appDataSavePath;
-            CollectSaveFiles(result, appDataSavePath, RenpySavePatterns);
+            var appDataFolders = SafeGetDirectories(appDataPath);
+            var matchingFolders = appDataFolders
+                .Where(d =>
+                {
+                    var folderName = Path.GetFileName(d);
+                    // Check for exact match or GameName-xxxxx pattern
+                    return folderName.Equals(gameName, StringComparison.OrdinalIgnoreCase) ||
+                           folderName.StartsWith(gameName + "-", StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+
+            foreach (var folder in matchingFolders)
+            {
+                var savesPath = Path.Combine(folder, "saves");
+                if (Directory.Exists(savesPath))
+                {
+                    if (string.IsNullOrEmpty(result.PrimarySavePath))
+                    {
+                        result.PrimarySavePath = savesPath;
+                    }
+                    else
+                    {
+                        result.AlternativePaths.Add(savesPath);
+                    }
+                    CollectSaveFiles(result, savesPath, RenpySavePatterns);
+                    Logger?.LogDebug("Found Renpy saves at: {SavesPath}", savesPath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogWarning(ex, "Error searching AppData for Renpy saves");
         }
 
         // Alternative location: game/saves/ in game folder
@@ -407,7 +429,7 @@ public static class EngineSaveDetector
         var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         try
         {
-            var potentialFolders = Directory.GetDirectories(appDataPath)
+            var potentialFolders = SafeGetDirectories(appDataPath)
                 .Where(d => !string.IsNullOrEmpty(game.Developer) &&
                             Path.GetFileName(d).Contains(game.Developer, StringComparison.OrdinalIgnoreCase))
                 .ToList();
@@ -418,27 +440,20 @@ public static class EngineSaveDetector
                 CollectSaveFiles(result, folder, KrkrSavePatterns);
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex)
         {
-            // Ignore
+            Logger?.LogWarning(ex, "Error searching AppData for Krkr saves");
         }
 
         // Check for .ksd files in game folder directly
-        try
+        var ksdFiles = SafeGetFiles(game.InstallPath, "*.ksd", SearchOption.TopDirectoryOnly);
+        if (ksdFiles.Length > 0)
         {
-            var ksdFiles = Directory.GetFiles(game.InstallPath, "*.ksd", SearchOption.TopDirectoryOnly);
-            if (ksdFiles.Length > 0)
+            if (string.IsNullOrEmpty(result.PrimarySavePath))
             {
-                if (string.IsNullOrEmpty(result.PrimarySavePath))
-                {
-                    result.PrimarySavePath = game.InstallPath;
-                }
-                result.SaveFiles.AddRange(ksdFiles);
+                result.PrimarySavePath = game.InstallPath;
             }
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Ignore
+            result.SaveFiles.AddRange(ksdFiles);
         }
 
         return result;
@@ -548,12 +563,13 @@ public static class EngineSaveDetector
             try
             {
                 // Find folders matching game name
-                var companyFolders = Directory.GetDirectories(localLowPath);
+                var companyFolders = SafeGetDirectories(localLowPath);
                 foreach (var companyFolder in companyFolders)
                 {
-                    var gameFolders = Directory.GetDirectories(companyFolder)
+                    var gameFolders = SafeGetDirectories(companyFolder)
                         .Where(d => Path.GetFileName(d).Contains(gameName, StringComparison.OrdinalIgnoreCase) ||
-                                    Path.GetFileName(d).Contains(game.NameOriginal, StringComparison.OrdinalIgnoreCase))
+                                    (!string.IsNullOrEmpty(game.NameOriginal) &&
+                                     Path.GetFileName(d).Contains(game.NameOriginal, StringComparison.OrdinalIgnoreCase)))
                         .ToList();
 
                     foreach (var gameFolder in gameFolders)
@@ -570,9 +586,9 @@ public static class EngineSaveDetector
                     }
                 }
             }
-            catch (DirectoryNotFoundException)
+            catch (Exception ex)
             {
-                // Ignore
+                Logger?.LogWarning(ex, "Error searching LocalLow for Unity saves");
             }
         }
 
@@ -618,21 +634,25 @@ public static class EngineSaveDetector
         }
 
         // RPG Maker VX Ace saves in game folder directly (.rvdata2)
-        try
+        // RPG Maker VX saves (.rvdata), XP saves (.rxdata), 2000/2003 saves (.lsd)
+        foreach (var pattern in RpgMakerDetectPatterns)
         {
-            var rvdataFiles = Directory.GetFiles(game.InstallPath, "*.rvdata2", SearchOption.TopDirectoryOnly);
-            if (rvdataFiles.Length > 0)
+            try
             {
-                if (string.IsNullOrEmpty(result.PrimarySavePath))
+                var files = SafeGetFiles(game.InstallPath, pattern, SearchOption.TopDirectoryOnly);
+                if (files.Length > 0)
                 {
-                    result.PrimarySavePath = game.InstallPath;
+                    if (string.IsNullOrEmpty(result.PrimarySavePath))
+                    {
+                        result.PrimarySavePath = game.InstallPath;
+                    }
+                    result.SaveFiles.AddRange(files);
                 }
-                result.SaveFiles.AddRange(rvdataFiles);
             }
-        }
-        catch (DirectoryNotFoundException)
-        {
-            // Ignore
+            catch (Exception ex)
+            {
+                Logger?.LogWarning(ex, "Error detecting RPG Maker saves with pattern: {Pattern}", pattern);
+            }
         }
 
         return result;
@@ -672,6 +692,72 @@ public static class EngineSaveDetector
 
     #region Helper Methods
 
+    private static string[] SafeGetFiles(string path, string pattern, SearchOption searchOption)
+    {
+        try
+        {
+            return Directory.GetFiles(path, pattern, searchOption);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger?.LogWarning(ex, "Access denied when searching files in: {Path}", path);
+            return Array.Empty<string>();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (IOException ex)
+        {
+            Logger?.LogWarning(ex, "IO error when searching files in: {Path}", path);
+            return Array.Empty<string>();
+        }
+    }
+
+    private static string[] SafeGetFiles(string path, string pattern, EnumerationOptions options)
+    {
+        try
+        {
+            return Directory.GetFiles(path, pattern, options);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger?.LogWarning(ex, "Access denied when searching files in: {Path}", path);
+            return Array.Empty<string>();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (IOException ex)
+        {
+            Logger?.LogWarning(ex, "IO error when searching files in: {Path}", path);
+            return Array.Empty<string>();
+        }
+    }
+
+    private static string[] SafeGetDirectories(string path)
+    {
+        try
+        {
+            return Directory.GetDirectories(path);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger?.LogWarning(ex, "Access denied when listing directories in: {Path}", path);
+            return Array.Empty<string>();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (IOException ex)
+        {
+            Logger?.LogWarning(ex, "IO error when listing directories in: {Path}", path);
+            return Array.Empty<string>();
+        }
+    }
+
     private static string GetGameFolderName(GameInfo game)
     {
         // Use the game folder name or the game name
@@ -698,25 +784,35 @@ public static class EngineSaveDetector
     {
         try
         {
+            // Use HashSet for deduplication to improve performance
+            var newFiles = new HashSet<string>();
+
             foreach (var pattern in patterns)
             {
                 var files = Directory.GetFiles(path, pattern, RecursionOptions);
                 foreach (var file in files)
                 {
-                    if (!result.SaveFiles.Contains(file))
-                    {
-                        result.SaveFiles.Add(file);
-                    }
+                    newFiles.Add(file);
                 }
             }
+
+            // Add to result, avoiding duplicates
+            foreach (var file in newFiles)
+            {
+                result.SaveFiles.Add(file);
+            }
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            // Skip inaccessible directories
+            Logger?.LogWarning(ex, "Access denied when collecting save files from: {Path}", path);
         }
         catch (DirectoryNotFoundException)
         {
-            // Directory doesn't exist
+            Logger?.LogDebug("Directory not found when collecting save files: {Path}", path);
+        }
+        catch (IOException ex)
+        {
+            Logger?.LogWarning(ex, "IO error when collecting save files from: {Path}", path);
         }
     }
 
@@ -727,19 +823,20 @@ public static class EngineSaveDetector
             var files = Directory.GetFiles(path, "*.*", RecursionOptions);
             foreach (var file in files)
             {
-                if (!result.SaveFiles.Contains(file))
-                {
-                    result.SaveFiles.Add(file);
-                }
+                result.SaveFiles.Add(file);
             }
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            // Skip inaccessible directories
+            Logger?.LogWarning(ex, "Access denied when collecting all save files from: {Path}", path);
         }
         catch (DirectoryNotFoundException)
         {
-            // Directory doesn't exist
+            Logger?.LogDebug("Directory not found when collecting all save files: {Path}", path);
+        }
+        catch (IOException ex)
+        {
+            Logger?.LogWarning(ex, "IO error when collecting all save files from: {Path}", path);
         }
     }
 

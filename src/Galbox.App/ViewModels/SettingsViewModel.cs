@@ -13,6 +13,10 @@ namespace Galbox.App.ViewModels;
 /// <summary>
 /// ViewModel for the Settings Page.
 /// Handles all user settings categories with MVVM pattern.
+/// Split into partial classes for better organization:
+/// - SettingsViewModel.cs: Core properties and service injection
+/// - SettingsViewModel.Sources.cs: Scraping source settings
+/// - SettingsViewModel.Display.cs: Display and appearance settings
 /// </summary>
 public partial class SettingsViewModel : ObservableObject
 {
@@ -182,6 +186,22 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _defaultScrapingSource = "Bangumi";
 
+    /// <summary>
+    /// List of game directories to scan.
+    /// </summary>
+    public ObservableCollection<string> GameDirectories { get; } = new();
+
+    /// <summary>
+    /// Selected directory for removal.
+    /// </summary>
+    [ObservableProperty]
+    private string? _selectedDirectory;
+
+    /// <summary>
+    /// Event to request folder picker dialog.
+    /// </summary>
+    public event EventHandler? RequestFolderPicker;
+
     #endregion
 
     #region About
@@ -194,7 +214,7 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// Developer name.
     /// </summary>
-    public string DeveloperInfo => "Galbox Development Team";
+    public string DeveloperInfo => "Galbox 开发团队";
 
     /// <summary>
     /// GitHub repository URL.
@@ -204,7 +224,7 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// License information.
     /// </summary>
-    public string LicenseInfo => "MIT License";
+    public string LicenseInfo => "MIT 许可证";
 
     /// <summary>
     /// Application data path.
@@ -227,20 +247,8 @@ public partial class SettingsViewModel : ObservableObject
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
-        // Initialize source priority list
+        // Initialize source priority list (defined in SettingsViewModel.Sources.cs)
         InitializeSourcePriorityList();
-    }
-
-    /// <summary>
-    /// Initializes the source priority list with default values.
-    /// </summary>
-    private void InitializeSourcePriorityList()
-    {
-        SourcePriorityList.Clear();
-        SourcePriorityList.Add(new SourcePriorityItem { Name = "Bangumi", DisplayName = "Bangumi", IsEnabled = true });
-        SourcePriorityList.Add(new SourcePriorityItem { Name = "VNDB", DisplayName = "VNDB", IsEnabled = true });
-        SourcePriorityList.Add(new SourcePriorityItem { Name = "ymgal", DisplayName = "ymgal", IsEnabled = true });
-        SourcePriorityList.Add(new SourcePriorityItem { Name = "cngal", DisplayName = "cngal", IsEnabled = true });
     }
 
     /// <summary>
@@ -272,7 +280,7 @@ public partial class SettingsViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading settings");
-            ErrorMessage = $"Failed to load settings: {ex.Message}";
+            ErrorMessage = $"加载设置失败：{ex.Message}";
         }
         finally
         {
@@ -295,7 +303,7 @@ public partial class SettingsViewModel : ObservableObject
         MatchThreshold = settings.MatchThresholdPercent;
         AutoScrapeOnAdd = settings.AutoScrapeOnAdd;
 
-        // Load source priority
+        // Load source priority (defined in SettingsViewModel.Sources.cs)
         LoadSourcePriorityFromJson(settings.SourcePriorityJson);
 
         // Launch behavior
@@ -333,84 +341,50 @@ public partial class SettingsViewModel : ObservableObject
         // Library
         AutoScanOnStartup = settings.AutoScanOnStartup;
         DefaultScrapingSource = settings.DefaultScrapingSource;
+
+        // Load game directories from JSON
+        LoadGameDirectoriesFromJson(settings.GameDirectoriesJson);
     }
 
     /// <summary>
-    /// Loads source priority from JSON string.
+    /// Loads game directories from JSON string.
     /// </summary>
-    private void LoadSourcePriorityFromJson(string? json)
+    private void LoadGameDirectoriesFromJson(string? json)
     {
+        GameDirectories.Clear();
+
         if (string.IsNullOrWhiteSpace(json))
         {
-            InitializeSourcePriorityList();
             return;
         }
 
         try
         {
-            var priorityList = JsonSerializer.Deserialize<List<string>>(json);
-            if (priorityList == null || priorityList.Count == 0)
+            var directories = JsonSerializer.Deserialize<List<string>>(json);
+            if (directories != null)
             {
-                InitializeSourcePriorityList();
-                return;
-            }
-
-            // Clear and rebuild list based on priority
-            SourcePriorityList.Clear();
-
-            // Add items in priority order
-            foreach (var sourceName in priorityList)
-            {
-                var existingItem = SourcePriorityList.FirstOrDefault(s => s.Name == sourceName);
-                if (existingItem == null)
+                foreach (var dir in directories)
                 {
-                    SourcePriorityList.Add(new SourcePriorityItem
+                    if (!string.IsNullOrWhiteSpace(dir) && System.IO.Directory.Exists(dir))
                     {
-                        Name = sourceName,
-                        DisplayName = GetSourceDisplayName(sourceName),
-                        IsEnabled = GetSourceEnabled(sourceName)
-                    });
-                }
-            }
-
-            // Add remaining sources not in priority list
-            var allSources = new[] { "Bangumi", "VNDB", "ymgal", "cngal" };
-            foreach (var sourceName in allSources)
-            {
-                if (!SourcePriorityList.Any(s => s.Name == sourceName))
-                {
-                    SourcePriorityList.Add(new SourcePriorityItem
-                    {
-                        Name = sourceName,
-                        DisplayName = GetSourceDisplayName(sourceName),
-                        IsEnabled = GetSourceEnabled(sourceName)
-                    });
+                        GameDirectories.Add(dir);
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to parse source priority JSON, using defaults");
-            InitializeSourcePriorityList();
+            _logger.LogError(ex, "Error loading game directories from JSON");
         }
     }
 
     /// <summary>
-    /// Gets display name for a source.
+    /// Saves game directories to JSON string.
     /// </summary>
-    private string GetSourceDisplayName(string name) => name;
-
-    /// <summary>
-    /// Gets enabled status for a source.
-    /// </summary>
-    private bool GetSourceEnabled(string name) => name switch
+    private string SaveGameDirectoriesToJson()
     {
-        "Bangumi" => EnableBangumi,
-        "VNDB" => EnableVndb,
-        "ymgal" => EnableYmgal,
-        "cngal" => EnableCngal,
-        _ => false
-    };
+        return JsonSerializer.Serialize(GameDirectories.ToList());
+    }
 
     /// <summary>
     /// Loads boss key modifiers from flags.
@@ -505,24 +479,6 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Updates launch behavior warning message.
-    /// </summary>
-    partial void OnOnLaunchBehaviorChanged(LaunchBehavior value)
-    {
-        UpdateLaunchBehaviorWarning();
-    }
-
-    /// <summary>
-    /// Updates the launch behavior warning.
-    /// </summary>
-    private void UpdateLaunchBehaviorWarning()
-    {
-        LaunchBehaviorWarning = OnLaunchBehavior == LaunchBehavior.ExitApp
-            ? "Warning: The application will close completely when launching a game. You will need to manually restart it after the game exits."
-            : null;
-    }
-
-    /// <summary>
     /// Saves all settings to database asynchronously.
     /// </summary>
     [RelayCommand]
@@ -553,7 +509,7 @@ public partial class SettingsViewModel : ObservableObject
             // Apply runtime settings
             ApplyRuntimeSettings();
 
-            SuccessMessage = "Settings saved successfully";
+            SuccessMessage = "设置已保存";
             _logger.LogInformation("Settings saved successfully");
 
             // Clear success message after delay
@@ -563,7 +519,7 @@ public partial class SettingsViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error saving settings");
-            ErrorMessage = $"Failed to save settings: {ex.Message}";
+            ErrorMessage = $"保存设置失败：{ex.Message}";
         }
         finally
         {
@@ -624,6 +580,9 @@ public partial class SettingsViewModel : ObservableObject
         // Library
         settings.AutoScanOnStartup = AutoScanOnStartup;
         settings.DefaultScrapingSource = DefaultScrapingSource;
+
+        // Game directories
+        settings.GameDirectoriesJson = SaveGameDirectoriesToJson();
     }
 
     /// <summary>
@@ -676,38 +635,6 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Moves a source up in priority list.
-    /// </summary>
-    [RelayCommand]
-    private void MoveSourceUp(SourcePriorityItem? item)
-    {
-        if (item == null) return;
-
-        var index = SourcePriorityList.IndexOf(item);
-        if (index > 0)
-        {
-            SourcePriorityList.Move(index, index - 1);
-            _logger.LogDebug("Moved {Source} up in priority", item.Name);
-        }
-    }
-
-    /// <summary>
-    /// Moves a source down in priority list.
-    /// </summary>
-    [RelayCommand]
-    private void MoveSourceDown(SourcePriorityItem? item)
-    {
-        if (item == null) return;
-
-        var index = SourcePriorityList.IndexOf(item);
-        if (index < SourcePriorityList.Count - 1)
-        {
-            SourcePriorityList.Move(index, index + 1);
-            _logger.LogDebug("Moved {Source} down in priority", item.Name);
-        }
-    }
-
-    /// <summary>
     /// Opens the data folder in Windows Explorer.
     /// </summary>
     [RelayCommand]
@@ -730,7 +657,7 @@ public partial class SettingsViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open data folder");
-            ErrorMessage = $"Failed to open data folder: {ex.Message}";
+            ErrorMessage = $"打开数据文件夹失败：{ex.Message}";
         }
     }
 
@@ -751,8 +678,80 @@ public partial class SettingsViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open GitHub");
-            ErrorMessage = $"Failed to open GitHub: {ex.Message}";
+            ErrorMessage = $"打开 GitHub 页面失败：{ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Requests folder picker to add a new game directory.
+    /// </summary>
+    [RelayCommand]
+    private void AddGameDirectory()
+    {
+        RequestFolderPicker?.Invoke(this, EventArgs.Empty);
+        _logger.LogInformation("Requesting folder picker for adding game directory");
+    }
+
+    /// <summary>
+    /// Adds a game directory from folder picker result.
+    /// </summary>
+    public void AddGameDirectoryFromPath(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath) || !System.IO.Directory.Exists(directoryPath))
+        {
+            ErrorMessage = "无效的目录路径";
+            return;
+        }
+
+        // Check if directory already exists in list
+        if (GameDirectories.Contains(directoryPath))
+        {
+            ErrorMessage = "该目录已存在于列表中";
+            return;
+        }
+
+        GameDirectories.Add(directoryPath);
+        SuccessMessage = $"已添加游戏目录：{directoryPath}";
+        _logger.LogInformation("Added game directory: {DirectoryPath}", directoryPath);
+
+        // Save settings after adding
+        _ = SaveSettingsAsync();
+    }
+
+    /// <summary>
+    /// Removes the selected game directory.
+    /// </summary>
+    [RelayCommand]
+    private void RemoveGameDirectory()
+    {
+        if (SelectedDirectory == null)
+        {
+            ErrorMessage = "请先选择要删除的目录";
+            return;
+        }
+
+        GameDirectories.Remove(SelectedDirectory);
+        SelectedDirectory = null;
+        SuccessMessage = "已删除游戏目录";
+        _logger.LogInformation("Removed game directory: {DirectoryPath}", SelectedDirectory);
+
+        // Save settings after removing
+        _ = SaveSettingsAsync();
+    }
+
+    /// <summary>
+    /// Clears all game directories.
+    /// </summary>
+    [RelayCommand]
+    private void ClearGameDirectories()
+    {
+        GameDirectories.Clear();
+        SelectedDirectory = null;
+        SuccessMessage = "已清除所有游戏目录";
+        _logger.LogInformation("Cleared all game directories");
+
+        // Save settings after clearing
+        _ = SaveSettingsAsync();
     }
 
     /// <summary>
@@ -763,63 +762,6 @@ public partial class SettingsViewModel : ObservableObject
         return System.IO.Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Galbox");
-    }
-
-    /// <summary>
-    /// Gets the formatted boss key display string.
-    /// </summary>
-    public string BossKeyDisplay
-    {
-        get
-        {
-            var parts = new List<string>();
-            if (BossKeyCtrl) parts.Add("Ctrl");
-            if (BossKeyAlt) parts.Add("Alt");
-            if (BossKeyShift) parts.Add("Shift");
-            if (BossKeyWin) parts.Add("Win");
-            parts.Add(BossKeyKey.ToUpperInvariant());
-            return string.Join(" + ", parts);
-        }
-    }
-
-    /// <summary>
-    /// Called when BossKeyAlt changes - updates BossKeyDisplay.
-    /// </summary>
-    partial void OnBossKeyAltChanged(bool value)
-    {
-        OnPropertyChanged(nameof(BossKeyDisplay));
-    }
-
-    /// <summary>
-    /// Called when BossKeyCtrl changes - updates BossKeyDisplay.
-    /// </summary>
-    partial void OnBossKeyCtrlChanged(bool value)
-    {
-        OnPropertyChanged(nameof(BossKeyDisplay));
-    }
-
-    /// <summary>
-    /// Called when BossKeyShift changes - updates BossKeyDisplay.
-    /// </summary>
-    partial void OnBossKeyShiftChanged(bool value)
-    {
-        OnPropertyChanged(nameof(BossKeyDisplay));
-    }
-
-    /// <summary>
-    /// Called when BossKeyWin changes - updates BossKeyDisplay.
-    /// </summary>
-    partial void OnBossKeyWinChanged(bool value)
-    {
-        OnPropertyChanged(nameof(BossKeyDisplay));
-    }
-
-    /// <summary>
-    /// Called when BossKeyKey changes - updates BossKeyDisplay.
-    /// </summary>
-    partial void OnBossKeyKeyChanged(string value)
-    {
-        OnPropertyChanged(nameof(BossKeyDisplay));
     }
 }
 

@@ -43,10 +43,32 @@ public class UserSettings
     public string? BangumiAccessToken { get; set; }
 
     /// <summary>
+    /// Bangumi refresh token (for OAuth token refresh).
+    /// </summary>
+    [MaxLength(500)]
+    public string? BangumiRefreshToken { get; set; }
+
+    /// <summary>
+    /// Bangumi token expiration time (UTC).
+    /// </summary>
+    public DateTime? BangumiTokenExpiresAt { get; set; }
+
+    /// <summary>
     /// Bangumi user ID (after OAuth login).
     /// </summary>
     [MaxLength(100)]
     public string? BangumiUserId { get; set; }
+
+    /// <summary>
+    /// Bangumi username (display name).
+    /// </summary>
+    [MaxLength(100)]
+    public string? BangumiUsername { get; set; }
+
+    /// <summary>
+    /// Authentication method used (OAuth or ApiKey).
+    /// </summary>
+    public BangumiAuthMethod BangumiAuthMethod { get; set; } = BangumiAuthMethod.ApiKey;
 
     /// <summary>
     /// Source priority order (JSON serialized list of source names).
@@ -208,6 +230,12 @@ public class UserSettings
     [MaxLength(50)]
     public string DefaultScrapingSource { get; set; } = "Bangumi";
 
+    /// <summary>
+    /// Game directories to scan (JSON serialized list of paths).
+    /// </summary>
+    [MaxLength(10000)]
+    public string? GameDirectoriesJson { get; set; } = "[]";
+
     #endregion
 
     #region Timestamps
@@ -352,4 +380,20 @@ public enum LibraryViewMode
     /// Table view with details.
     /// </summary>
     Table = 1
+}
+
+/// <summary>
+/// Bangumi authentication method.
+/// </summary>
+public enum BangumiAuthMethod
+{
+    /// <summary>
+    /// API key authentication (simple access token).
+    /// </summary>
+    ApiKey = 0,
+
+    /// <summary>
+    /// OAuth authentication (requires refresh token).
+    /// </summary>
+    OAuth = 1
 }

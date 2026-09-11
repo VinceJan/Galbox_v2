@@ -26,23 +26,24 @@
         <converters:SortOptionConverter x:Key="SortOptionConverter"/>
         <converters:GameStatusConverter x:Key="GameStatusConverter"/>
 
-        <!-- Styles -->
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="12"/>
+        <!-- Styles - Local styles only, global styles defined in App.xaml -->
+        <Style x:Key="LibraryCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Margin" Value="0,0,0,16"/>
         </Style>
 
+        <!-- Responsive Game Grid Card Style -->
         <Style x:Key="GameGridCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Width" Value="160"/>
-            <Setter Property="Height" Value="220"/>
+            <Setter Property="MinWidth" Value="140"/>
+            <Setter Property="MinHeight" Value="180"/>
         </Style>
 
+        <!-- Responsive Search TextBox -->
         <Style x:Key="SearchTextBoxStyle" TargetType="TextBox">
-            <Setter Property="PlaceholderText" Value="Search games, developer, characters..."/>
-            <Setter Property="Width" Value="300"/>
+            <Setter Property="PlaceholderText" Value="搜索游戏、开发商、角色..."/>
+            <Setter Property="MinWidth" Value="200"/>
+            <Setter Property="MaxWidth" Value="400"/>
             <Setter Property="CornerRadius" Value="8"/>
         </Style>
 
@@ -130,7 +131,7 @@
 
         <!-- Error Message -->
         <InfoBar
-            Title="Error"
+            Title="错误"
             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
             Severity="Error"
             IsOpen="{x:Bind ViewModel.ErrorMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -140,7 +141,7 @@
 
         <!-- Success Message -->
         <InfoBar
-            Title="Success"
+            Title="成功"
             Message="{x:Bind ViewModel.SuccessMessage, Mode=OneWay}"
             Severity="Success"
             IsOpen="{x:Bind ViewModel.SuccessMessage, Mode=OneWay, Converter={StaticResource EmptyStringToBooleanConverter}}"
@@ -170,21 +171,21 @@
                 <!-- Title -->
                 <TextBlock
                     Grid.Column="0"
-                    Text="Game Library"
-                    FontSize="24"
+                    Text="游戏库"
+                    FontSize="{StaticResource FontSizeTitle}"
                     FontWeight="Bold"/>
 
                 <!-- Games Count -->
                 <TextBlock
                     Grid.Column="1"
-                    FontSize="14"
+                    FontSize="{StaticResource FontSizeNormal}"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Margin="16,0,0,0"
                     VerticalAlignment="Center">
                     <Run Text="{x:Bind ViewModel.FilteredGamesCount, Mode=OneWay}"/>
-                    <Run Text="of"/>
+                    <Run Text="/"/>
                     <Run Text="{x:Bind ViewModel.TotalGamesCount, Mode=OneWay}"/>
-                    <Run Text="games"/>
+                    <Run Text="个游戏"/>
                 </TextBlock>
 
                 <!-- Search Box -->
@@ -192,18 +193,31 @@
                     Grid.Column="2"
                     Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                     Style="{StaticResource SearchTextBoxStyle}"
+                    TabIndex="0"
                     HorizontalAlignment="Right"
                     Margin="0,0,16,0"/>
 
                 <!-- Action Buttons -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-                    <!-- Add Game Button -->
+                    <!-- Scan Folder Button (batch add) -->
                     <Button
-                        Click="OnAddGameClick"
+                        Click="OnScanFolderClick"
+                        TabIndex="1"
                         Width="40"
                         Height="40"
                         Padding="0"
-                        ToolTipService.ToolTip="Add game folder">
+                        ToolTipService.ToolTip="批量扫描游戏文件夹">
+                        <FontIcon FontSize="16" Glyph="&#xE895;"/>
+                    </Button>
+
+                    <!-- Add Game Button -->
+                    <Button
+                        Click="OnAddGameClick"
+                        TabIndex="2"
+                        Width="40"
+                        Height="40"
+                        Padding="0"
+                        ToolTipService.ToolTip="添加单个游戏文件夹">
                         <FontIcon FontSize="16" Glyph="&#xE710;"/>
                     </Button>
 
@@ -211,10 +225,11 @@
                     <ToggleButton
                         IsChecked="{x:Bind ViewModel.IsGridView, Mode=OneWay}"
                         Click="OnToggleViewClick"
+                        TabIndex="3"
                         Width="40"
                         Height="40"
                         Padding="0"
-                        ToolTipService.ToolTip="Grid view">
+                        ToolTipService.ToolTip="网格视图">
                         <FontIcon FontSize="16" Glyph="&#xE80A;"/>
                     </ToggleButton>
 
@@ -222,21 +237,23 @@
                     <ToggleButton
                         IsChecked="{x:Bind ViewModel.IsTableView, Mode=OneWay}"
                         Click="OnToggleViewClick"
+                        TabIndex="4"
                         Width="40"
                         Height="40"
                         Padding="0"
-                        ToolTipService.ToolTip="Table view">
+                        ToolTipService.ToolTip="表格视图">
                         <FontIcon FontSize="16" Glyph="&#xE80C;"/>
                     </ToggleButton>
 
                     <!-- Refresh Button -->
                     <Button
                         Click="OnRefreshClick"
+                        TabIndex="5"
                         Width="40"
                         Height="40"
                         Padding="0"
                         Margin="8,0,0,0"
-                        ToolTipService.ToolTip="Refresh library">
+                        ToolTipService.ToolTip="刷新游戏库">
                         <FontIcon FontSize="16" Glyph="&#xE72C;"/>
                     </Button>
                 </StackPanel>
@@ -245,35 +262,41 @@
             <!-- Filters Section -->
             <Border
                 Grid.Row="1"
-                Style="{StaticResource CardStyle}"
+                Style="{StaticResource LibraryCardStyle}"
                 Margin="0,0,0,16">
                 <StackPanel Orientation="Horizontal" Spacing="16">
                     <!-- Status Filter -->
                     <ComboBox
-                        Header="Status"
+                        Header="状态"
+                        TabIndex="6"
                         SelectedIndex="{x:Bind ViewModel.StatusFilter, Converter={StaticResource StatusFilterConverter}, Mode=TwoWay}"
-                        Width="150">
-                        <ComboBoxItem Content="All"/>
-                        <ComboBoxItem Content="Favorites"/>
-                        <ComboBoxItem Content="Playing"/>
-                        <ComboBoxItem Content="Completed"/>
-                        <ComboBoxItem Content="Never Played"/>
-                        <ComboBoxItem Content="Recently Added"/>
+                        MinWidth="120"
+                        MaxWidth="180"
+                        Width="Auto">
+                        <ComboBoxItem Content="全部"/>
+                        <ComboBoxItem Content="收藏"/>
+                        <ComboBoxItem Content="正在游玩"/>
+                        <ComboBoxItem Content="已完成"/>
+                        <ComboBoxItem Content="从未游玩"/>
+                        <ComboBoxItem Content="最近添加"/>
                     </ComboBox>
 
                     <!-- Sort Option -->
                     <ComboBox
-                        Header="Sort By"
+                        Header="排序方式"
+                        TabIndex="7"
                         SelectedIndex="{x:Bind ViewModel.SortOption, Converter={StaticResource SortOptionConverter}, Mode=TwoWay}"
-                        Width="150">
-                        <ComboBoxItem Content="Added (Newest)"/>
-                        <ComboBoxItem Content="Added (Oldest)"/>
-                        <ComboBoxItem Content="Name (A-Z)"/>
-                        <ComboBoxItem Content="Name (Z-A)"/>
-                        <ComboBoxItem Content="Release Date"/>
-                        <ComboBoxItem Content="Play Time"/>
-                        <ComboBoxItem Content="Last Played"/>
-                        <ComboBoxItem Content="Rating"/>
+                        MinWidth="120"
+                        MaxWidth="180"
+                        Width="Auto">
+                        <ComboBoxItem Content="添加时间（最新）"/>
+                        <ComboBoxItem Content="添加时间（最早）"/>
+                        <ComboBoxItem Content="名称（A-Z）"/>
+                        <ComboBoxItem Content="名称（Z-A）"/>
+                        <ComboBoxItem Content="发布日期"/>
+                        <ComboBoxItem Content="游玩时间"/>
+                        <ComboBoxItem Content="最后游玩"/>
+                        <ComboBoxItem Content="评分"/>
                     </ComboBox>
                 </StackPanel>
             </Border>
@@ -287,10 +310,10 @@
                     <ItemsRepeater.Layout>
                         <UniformGridLayout
                             ItemsStretch="None"
-                            MinColumnSpacing="16"
-                            MinRowSpacing="16"
-                            MinItemWidth="160"
-                            MinItemHeight="220"/>
+                            MinColumnSpacing="12"
+                            MinRowSpacing="12"
+                            MinItemWidth="140"
+                            MinItemHeight="180"/>
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate>
@@ -381,17 +404,17 @@
                         ColumnSpacing="8"
                         Padding="12,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="60"/>
-                            <ColumnDefinition Width="180"/>
-                            <ColumnDefinition Width="150"/>
-                            <ColumnDefinition Width="80"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="Auto" MinWidth="60"/>
+                            <ColumnDefinition Width="*" MinWidth="150"/>
+                            <ColumnDefinition Width="2*" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="80"/>
+                            <ColumnDefinition Width="Auto" MinWidth="100"/>
+                            <ColumnDefinition Width="Auto" MinWidth="100"/>
+                            <ColumnDefinition Width="Auto" MinWidth="80"/>
                         </Grid.ColumnDefinitions>
 
                         <!-- Cover Header -->
-                        <TextBlock Grid.Column="0" Text="Cover" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="封面" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
 
                         <!-- Name (CN) Header - Sortable -->
                         <Button
@@ -403,16 +426,16 @@
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Name (CN)" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="名称（中文）" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <FontIcon FontSize="12" Glyph="&#xE8CB;" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </Button>
 
                         <!-- Name (Original) Header - Sortable -->
-                        <TextBlock Grid.Column="2" Text="Name (Original)" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="名称（原名）" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
 
                         <!-- Status Header -->
-                        <TextBlock Grid.Column="3" Text="Status" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="3" Text="状态" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
 
                         <!-- Added Date Header - Sortable -->
                         <Button
@@ -424,7 +447,7 @@
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Added Date" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="添加日期" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <FontIcon FontSize="12" Glyph="&#xE8CB;" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </Button>
@@ -439,7 +462,7 @@
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Last Played" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="最后游玩" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <FontIcon FontSize="12" Glyph="&#xE8CB;" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </Button>
@@ -454,7 +477,7 @@
                             HorizontalAlignment="Stretch"
                             VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="Play Time" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="游玩时间" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <FontIcon FontSize="12" Glyph="&#xE8CB;" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </Button>
@@ -471,13 +494,13 @@
                             <DataTemplate>
                                 <Grid ColumnSpacing="8" Padding="12,4" Height="56" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="60"/>
-                                        <ColumnDefinition Width="180"/>
-                                        <ColumnDefinition Width="150"/>
-                                        <ColumnDefinition Width="80"/>
-                                        <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="60"/>
+                                        <ColumnDefinition Width="*" MinWidth="150"/>
+                                        <ColumnDefinition Width="2*" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="80"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="100"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="100"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="80"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Cover Thumbnail -->
@@ -561,18 +584,18 @@
                 Spacing="16">
                 <FontIcon FontSize="48" Glyph="&#xE8FD;" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 <TextBlock
-                    Text="No games found"
-                    FontSize="16"
+                    Text="未找到游戏"
+                    FontSize="{StaticResource FontSizeMedium}"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     HorizontalAlignment="Center"/>
                 <TextBlock
-                    Text="Try adjusting your search or filters, or add a new game"
-                    FontSize="14"
+                    Text="尝试调整搜索条件或筛选器，或添加新游戏"
+                    FontSize="{StaticResource FontSizeNormal}"
                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                     HorizontalAlignment="Center"/>
                 <Button
                     Click="OnAddGameClick"
-                    Content="Add Game"
+                    Content="添加游戏"
                     Style="{StaticResource AccentButtonStyle}"
                     Margin="0,8,0,0"/>
             </StackPanel>

@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
-using WinRT;
 using WinRT.Interop;
 
 namespace Galbox.App.Views;
@@ -33,6 +32,9 @@ public sealed partial class SettingsPage : Page
 
         // Set DataContext for any binding fallback
         DataContext = ViewModel;
+
+        // Subscribe to folder picker request event
+        ViewModel.RequestFolderPicker += OnRequestFolderPicker;
     }
 
     /// <summary>
@@ -167,6 +169,55 @@ public sealed partial class SettingsPage : Page
     }
 
     /// <summary>
+    /// Handles folder picker request from ViewModel for game directories.
+    /// </summary>
+    private async void OnRequestFolderPicker(object? sender, EventArgs e)
+    {
+        try
+        {
+            // Create folder picker
+            var folderPicker = new FolderPicker();
+            folderPicker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
+            folderPicker.FileTypeFilter.Add("*"); // Required for folder picker
+
+            // Get the window handle for the picker
+            var hWnd = GetWindowHandle();
+            InitializeWithWindow.Initialize(folderPicker, hWnd);
+
+            // Show picker
+            var folder = await folderPicker.PickSingleFolderAsync();
+            if (folder != null)
+            {
+                ViewModel.AddGameDirectoryFromPath(folder.Path);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            ViewModel.ErrorMessage = $"Failed to select folder: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Handles add game directory button click.
+    /// </summary>
+    private void OnAddGameDirectoryClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.AddGameDirectoryCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// Handles remove game directory button click.
+    /// </summary>
+    private void OnRemoveGameDirectoryClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.DataContext is string directoryPath)
+        {
+            ViewModel.SelectedDirectory = directoryPath;
+            ViewModel.RemoveGameDirectoryCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
     /// Gets the window handle for Win32 API usage.
     /// </summary>
     private IntPtr GetWindowHandle()
@@ -175,8 +226,7 @@ public sealed partial class SettingsPage : Page
         var mainWindow = (App.Current as App)?.MainWindow;
         if (mainWindow != null)
         {
-            var windowHandle = mainWindow.WindowHandle;
-            return windowHandle;
+            return mainWindow.WindowHandle;
         }
 
         return IntPtr.Zero;

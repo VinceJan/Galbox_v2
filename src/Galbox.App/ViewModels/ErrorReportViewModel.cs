@@ -593,7 +593,7 @@ public partial class ErrorReportViewModel : ObservableObject
             Title = record.Title,
             Description = record.Description,
             SolutionType = Enum.Parse<SolutionType>(record.SolutionType),
-            SolutionInstructions = record.SolutionInstructions,
+            SolutionInstructions = record.SolutionInstructions ?? string.Empty,
             DownloadUrl = record.DownloadUrl,
             ToolName = record.ToolName,
             DetectedTime = record.DetectedTime,

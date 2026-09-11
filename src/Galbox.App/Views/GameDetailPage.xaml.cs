@@ -101,12 +101,12 @@ public sealed partial class GameDetailPage : Page
             else
             {
                 // Invalid parameter - show error
-                ViewModel.ErrorMessage = "Invalid game ID provided";
+                ViewModel.ErrorMessage = "提供了无效的游戏 ID";
             }
         }
         catch (Exception ex)
         {
-            ViewModel.ErrorMessage = $"Failed to load page: {ex.Message}";
+            ViewModel.ErrorMessage = $"加载页面失败：{ex.Message}";
         }
     }
 

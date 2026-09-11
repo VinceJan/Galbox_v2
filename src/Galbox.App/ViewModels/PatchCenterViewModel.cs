@@ -163,7 +163,7 @@ public partial class PatchCenterViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading patch center data");
-            ErrorMessage = $"Failed to load patch data: {ex.Message}";
+            ErrorMessage = $"加载补丁数据失败：{ex.Message}";
         }
         finally
         {
@@ -292,7 +292,7 @@ public partial class PatchCenterViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading patches for game {GameId}", gameId);
-            ErrorMessage = $"Failed to load patches: {ex.Message}";
+            ErrorMessage = $"加载补丁失败：{ex.Message}";
         }
     }
 
@@ -439,21 +439,37 @@ public partial class PatchCenterViewModel : ObservableObject
 
     /// <summary>
     /// Handles selected game changed - loads patches for that game.
+    /// Uses Dispatcher to ensure UI updates happen on the UI thread.
     /// </summary>
     partial void OnSelectedGameChanged(GameInfo? value)
     {
         if (value != null)
         {
+            // Get the dispatcher from the App's main window
+            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            if (dispatcher == null)
+            {
+                // Fallback: just run directly if no dispatcher
+                _ = LoadPatchesForGameSafeAsync(value.Id);
+                return;
+            }
+
+            // Run the async operation, but ensure UI updates happen on UI thread
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await LoadPatchesForGameAsync(value.Id).ConfigureAwait(false);
+                    await LoadPatchesForGameSafeAsync(value.Id).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error loading patches for game: {GameId}", value.Id);
-                    ErrorMessage = $"Failed to load patches: {ex.Message}";
+
+                    // Update error message on UI thread
+                    dispatcher.TryEnqueue(() =>
+                    {
+                        ErrorMessage = $"加载补丁失败：{ex.Message}";
+                    });
                 }
             });
         }
@@ -462,6 +478,80 @@ public partial class PatchCenterViewModel : ObservableObject
             AvailablePatches.Clear();
             FilteredPatches.Clear();
             AvailablePatchesCount = 0;
+        }
+    }
+
+    /// <summary>
+    /// Loads available patches for a specific game with thread-safe UI updates.
+    /// </summary>
+    public async Task LoadPatchesForGameSafeAsync(int gameId)
+    {
+        try
+        {
+            // First check if we have patches in the database for this game
+            var existingPatches = await _dbContext.Patches
+                .Where(p => p.GameInfoId == gameId)
+                .ToListAsync().ConfigureAwait(false);
+
+            // If no existing patches, generate stub data
+            if (existingPatches.Count == 0)
+            {
+                var game = await _dbContext.Games.FindAsync(gameId).ConfigureAwait(false);
+                if (game != null)
+                {
+                    // Generate stub patches based on game
+                    var stubPatches = GenerateStubPatchesForGame(game);
+                    foreach (var patch in stubPatches)
+                    {
+                        _dbContext.Patches.Add(patch);
+                    }
+                    await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+                    existingPatches = stubPatches;
+                }
+            }
+
+            // Get dispatcher for UI thread updates
+            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
+            if (dispatcher != null)
+            {
+                // Update UI on dispatcher thread
+                dispatcher.TryEnqueue(() =>
+                {
+                    AvailablePatches.Clear();
+
+                    // Add to available patches collection
+                    foreach (var patch in existingPatches)
+                    {
+                        AvailablePatches.Add(patch);
+                    }
+
+                    // Apply type filter
+                    ApplyPatchFilters();
+
+                    AvailablePatchesCount = AvailablePatches.Count;
+                });
+            }
+            else
+            {
+                // No dispatcher available, update directly (fallback)
+                AvailablePatches.Clear();
+
+                foreach (var patch in existingPatches)
+                {
+                    AvailablePatches.Add(patch);
+                }
+
+                ApplyPatchFilters();
+                AvailablePatchesCount = AvailablePatches.Count;
+            }
+
+            _logger.LogInformation("Loaded {Count} patches for game {GameId}", existingPatches.Count, gameId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading patches for game {GameId}", gameId);
+            ErrorMessage = $"加载补丁失败：{ex.Message}";
         }
     }
 
@@ -479,7 +569,7 @@ public partial class PatchCenterViewModel : ObservableObject
 
         if (patch.Status == PatchStatus.Downloading || patch.Status == PatchStatus.Installed)
         {
-            ErrorMessage = "Patch is already downloading or installed";
+            ErrorMessage = "补丁正在下载或已安装";
             return;
         }
 
@@ -517,7 +607,7 @@ public partial class PatchCenterViewModel : ObservableObject
             }
             ApplyPatchFilters();
 
-            SuccessMessage = $"Downloaded '{patch.Name}' successfully";
+            SuccessMessage = $"已成功下载 '{patch.Name}'";
             _logger.LogInformation("Downloaded patch {PatchName} for game {GameId}", patch.Name, patch.GameInfoId);
 
             // Clear success message after delay
@@ -527,7 +617,7 @@ public partial class PatchCenterViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error downloading patch {PatchName}", patch.Name);
-            ErrorMessage = $"Failed to download patch: {ex.Message}";
+            ErrorMessage = $"下载补丁失败：{ex.Message}";
 
             // Reset status
             patch.Status = PatchStatus.Available;
@@ -554,7 +644,7 @@ public partial class PatchCenterViewModel : ObservableObject
 
         if (patch.Status != PatchStatus.Downloaded && patch.Status != PatchStatus.Available)
         {
-            ErrorMessage = "Patch must be downloaded before installation";
+            ErrorMessage = "补丁必须先下载才能安装";
             return;
         }
 
@@ -587,7 +677,7 @@ public partial class PatchCenterViewModel : ObservableObject
             // Reload installed patches
             await LoadInstalledPatchesAsync();
 
-            SuccessMessage = $"Installed '{patch.Name}' successfully";
+            SuccessMessage = $"已成功安装 '{patch.Name}'";
             _logger.LogInformation("Installed patch {PatchName} for game {GameId}", patch.Name, patch.GameInfoId);
 
             // Clear success message after delay
@@ -597,7 +687,7 @@ public partial class PatchCenterViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error installing patch {PatchName}", patch.Name);
-            ErrorMessage = $"Failed to install patch: {ex.Message}";
+            ErrorMessage = $"安装补丁失败：{ex.Message}";
 
             // Reset status
             patch.Status = PatchStatus.Downloaded;

@@ -87,6 +87,11 @@ public class GalboxDbContext : DbContext
             entity.Property(e => e.SourceId).HasMaxLength(100);
             entity.Property(e => e.SourceType).HasMaxLength(50);
 
+            // EngineType 枚举配置
+            entity.Property(e => e.EngineType)
+                .HasDefaultValue(GameEngineType.Unknown)
+                .HasConversion<int>();
+
             // Relationships
             entity.HasMany(e => e.Characters)
                 .WithOne(e => e.GameInfo)
@@ -210,6 +215,55 @@ public class GalboxDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.GameInfoId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // UserSettings configuration
+        modelBuilder.Entity<UserSettings>(entity =>
+        {
+            entity.ToTable("UserSettings");
+            entity.HasKey(e => e.Id);
+
+            // 字符串长度约束
+            entity.Property(e => e.DefaultScrapingSource).HasMaxLength(50);
+            entity.Property(e => e.GameDirectoriesJson).HasMaxLength(10000);
+            entity.Property(e => e.BangumiAccessToken).HasMaxLength(500);
+            entity.Property(e => e.BangumiRefreshToken).HasMaxLength(500);
+            entity.Property(e => e.BangumiUserId).HasMaxLength(100);
+            entity.Property(e => e.BangumiUsername).HasMaxLength(100);
+            entity.Property(e => e.SourcePriorityJson).HasMaxLength(500);
+            entity.Property(e => e.DefaultBackupPath).HasMaxLength(2000);
+            entity.Property(e => e.ScreenshotPath).HasMaxLength(2000);
+
+            // 枚举类型转换
+            entity.Property(e => e.BangumiAuthMethod).HasConversion<int>();
+            entity.Property(e => e.OnLaunchBehavior).HasConversion<int>();
+            entity.Property(e => e.OnExitBehavior).HasConversion<int>();
+            entity.Property(e => e.BossKeyModifiers).HasConversion<int>();
+            entity.Property(e => e.ScreenshotFormat).HasConversion<int>();
+            entity.Property(e => e.Theme).HasConversion<int>();
+            entity.Property(e => e.Language).HasConversion<int>();
+            entity.Property(e => e.LibraryViewMode).HasConversion<int>();
+
+            // 默认值
+            entity.Property(e => e.EnableBossKey).HasDefaultValue(true);
+            entity.Property(e => e.EnableBangumi).HasDefaultValue(true);
+            entity.Property(e => e.EnableVndb).HasDefaultValue(true);
+            entity.Property(e => e.EnableYmgal).HasDefaultValue(true);
+            entity.Property(e => e.EnableCngal).HasDefaultValue(true);
+            entity.Property(e => e.AutoScrapeOnAdd).HasDefaultValue(true);
+            entity.Property(e => e.MatchThresholdPercent).HasDefaultValue(90);
+            entity.Property(e => e.MonitoringIntervalMs).HasDefaultValue(1000);
+            entity.Property(e => e.JpgQuality).HasDefaultValue(90);
+            entity.Property(e => e.UseCustomBackupPath).HasDefaultValue(false);
+            entity.Property(e => e.AutoBackupOnExit).HasDefaultValue(false);
+            entity.Property(e => e.AutoScreenshotOnExit).HasDefaultValue(false);
+            entity.Property(e => e.EnableAdvancedMonitoring).HasDefaultValue(false);
+            entity.Property(e => e.AutoScanOnStartup).HasDefaultValue(false);
+            entity.Property(e => e.MinimizeToTrayOnBossKey).HasDefaultValue(true);
+            entity.Property(e => e.ShowBossKeyNotification).HasDefaultValue(true);
+
+            // 索引
+            entity.HasIndex(e => e.Id).IsUnique();
         });
     }
 }

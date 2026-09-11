@@ -215,7 +215,7 @@ public partial class GameDetailViewModel : ObservableObject
         if (gameId <= 0)
         {
             Debug.WriteLine($"[GameDetailViewModel] Invalid gameId: {gameId}");
-            ErrorMessage = "Invalid game ID";
+            ErrorMessage = "无效的游戏 ID";
             return;
         }
 
@@ -237,7 +237,7 @@ public partial class GameDetailViewModel : ObservableObject
             if (game == null)
             {
                 Debug.WriteLine($"[GameDetailViewModel] Game not found with ID: {gameId}");
-                ErrorMessage = "Game not found";
+                ErrorMessage = "未找到游戏";
                 IsLoading = false;
                 return;
             }
@@ -264,7 +264,7 @@ public partial class GameDetailViewModel : ObservableObject
             Executables.Clear();
             Executables.Add(new ExecutableItem
             {
-                Name = "Main",
+                Name = "主程序",
                 Path = game.MainExecutable,
                 IsDefault = true
             });
@@ -367,7 +367,7 @@ public partial class GameDetailViewModel : ObservableObject
         {
             Debug.WriteLine($"[GameDetailViewModel] Error loading game: {ex}");
             _logger.LogError(ex, "Error loading game with ID {GameId}", gameId);
-            ErrorMessage = $"Failed to load game: {ex.Message}";
+            ErrorMessage = $"加载游戏失败：{ex.Message}";
         }
         finally
         {
@@ -391,14 +391,14 @@ public partial class GameDetailViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(executablePath))
         {
             Debug.WriteLine("[GameDetailViewModel] No executable path available");
-            ErrorMessage = "No executable path available";
+            ErrorMessage = "无可用的可执行文件路径";
             return;
         }
 
         if (!System.IO.File.Exists(executablePath))
         {
             Debug.WriteLine($"[GameDetailViewModel] Executable not found: {executablePath}");
-            ErrorMessage = "Executable file not found";
+            ErrorMessage = "未找到可执行文件";
             return;
         }
 
@@ -457,17 +457,42 @@ public partial class GameDetailViewModel : ObservableObject
         {
             Debug.WriteLine($"[GameDetailViewModel] Error launching game: {ex}");
             _logger.LogError(ex, "Error launching game {GameName}", DisplayName);
-            ErrorMessage = $"Failed to launch game: {ex.Message}";
+            ErrorMessage = $"启动游戏失败：{ex.Message}";
         }
         finally
         {
             IsLaunching = false;
             IsRunning = false;
 
-            // Dispose the process
-            if (_runningProcess != null)
+            // Safely dispose the process - check before accessing
+            try
             {
-                _runningProcess.Dispose();
+                if (_runningProcess != null)
+                {
+                    // Check if process is still accessible (not disposed)
+                    var hasExited = false;
+                    try
+                    {
+                        hasExited = _runningProcess.HasExited;
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        // Process is no longer accessible, skip dispose
+                        _logger.LogDebug("Process already disposed or inaccessible");
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Process has been disposed
+                        _logger.LogDebug("Process already disposed");
+                    }
+
+                    _runningProcess.Dispose();
+                    _runningProcess = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing process");
                 _runningProcess = null;
             }
         }
@@ -547,14 +572,14 @@ public partial class GameDetailViewModel : ObservableObject
             else
             {
                 Debug.WriteLine($"[GameDetailViewModel] Document file not found: {document.FilePath}");
-                ErrorMessage = "Document file not found";
+                ErrorMessage = "未找到文档文件";
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[GameDetailViewModel] Error opening document: {ex}");
             _logger.LogError(ex, "Error opening document {FileName}", document.FileName);
-            ErrorMessage = $"Failed to open document: {ex.Message}";
+            ErrorMessage = $"打开文档失败：{ex.Message}";
         }
     }
 
@@ -642,7 +667,7 @@ public partial class GameDetailViewModel : ObservableObject
                 Name = backupName,
                 BackupPath = System.IO.Path.Combine(Game.InstallPath, "Backups", backupName),
                 CreatedTime = DateTime.UtcNow,
-                Description = "Auto-created backup"
+                Description = "自动创建的备份"
             };
 
             _dbContext.SaveBackups.Add(backup);
@@ -656,7 +681,7 @@ public partial class GameDetailViewModel : ObservableObject
         {
             Debug.WriteLine($"[GameDetailViewModel] Error creating backup: {ex}");
             _logger.LogError(ex, "Error creating save backup for {GameName}", DisplayName);
-            ErrorMessage = $"Failed to create backup: {ex.Message}";
+            ErrorMessage = $"创建备份失败：{ex.Message}";
         }
     }
 
@@ -664,12 +689,12 @@ public partial class GameDetailViewModel : ObservableObject
     /// Restores a save backup.
     /// </summary>
     [RelayCommand]
-    private async Task RestoreSaveBackupAsync(GameSaveBackup? backup)
+    private Task RestoreSaveBackupAsync(GameSaveBackup? backup)
     {
         if (backup == null)
         {
             Debug.WriteLine("[GameDetailViewModel] No backup to restore");
-            return;
+            return Task.CompletedTask;
         }
 
         try
@@ -678,14 +703,16 @@ public partial class GameDetailViewModel : ObservableObject
             _logger.LogInformation("Restoring save backup {BackupName} for {GameName}", backup.Name, DisplayName);
 
             // Show a message (in real implementation would restore files)
-            ErrorMessage = "Save backup restoration not yet implemented";
+            ErrorMessage = "存档备份恢复功能尚未实现";
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[GameDetailViewModel] Error restoring backup: {ex}");
             _logger.LogError(ex, "Error restoring save backup {BackupName}", backup.Name);
-            ErrorMessage = $"Failed to restore backup: {ex.Message}";
+            ErrorMessage = $"恢复备份失败：{ex.Message}";
         }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -149,16 +149,7 @@ public class BangumiAuthResult
     /// <summary>
     /// Authentication method used.
     /// </summary>
-    public BangumiAuthMethod AuthMethod { get; set; }
-}
-
-/// <summary>
-/// Authentication method used.
-/// </summary>
-public enum BangumiAuthMethod
-{
-    OAuth,
-    ApiKey
+    public Galbox.Data.Entities.BangumiAuthMethod AuthMethod { get; set; }
 }
 
 /// <summary>
@@ -258,14 +249,23 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
     /// Creates a BangumiAuthService with injected dependencies.
     /// Note: Use InitializeAsync() after construction to load stored credentials.
     /// </summary>
+    /// <param name="serviceProvider">Service provider for scoped services</param>
+    /// <param name="logger">Logger instance</param>
+    /// <param name="httpClient">HttpClient configured for Bangumi API (from DI)</param>
     public BangumiAuthService(
         IServiceProvider serviceProvider,
-        ILogger<BangumiAuthService> logger)
+        ILogger<BangumiAuthService> logger,
+        HttpClient httpClient)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _httpClient = new HttpClient();
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+
+        // Ensure User-Agent header is set (should be configured in DI)
+        if (!_httpClient.DefaultRequestHeaders.Contains("User-Agent"))
+        {
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Galbox/1.0");
+        }
     }
 
     /// <summary>
@@ -304,11 +304,11 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<BangumiAuthResult> CompleteOAuthAsync(string authorizationCode, CancellationToken cancellationToken = default)
+    public Task<BangumiAuthResult> CompleteOAuthAsync(string authorizationCode, CancellationToken cancellationToken = default)
     {
         var result = new BangumiAuthResult
         {
-            AuthMethod = BangumiAuthMethod.OAuth
+            AuthMethod = Galbox.Data.Entities.BangumiAuthMethod.OAuth
         };
 
         try
@@ -369,7 +369,7 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
             _logger.LogError(ex, "OAuth authentication failed");
         }
 
-        return result;
+        return Task.FromResult(result);
     }
 
     /// <inheritdoc />
@@ -377,7 +377,7 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
     {
         var result = new BangumiAuthResult
         {
-            AuthMethod = BangumiAuthMethod.ApiKey
+            AuthMethod = Galbox.Data.Entities.BangumiAuthMethod.ApiKey
         };
 
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -500,7 +500,7 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<BangumiAuthResult> RefreshTokenAsync(CancellationToken cancellationToken = default)
+    public Task<BangumiAuthResult> RefreshTokenAsync(CancellationToken cancellationToken = default)
     {
         var result = new BangumiAuthResult();
 
@@ -509,7 +509,7 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
         {
             result.ErrorMessage = "No refresh token available. API keys do not expire.";
             result.Success = true; // Consider valid if using API key
-            return result;
+            return Task.FromResult(result);
         }
 
         try
@@ -552,7 +552,7 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
             _logger.LogError(ex, "Token refresh failed");
         }
 
-        return result;
+        return Task.FromResult(result);
     }
 
     /// <inheritdoc />
@@ -732,12 +732,18 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
             }
 
             settings.BangumiAccessToken = result.AccessToken;
+            settings.BangumiRefreshToken = result.RefreshToken;
+            settings.BangumiTokenExpiresAt = result.ExpiresAt;
             settings.BangumiUserId = result.UserId;
+            settings.BangumiUsername = result.Username;
+            settings.BangumiAuthMethod = result.AuthMethod == Galbox.Data.Entities.BangumiAuthMethod.OAuth
+                ? Galbox.Data.Entities.BangumiAuthMethod.OAuth
+                : Galbox.Data.Entities.BangumiAuthMethod.ApiKey;
             settings.LastModified = DateTime.UtcNow;
 
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            _logger.LogInformation("Stored Bangumi credentials to database");
+            _logger.LogInformation("Stored Bangumi credentials to database (AuthMethod: {AuthMethod})", result.AuthMethod);
         }
         catch (Exception ex)
         {
@@ -824,12 +830,13 @@ public class BangumiAuthService : IBangumiAuthService, IDisposable
 
     /// <summary>
     /// Disposes resources used by the service.
+    /// Note: HttpClient is managed by DI and should not be disposed here.
     /// </summary>
     public void Dispose()
     {
         if (!_disposed)
         {
-            _httpClient.Dispose();
+            // HttpClient is managed by IHttpClientFactory, do not dispose
             _disposed = true;
         }
     }

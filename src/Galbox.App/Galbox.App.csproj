@@ -12,6 +12,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Disable MRT Core tooling to avoid MSBuild task error when UWP tools are not installed -->
     <EnableCoreMrtTooling>false</EnableCoreMrtTooling>
+    <!-- Disable auto-generated Main to use custom Program.cs with Bootstrap initialization -->
+    <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

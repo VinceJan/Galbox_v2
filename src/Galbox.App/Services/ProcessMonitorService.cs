@@ -114,6 +114,8 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
     private const int SW_SHOWNA = 8;
     private const int SW_RESTORE = 9;
     private const int SW_MINIMIZE = 6;
+    private const int SW_SHOWMAXIMIZED = 3;
+    private const int SW_SHOWNORMAL = 1;
 
     // BitBlt constant
     private const int SRCCOPY = 0x00CC0020;
@@ -124,15 +126,27 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
     // PrintWindow flags
     private const int PW_CLIENTONLY = 0x1;
 
+    /// <summary>
+    /// Stores window handle and its original state for proper restoration.
+    /// </summary>
+    private struct WindowRestoreInfo
+    {
+        public IntPtr Handle;
+        public WindowState OriginalState;
+    }
+
     #endregion
 
     private readonly ILogger<ProcessMonitorService> _logger;
     private readonly ConcurrentDictionary<int, MonitoredGameInfo> _registeredGames;
     private readonly ConcurrentDictionary<int, MonitoredProcessState> _processStates;
-    private readonly ConcurrentDictionary<int, Process> _trackedProcesses;
-    private readonly ConcurrentDictionary<int, List<IntPtr>> _hiddenWindows;
+    private readonly ConcurrentDictionary<int, List<Process>> _trackedProcesses;
+    private readonly ConcurrentDictionary<int, List<WindowRestoreInfo>> _hiddenWindows;
     private readonly ConcurrentDictionary<int, PerformanceCounter?> _cpuCounters;
+    private readonly ConcurrentDictionary<int, float> _cpuSampledValues;  // Stores sampled CPU values
     private readonly ConcurrentDictionary<string, byte> _screenshots;
+
+    private Task? _cpuSamplingTask;  // Background CPU sampling task
 
     private ProcessMonitorConfig _config;
     private CancellationTokenSource? _monitoringCts;
@@ -155,9 +169,10 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
 
         _registeredGames = new ConcurrentDictionary<int, MonitoredGameInfo>();
         _processStates = new ConcurrentDictionary<int, MonitoredProcessState>();
-        _trackedProcesses = new ConcurrentDictionary<int, Process>();
-        _hiddenWindows = new ConcurrentDictionary<int, List<IntPtr>>();
+        _trackedProcesses = new ConcurrentDictionary<int, List<Process>>();
+        _hiddenWindows = new ConcurrentDictionary<int, List<WindowRestoreInfo>>();
         _cpuCounters = new ConcurrentDictionary<int, PerformanceCounter?>();
+        _cpuSampledValues = new ConcurrentDictionary<int, float>();
         _screenshots = new ConcurrentDictionary<string, byte>();
 
         _config = new ProcessMonitorConfig();
@@ -327,16 +342,19 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
 
         _processStates.TryRemove(gameId, out _);
 
-        // Clean up tracked process
-        if (_trackedProcesses.TryRemove(gameId, out var process))
+        // Clean up tracked processes (now a list)
+        if (_trackedProcesses.TryRemove(gameId, out var processList))
         {
-            try
+            foreach (var process in processList)
             {
-                process?.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing process for game: {GameId}", gameId);
+                try
+                {
+                    process?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing process for game: {GameId}", gameId);
+                }
             }
         }
 
@@ -550,6 +568,12 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
         // Start monitoring loop
         _monitoringTask = Task.Run(() => MonitoringLoop(_monitoringCts.Token), cancellationToken);
 
+        // Start background CPU sampling loop (runs independently to avoid blocking main loop)
+        if (_config.EnableAdvancedMonitoring)
+        {
+            _cpuSamplingTask = Task.Run(() => CpuSamplingLoop(_monitoringCts.Token), cancellationToken);
+        }
+
         _logger.LogInformation("Process monitor started");
 
         await Task.CompletedTask.ConfigureAwait(false);
@@ -597,16 +621,19 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
             RestoreAllWindows();
         }
 
-        // Clean up tracked processes
+        // Clean up tracked processes (now lists)
         foreach (var kvp in _trackedProcesses)
         {
-            try
+            foreach (var process in kvp.Value)
             {
-                kvp.Value?.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing tracked process for game: {GameId}", kvp.Key);
+                try
+                {
+                    process?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing tracked process for game: {GameId}", kvp.Key);
+                }
             }
         }
         _trackedProcesses.Clear();
@@ -624,6 +651,7 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
             }
         }
         _cpuCounters.Clear();
+        _cpuSampledValues.Clear();
 
         _isRunning = false;
         _monitoringCts?.Dispose();
@@ -738,11 +766,12 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
                         // Auto screenshot on exit if configured
                         if (_config.AutoScreenshotOnExit && previousState?.WindowHandle != IntPtr.Zero)
                         {
+                            var windowHandle = previousState!.WindowHandle;
                             _ = Task.Run(async () =>
                             {
                                 try
                                 {
-                                    await CaptureScreenshotAsync(previousState.WindowHandle, gameInfo.GameName, CancellationToken.None)
+                                    await CaptureScreenshotAsync(windowHandle, gameInfo.GameName, CancellationToken.None)
                                         .ConfigureAwait(false);
                                 }
                                 catch (Exception screenshotEx)
@@ -804,14 +833,17 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
                 state.StartTime = previousState.StartTime;
                 state.DurationSeconds = previousState.DurationSeconds;
 
-                // Clean up tracked process
-                if (_trackedProcesses.TryRemove(gameInfo.GameId, out var trackedProcess))
+                // Clean up tracked processes (now a list)
+                if (_trackedProcesses.TryRemove(gameInfo.GameId, out var trackedProcessList))
                 {
-                    try
+                    foreach (var trackedProcess in trackedProcessList)
                     {
-                        trackedProcess?.Dispose();
+                        try
+                        {
+                            trackedProcess?.Dispose();
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
 
                 // Clean up CPU counter
@@ -832,19 +864,45 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
             return state;
         }
 
-        // Process is running
-        var process = processes[0];
+        // Process is running - track all instances
         state.State = ProcessState.Running;
-        state.ProcessId = process.Id;
 
-        // Track this process
-        _trackedProcesses[gameInfo.GameId] = process;
+        // Create or update the list of tracked processes
+        var trackedList = new List<Process>();
+        foreach (var proc in processes)
+        {
+            trackedList.Add(proc);
+        }
+
+        // Remove old tracked processes if they exist
+        if (_trackedProcesses.TryGetValue(gameInfo.GameId, out var oldList))
+        {
+            foreach (var oldProc in oldList)
+            {
+                // Check if old process is still in new list
+                var stillRunning = trackedList.Any(p => p.Id == oldProc.Id);
+                if (!stillRunning)
+                {
+                    try
+                    {
+                        oldProc?.Dispose();
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        _trackedProcesses[gameInfo.GameId] = trackedList;
+
+        // Use the first process for primary state tracking
+        var primaryProcess = processes[0];
+        state.ProcessId = primaryProcess.Id;
 
         // Get process start time
         try
         {
-            state.StartTime = process.StartTime;
-            state.DurationSeconds = (long)(DateTime.UtcNow - process.StartTime).TotalSeconds;
+            state.StartTime = primaryProcess.StartTime;
+            state.DurationSeconds = (long)(DateTime.UtcNow - primaryProcess.StartTime).TotalSeconds;
         }
         catch (Exception ex)
         {
@@ -858,8 +916,17 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
             }
         }
 
-        // Find window handle
-        state.WindowHandle = FindProcessWindow(process.Id, gameInfo.WindowTitlePattern);
+        // Find window handle - search all instances
+        state.WindowHandle = IntPtr.Zero;
+        foreach (var proc in processes)
+        {
+            var hWnd = FindProcessWindow(proc.Id, gameInfo.WindowTitlePattern);
+            if (hWnd != IntPtr.Zero)
+            {
+                state.WindowHandle = hWnd;
+                break; // Use first found window
+            }
+        }
 
         // Get window info
         if (state.WindowHandle != IntPtr.Zero)
@@ -873,7 +940,25 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
         // Advanced monitoring (CPU/Memory/GPU)
         if (_config.EnableAdvancedMonitoring)
         {
-            await UpdateAdvancedMetricsAsync(state, process, cancellationToken).ConfigureAwait(false);
+            // Create CPU counter if not exists (this is a quick operation)
+            if (!_cpuCounters.ContainsKey(gameInfo.GameId))
+            {
+                try
+                {
+                    var instanceName = GetPerformanceCounterInstanceName(primaryProcess);
+                    var counter = new PerformanceCounter("Process", "% Processor Time", instanceName);
+                    counter.NextValue(); // First call returns 0, initialize counter
+                    _cpuCounters[gameInfo.GameId] = counter;
+                    _logger.LogInformation("Created CPU counter for game: {GameName} (Instance: {InstanceName})", gameInfo.GameName, instanceName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not create CPU counter for: {ProcessName}", primaryProcess.ProcessName);
+                    _cpuCounters[gameInfo.GameId] = null;
+                }
+            }
+
+            await UpdateAdvancedMetricsAsync(state, primaryProcess, cancellationToken).ConfigureAwait(false);
         }
 
         // Dispose other process instances (keep only the tracked one)
@@ -889,7 +974,7 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
         return state;
     }
 
-    private async Task UpdateAdvancedMetricsAsync(
+    private Task UpdateAdvancedMetricsAsync(
         MonitoredProcessState state,
         Process process,
         CancellationToken cancellationToken)
@@ -898,34 +983,19 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
 
         try
         {
-            // Memory usage
+            // Memory usage - this is non-blocking
             process.Refresh();
             state.MemoryUsageBytes = process.WorkingSet64;
 
-            // CPU usage - need performance counter
-            if (!_cpuCounters.ContainsKey(state.GameId))
+            // CPU usage - read pre-sampled value (non-blocking)
+            // The actual sampling is done by the background CpuSamplingLoop
+            if (_cpuCounters.ContainsKey(state.GameId))
             {
-                try
+                // Read the latest sampled CPU value
+                if (_cpuSampledValues.TryGetValue(state.GameId, out var cpuValue))
                 {
-                    // Get the correct instance name for PerformanceCounter
-                    // When multiple processes have the same name, instances are named like "process#1", "process#2"
-                    var instanceName = GetPerformanceCounterInstanceName(process);
-                    var counter = new PerformanceCounter("Process", "% Processor Time", instanceName);
-                    counter.NextValue(); // First call returns 0, need to wait
-                    _cpuCounters[state.GameId] = counter;
+                    state.CpuUsagePercent = cpuValue;
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not create CPU counter for: {ProcessName}", process.ProcessName);
-                    _cpuCounters[state.GameId] = null;
-                }
-            }
-
-            if (_cpuCounters.TryGetValue(state.GameId, out var cpuCounter) && cpuCounter != null)
-            {
-                // Wait a bit for accurate CPU measurement
-                await Task.Delay(_config.CpuSamplingIntervalMs, cancellationToken).ConfigureAwait(false);
-                state.CpuUsagePercent = cpuCounter.NextValue();
             }
         }
         catch (Exception ex)
@@ -936,6 +1006,63 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
         // GPU usage is more complex - would need NvAPI or similar
         // For now, leave as null (not supported in basic implementation)
         state.GpuUsagePercent = null;
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Background CPU sampling loop - runs independently from main monitoring loop.
+    /// This avoids blocking the main loop with CPU measurement delays.
+    /// </summary>
+    private async Task CpuSamplingLoop(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("CPU sampling loop started");
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                // Sample CPU for all registered games with counters
+                foreach (var kvp in _cpuCounters)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        break;
+
+                    var gameId = kvp.Key;
+                    var counter = kvp.Value;
+
+                    if (counter != null)
+                    {
+                        try
+                        {
+                            // Sample CPU value
+                            var cpuValue = counter.NextValue();
+                            _cpuSampledValues[gameId] = cpuValue;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error sampling CPU for game: {GameId}", gameId);
+                            _cpuSampledValues.TryRemove(gameId, out _);
+                        }
+                    }
+                }
+
+                // Wait before next sampling cycle
+                await Task.Delay(_config.CpuSamplingIntervalMs, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected on shutdown
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in CPU sampling loop");
+                await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        _logger.LogInformation("CPU sampling loop stopped");
     }
 
     private static IntPtr FindProcessWindow(int processId, string? titlePattern)
@@ -1148,12 +1275,16 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
                 // Hide the window
                 ShowWindow(state.WindowHandle, SW_HIDE);
 
-                // Track hidden window
+                // Track hidden window with its original state
                 if (!_hiddenWindows.ContainsKey(kvp.Key))
                 {
-                    _hiddenWindows[kvp.Key] = new List<IntPtr>();
+                    _hiddenWindows[kvp.Key] = new List<WindowRestoreInfo>();
                 }
-                _hiddenWindows[kvp.Key].Add(originalHandle);
+                _hiddenWindows[kvp.Key].Add(new WindowRestoreInfo
+                {
+                    Handle = originalHandle,
+                    OriginalState = originalState
+                });
 
                 windowsHidden++;
                 state.IsHiddenByBossKey = true;
@@ -1184,22 +1315,39 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
 
         foreach (var kvp in _hiddenWindows)
         {
-            foreach (var hWnd in kvp.Value)
+            foreach (var windowInfo in kvp.Value)
             {
-                if (hWnd != IntPtr.Zero)
+                if (windowInfo.Handle != IntPtr.Zero)
                 {
-                    // Restore the window
-                    ShowWindow(hWnd, SW_RESTORE);
+                    // Restore the window with correct state
+                    int showCmd;
+                    switch (windowInfo.OriginalState)
+                    {
+                        case WindowState.Maximized:
+                            showCmd = SW_SHOWMAXIMIZED;
+                            break;
+                        case WindowState.Minimized:
+                            showCmd = SW_MINIMIZE;
+                            break;
+                        case WindowState.Normal:
+                            showCmd = SW_SHOWNORMAL;
+                            break;
+                        default:
+                            showCmd = SW_RESTORE;
+                            break;
+                    }
+
+                    ShowWindow(windowInfo.Handle, showCmd);
 
                     // Update state
                     if (_processStates.TryGetValue(kvp.Key, out var state))
                     {
                         state.IsHiddenByBossKey = false;
-                        state.WindowState = DetermineWindowState(hWnd);
+                        state.WindowState = windowInfo.OriginalState;
                     }
 
                     windowsRestored++;
-                    _logger.LogInformation("Restored window for game: {GameId}", kvp.Key);
+                    _logger.LogInformation("Restored window for game: {GameId} (State: {State})", kvp.Key, windowInfo.OriginalState);
                 }
             }
         }
@@ -1336,20 +1484,27 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
             // Save the bitmap
             await SaveBitmapAsync(bitmap, filePath, _config.ScreenshotFormat, _config.JpgQuality, cancellationToken).ConfigureAwait(false);
 
+            // Extract dimensions before disposing bitmap
+            int bitmapWidth = bitmap.Width;
+            int bitmapHeight = bitmap.Height;
+
+            // Dispose bitmap immediately after saving to free resources
+            bitmap.Dispose();
+            bitmap = null;
+
             result.Success = true;
             result.FilePath = filePath;
-            result.Width = bitmap.Width;
-            result.Height = bitmap.Height;
+            result.Width = bitmapWidth;
+            result.Height = bitmapHeight;
             result.FileSizeBytes = new FileInfo(filePath).Length;
 
             // Track screenshot
             _screenshots.TryAdd(filePath, 0);
 
-            _logger.LogInformation("Screenshot captured: {FilePath} ({Width}x{Height})", filePath, width, height);
+            _logger.LogInformation("Screenshot captured: {FilePath} ({Width}x{Height})", filePath, bitmapWidth, bitmapHeight);
 
+            // Trigger event after bitmap is disposed
             ScreenshotCaptured?.Invoke(this, result);
-
-            bitmap.Dispose();
 
             return result;
         }
@@ -1428,7 +1583,7 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
         }
     }
 
-    private async Task<Bitmap?> CaptureWindowBitmapAsync(IntPtr hWnd, int width, int height, CancellationToken cancellationToken)
+    private Task<Bitmap?> CaptureWindowBitmapAsync(IntPtr hWnd, int width, int height, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -1448,17 +1603,17 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
                 graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
             }
 
-            return bitmap;
+            return Task.FromResult<Bitmap?>(bitmap);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error capturing window bitmap using CopyFromScreen");
             bitmap?.Dispose();
-            return null;
+            return Task.FromResult<Bitmap?>(null);
         }
     }
 
-    private async Task<Bitmap?> CaptureWindowBitmapAlternativeAsync(IntPtr hWnd, int width, int height, CancellationToken cancellationToken)
+    private Task<Bitmap?> CaptureWindowBitmapAlternativeAsync(IntPtr hWnd, int width, int height, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -1476,13 +1631,13 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
                 graphics.CopyFromScreen(rect.Left, rect.Top, 0, 0, new System.Drawing.Size(width, height));
             }
 
-            return bitmap;
+            return Task.FromResult<Bitmap?>(bitmap);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error capturing window bitmap using CopyFromScreen");
             bitmap?.Dispose();
-            return null;
+            return Task.FromResult<Bitmap?>(null);
         }
     }
 
@@ -1632,6 +1787,8 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
 
     /// <summary>
     /// Disposes the process monitor service.
+    /// Note: This is a synchronous dispose that does not wait for async tasks.
+    /// For proper async cleanup, use StopAsync() before calling Dispose().
     /// </summary>
     public void Dispose()
     {
@@ -1642,60 +1799,50 @@ public class ProcessMonitorService : IProcessMonitorService, IDisposable
 
         _disposed = true;
 
-        try
+        // Cancel monitoring task but do NOT wait for it (avoids deadlock)
+        _monitoringCts?.Cancel();
+
+        // Unregister boss key
+        UnregisterBossKey();
+
+        // Restore hidden windows if any
+        if (_areWindowsHidden)
         {
-            // Stop monitoring - cancel and wait asynchronously on thread pool to avoid deadlock
-            _monitoringCts?.Cancel();
-
-            if (_monitoringTask != null)
-            {
-                // Use Task.Run to wait on thread pool to avoid potential deadlock
-                // on UI thread if monitoring task tries to synchronize back
-                try
-                {
-                    Task.Run(() => _monitoringTask.Wait(TimeSpan.FromSeconds(5))).Wait();
-                }
-                catch (AggregateException)
-                {
-                    // Timeout or cancellation - proceed with cleanup
-                }
-            }
-
-            // Unregister boss key
-            UnregisterBossKey();
-
-            // Restore hidden windows
-            if (_areWindowsHidden)
+            try
             {
                 RestoreAllWindows();
             }
-
-            // Dispose tracked processes
-            foreach (var kvp in _trackedProcesses)
-            {
-                try
-                {
-                    kvp.Value?.Dispose();
-                }
-                catch { }
-            }
-
-            // Dispose CPU counters
-            foreach (var kvp in _cpuCounters)
-            {
-                try
-                {
-                    kvp.Value?.Dispose();
-                }
-                catch { }
-            }
-
-            _monitoringCts?.Dispose();
+            catch { }
         }
-        catch (Exception ex)
+
+        // Dispose tracked processes directly without waiting (now lists)
+        foreach (var kvp in _trackedProcesses)
         {
-            _logger.LogError(ex, "Error during ProcessMonitorService disposal");
+            foreach (var process in kvp.Value)
+            {
+                try
+                {
+                    process?.Dispose();
+                }
+                catch { }
+            }
         }
+        _trackedProcesses.Clear();
+
+        // Dispose CPU counters
+        foreach (var kvp in _cpuCounters)
+        {
+            try
+            {
+                kvp.Value?.Dispose();
+            }
+            catch { }
+        }
+        _cpuCounters.Clear();
+        _cpuSampledValues.Clear();
+
+        _monitoringCts?.Dispose();
+        _monitoringCts = null;
 
         _logger.LogInformation("ProcessMonitorService disposed");
     }

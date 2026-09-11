@@ -1,0 +1,51 @@
+# 构建产物
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# 测试与覆盖率
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+*.coverage
+*.coveragexml
+
+# 发布产物
+publish/
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+AppPackages/
+BundleArtifacts/
+
+# 本地数据与缓存
+*.db
+*.db-shm
+*.db-wal
+ScrapingCache/
+SaveBackups/
+Screenshots/
+
+# 临时与系统文件
+*.tmp
+*.log
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/

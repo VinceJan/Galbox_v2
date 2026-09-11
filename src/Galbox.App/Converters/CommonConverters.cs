@@ -208,13 +208,13 @@ public class DateTimeFormatConverter : IValueConverter
 /// </summary>
 public class PathToImageConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, string language)
+    public object? Convert(object value, Type targetType, object parameter, string language)
     {
         if (value is string path)
         {
             if (string.IsNullOrWhiteSpace(path))
             {
-                return null;
+                return DependencyProperty.UnsetValue;
             }
 
             // Handle URLs
@@ -230,10 +230,10 @@ public class PathToImageConverter : IValueConverter
                 return new Uri(path);
             }
         }
-        return null;
+        return DependencyProperty.UnsetValue;
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    public object? ConvertBack(object value, Type targetType, object parameter, string language)
     {
         throw new NotImplementedException();
     }
@@ -314,7 +314,7 @@ public class RatingConverter : IValueConverter
         {
             return $"{rating:F1}/10";
         }
-        return "N/A";
+        return "无评分";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
@@ -469,7 +469,7 @@ public class GameStatusConverter : IValueConverter
         {
             return LibraryViewModel.GetGameStatus(game);
         }
-        return "Unknown";
+        return "未知";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
@@ -787,9 +787,9 @@ public class SettingsVersionTextConverter : IValueConverter
     {
         if (value is string version)
         {
-            return $"Version {version}";
+            return $"版本 {version}";
         }
-        return "Version 1.0.0";
+        return "版本 1.0.0";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)

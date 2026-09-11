@@ -106,57 +106,7 @@ public interface ISaveManagementService
     string BackupStoragePath { get; }
 }
 
-/// <summary>
-/// Enumeration of supported game engine types for save detection.
-/// </summary>
-public enum GameEngineType
-{
-    /// <summary>
-    /// Unknown or unspecified engine type.
-    /// </summary>
-    Unknown = 0,
-
-    /// <summary>
-    /// Renpy engine (Python-based visual novel engine).
-    /// Saves typically in %APPDATA%/{GameName}/saves/ or game/saves/
-    /// </summary>
-    Renpy = 1,
-
-    /// <summary>
-    /// Krkr (Kirikiri) engine.
-    /// Saves typically in savedata/ folder or %APPDATA%/
-    /// </summary>
-    Krkr = 2,
-
-    /// <summary>
-    /// TyranoBuilder/Tyrano engine.
-    /// Saves typically in data/save/ folder.
-    /// </summary>
-    Tyrano = 3,
-
-    /// <summary>
-    /// Visual Novel Maker (VNM) engine.
-    /// Saves path defined in project.json.
-    /// </summary>
-    Vnm = 4,
-
-    /// <summary>
-    /// Unity engine.
-    /// Saves in various locations via PlayerPrefs or persistentDataPath.
-    /// </summary>
-    Unity = 5,
-
-    /// <summary>
-    /// RPG Maker engine.
-    /// Saves typically in game folder.
-    /// </summary>
-    RpgMaker = 6,
-
-    /// <summary>
-    /// Live2D or other proprietary engines.
-    /// </summary>
-    Other = 7
-}
+// Note: GameEngineType is now defined in Galbox.Data.Entities/GameInfo.cs
 
 /// <summary>
 /// Result of save location detection.

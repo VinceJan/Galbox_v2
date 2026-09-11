@@ -90,7 +90,7 @@ public partial class SaveManagerViewModel : ObservableObject
     /// <summary>
     /// Display name of selected game.
     /// </summary>
-    public string SelectedGameDisplayName => SelectedGame?.DisplayName ?? "No Game Selected";
+    public string SelectedGameDisplayName => SelectedGame?.DisplayName ?? "未选择游戏";
 
     /// <summary>
     /// Backup count for selected game.
@@ -209,7 +209,7 @@ public partial class SaveManagerViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading save manager data");
-            ErrorMessage = $"Failed to load games: {ex.Message}";
+            ErrorMessage = $"加载游戏失败：{ex.Message}";
         }
         finally
         {
@@ -269,21 +269,37 @@ public partial class SaveManagerViewModel : ObservableObject
 
     /// <summary>
     /// Handles selected game changed - loads its backups.
+    /// Uses Dispatcher to ensure UI updates happen on the UI thread.
     /// </summary>
     partial void OnSelectedGameChanged(GameSaveInfo? value)
     {
         if (value != null)
         {
+            // Get the dispatcher from the App's main window
+            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+            if (dispatcher == null)
+            {
+                // Fallback: just run directly if no dispatcher
+                _ = LoadBackupsForGameSafeAsync(value.Id);
+                return;
+            }
+
+            // Run the async operation, but ensure UI updates happen on UI thread
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await LoadBackupsForGameAsync(value.Id).ConfigureAwait(false);
+                    await LoadBackupsForGameSafeAsync(value.Id).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error loading backups for game: {GameId}", value.Id);
-                    ErrorMessage = $"Failed to load backups: {ex.Message}";
+
+                    // Update error message on UI thread
+                    dispatcher.TryEnqueue(() =>
+                    {
+                        ErrorMessage = $"加载备份失败：{ex.Message}";
+                    });
                 }
             });
         }
@@ -291,6 +307,79 @@ public partial class SaveManagerViewModel : ObservableObject
         {
             SelectedGameBackups.Clear();
             SelectedBackup = null;
+        }
+    }
+
+    /// <summary>
+    /// Loads backups for a specific game with thread-safe UI updates.
+    /// </summary>
+    public async Task LoadBackupsForGameSafeAsync(int gameId)
+    {
+        IsLoadingBackups = true;
+        ErrorMessage = null;
+
+        try
+        {
+            // Load data on background thread
+            var backups = await _saveManagementService.GetSaveBackupsAsync(gameId).ConfigureAwait(false);
+
+            // Get dispatcher for UI thread updates
+            var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
+            if (dispatcher != null)
+            {
+                // Update UI on dispatcher thread
+                dispatcher.TryEnqueue(() =>
+                {
+                    SelectedGameBackups.Clear();
+                    SelectedBackup = null;
+
+                    foreach (var backup in backups)
+                    {
+                        SelectedGameBackups.Add(backup);
+                    }
+
+                    // Update backup count in selected game info
+                    if (SelectedGame != null && SelectedGame.Id == gameId)
+                    {
+                        SelectedGame.BackupCount = backups.Count;
+                        SelectedGame.HasSaves = backups.Count > 0;
+                        SelectedGame.LastBackupTime = backups.MaxBy(b => b.CreatedTime)?.CreatedTime;
+                        OnPropertyChanged(nameof(SelectedGameBackupCount));
+                    }
+
+                    IsLoadingBackups = false;
+                });
+            }
+            else
+            {
+                // No dispatcher available, update directly (may cause issues but fallback)
+                SelectedGameBackups.Clear();
+                SelectedBackup = null;
+
+                foreach (var backup in backups)
+                {
+                    SelectedGameBackups.Add(backup);
+                }
+
+                if (SelectedGame != null && SelectedGame.Id == gameId)
+                {
+                    SelectedGame.BackupCount = backups.Count;
+                    SelectedGame.HasSaves = backups.Count > 0;
+                    SelectedGame.LastBackupTime = backups.MaxBy(b => b.CreatedTime)?.CreatedTime;
+                    OnPropertyChanged(nameof(SelectedGameBackupCount));
+                }
+
+                IsLoadingBackups = false;
+            }
+
+            _logger.LogInformation("Loaded {Count} backups for game: {GameId}", backups.Count, gameId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading backups for game: {GameId}", gameId);
+            ErrorMessage = $"加载备份失败：{ex.Message}";
+            IsLoadingBackups = false;
         }
     }
 
@@ -337,7 +426,7 @@ public partial class SaveManagerViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading backups for game: {GameId}", gameId);
-            ErrorMessage = $"Failed to load backups: {ex.Message}";
+            ErrorMessage = $"加载备份失败：{ex.Message}";
         }
         finally
         {
@@ -353,13 +442,13 @@ public partial class SaveManagerViewModel : ObservableObject
     {
         if (SelectedGame == null)
         {
-            ErrorMessage = "Please select a game first";
+            ErrorMessage = "请先选择一个游戏";
             return;
         }
 
         IsBackupInProgress = true;
         BackupProgress = 0;
-        BackupPhaseDescription = "Starting backup...";
+        BackupPhaseDescription = "正在开始备份...";
         ErrorMessage = null;
         SuccessMessage = null;
 
@@ -369,7 +458,7 @@ public partial class SaveManagerViewModel : ObservableObject
             var game = await _dbContext.Games.FindAsync(SelectedGame.Id);
             if (game == null)
             {
-                ErrorMessage = "Game not found in database";
+                ErrorMessage = "数据库中未找到该游戏";
                 return;
             }
 
@@ -395,7 +484,7 @@ public partial class SaveManagerViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedGameBackupCount));
 
                 NewBackupDescription = string.Empty;
-                SuccessMessage = $"Backup created successfully: {backup.Name}";
+                SuccessMessage = $"备份创建成功：{backup.Name}";
                 _logger.LogInformation("Backup created: {BackupName} for game {GameId}", backup.Name, game.Id);
 
                 // Clear success message after delay
@@ -404,13 +493,13 @@ public partial class SaveManagerViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = "Failed to create backup. No save files detected.";
+                ErrorMessage = "创建备份失败。未检测到存档文件。";
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating backup for game: {GameId}", SelectedGame.Id);
-            ErrorMessage = $"Failed to create backup: {ex.Message}";
+            ErrorMessage = $"创建备份失败：{ex.Message}";
         }
         finally
         {
@@ -428,13 +517,13 @@ public partial class SaveManagerViewModel : ObservableObject
     {
         if (SelectedBackup == null)
         {
-            ErrorMessage = "Please select a backup to restore";
+            ErrorMessage = "请选择要恢复的备份";
             return;
         }
 
         IsBackupInProgress = true;
         BackupProgress = 0;
-        BackupPhaseDescription = "Starting restoration...";
+        BackupPhaseDescription = "正在开始恢复...";
         ErrorMessage = null;
         SuccessMessage = null;
 
@@ -450,7 +539,7 @@ public partial class SaveManagerViewModel : ObservableObject
 
             if (success)
             {
-                SuccessMessage = $"Backup restored successfully: {SelectedBackup.Name}";
+                SuccessMessage = $"备份恢复成功：{SelectedBackup.Name}";
                 _logger.LogInformation("Backup restored: {BackupId}", SelectedBackup.Id);
 
                 await Task.Delay(SuccessMessageDelayMs);
@@ -458,13 +547,13 @@ public partial class SaveManagerViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = "Failed to restore backup";
+                ErrorMessage = "恢复备份失败";
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error restoring backup: {BackupId}", SelectedBackup.Id);
-            ErrorMessage = $"Failed to restore backup: {ex.Message}";
+            ErrorMessage = $"恢复备份失败：{ex.Message}";
         }
         finally
         {
@@ -482,7 +571,7 @@ public partial class SaveManagerViewModel : ObservableObject
     {
         if (SelectedBackup == null)
         {
-            ErrorMessage = "Please select a backup to delete";
+            ErrorMessage = "请选择要删除的备份";
             return;
         }
 
@@ -510,7 +599,7 @@ public partial class SaveManagerViewModel : ObservableObject
                 }
 
                 SelectedBackup = null;
-                SuccessMessage = "Backup deleted successfully";
+                SuccessMessage = "备份已成功删除";
                 _logger.LogInformation("Backup deleted: {BackupId}", deletedBackupId);
 
                 await Task.Delay(SuccessMessageDelayMs);
@@ -518,13 +607,13 @@ public partial class SaveManagerViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = "Failed to delete backup";
+                ErrorMessage = "删除备份失败";
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting backup: {BackupId}", SelectedBackup?.Id);
-            ErrorMessage = $"Failed to delete backup: {ex.Message}";
+            ErrorMessage = $"删除备份失败：{ex.Message}";
         }
     }
 
@@ -536,19 +625,19 @@ public partial class SaveManagerViewModel : ObservableObject
     {
         if (backup == null)
         {
-            ErrorMessage = "Please select a backup to quick switch";
+            ErrorMessage = "请选择要快速切换的备份";
             return;
         }
 
         if (SelectedGame == null)
         {
-            ErrorMessage = "No game selected";
+            ErrorMessage = "未选择游戏";
             return;
         }
 
         IsBackupInProgress = true;
         BackupProgress = 0;
-        BackupPhaseDescription = "Quick switching...";
+        BackupPhaseDescription = "正在快速切换...";
         ErrorMessage = null;
         SuccessMessage = null;
 
@@ -566,7 +655,7 @@ public partial class SaveManagerViewModel : ObservableObject
                     OnPropertyChanged(nameof(SelectedGameBackupCount));
                 }
 
-                SuccessMessage = $"Quick switched to: {result.RestoredBackup?.Name}";
+                SuccessMessage = $"已快速切换到：{result.RestoredBackup?.Name}";
                 _logger.LogInformation("Quick switch completed: from backup {CurrentId} to {TargetId}",
                     result.CurrentBackup?.Id, backup.Id);
 
@@ -575,13 +664,13 @@ public partial class SaveManagerViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = result.ErrorMessage ?? "Quick switch failed";
+                ErrorMessage = result.ErrorMessage ?? "快速切换失败";
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error quick switching for game: {GameId}", SelectedGame.Id);
-            ErrorMessage = $"Failed to quick switch: {ex.Message}";
+            ErrorMessage = $"快速切换失败：{ex.Message}";
         }
         finally
         {
@@ -617,13 +706,13 @@ public partial class SaveManagerViewModel : ObservableObject
     {
         return phase switch
         {
-            BackupPhase.Scanning => "Scanning for save files...",
-            BackupPhase.CreatingDirectory => "Creating backup directory...",
-            BackupPhase.CopyingFiles => "Copying files...",
-            BackupPhase.Finalizing => "Finalizing backup...",
-            BackupPhase.Verifying => "Verifying backup integrity...",
-            BackupPhase.CleaningUp => "Cleaning up old backups...",
-            _ => "Processing..."
+            BackupPhase.Scanning => "正在扫描存档文件...",
+            BackupPhase.CreatingDirectory => "正在创建备份目录...",
+            BackupPhase.CopyingFiles => "正在复制文件...",
+            BackupPhase.Finalizing => "正在完成备份...",
+            BackupPhase.Verifying => "正在验证备份完整性...",
+            BackupPhase.CleaningUp => "正在清理旧备份...",
+            _ => "正在处理..."
         };
     }
 }
@@ -696,12 +785,12 @@ public class GameSaveInfo : ObservableObject
         get
         {
             if (LastBackupTime == null)
-                return "Never";
+                return "从未备份";
             var diff = DateTime.UtcNow - LastBackupTime.Value;
             if (diff.TotalDays < 1)
-                return $"{(int)diff.TotalHours} hours ago";
+                return $"{(int)diff.TotalHours} 小时前";
             if (diff.TotalDays < 7)
-                return $"{(int)diff.TotalDays} days ago";
+                return $"{(int)diff.TotalDays} 天前";
             return LastBackupTime.Value.ToString("yyyy-MM-dd");
         }
     }
@@ -709,7 +798,7 @@ public class GameSaveInfo : ObservableObject
     /// <summary>
     /// Status indicator text.
     /// </summary>
-    public string StatusText => HasSaves ? $"{BackupCount} backups" : "No saves detected";
+    public string StatusText => HasSaves ? $"{BackupCount} 个备份" : "未检测到存档";
 
     /// <summary>
     /// Status color (for indicator).

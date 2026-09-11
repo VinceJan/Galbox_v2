@@ -16,6 +16,7 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly GalboxDbContext _dbContext;
     private readonly INavigationService _navigationService;
+    private readonly IGameUtilityService _gameUtilityService;
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
@@ -29,6 +30,12 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string? _errorMessage;
+
+    /// <summary>
+    /// Success message to display after adding a game.
+    /// </summary>
+    [ObservableProperty]
+    private string? _successMessage;
 
     /// <summary>
     /// Quick launch game (pinned or last played).
@@ -58,15 +65,22 @@ public partial class MainViewModel : ObservableObject
     private int _totalGamesCount;
 
     /// <summary>
+    /// Event to request folder picker dialog.
+    /// </summary>
+    public event EventHandler? RequestFolderPicker;
+
+    /// <summary>
     /// Creates a MainViewModel with injected dependencies.
     /// </summary>
     public MainViewModel(
         GalboxDbContext dbContext,
         INavigationService navigationService,
+        IGameUtilityService gameUtilityService,
         ILogger<MainViewModel> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
+        _gameUtilityService = gameUtilityService ?? throw new ArgumentNullException(nameof(gameUtilityService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -196,5 +210,101 @@ public partial class MainViewModel : ObservableObject
     private void NavigateToFavorites()
     {
         _navigationService.NavigateTo("Library", "favorites");
+    }
+
+    /// <summary>
+    /// Requests folder picker to add a new game.
+    /// </summary>
+    [RelayCommand]
+    private void AddGame()
+    {
+        RequestFolderPicker?.Invoke(this, EventArgs.Empty);
+        _logger.LogInformation("Requesting folder picker for adding game");
+    }
+
+    /// <summary>
+    /// Adds a game from a selected folder path.
+    /// </summary>
+    /// <param name="folderPath">The path to the game folder.</param>
+    public async Task AddGameAsync(string folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath) || !System.IO.Directory.Exists(folderPath))
+        {
+            ErrorMessage = "无效的文件夹路径";
+            return;
+        }
+
+        IsLoading = true;
+        ErrorMessage = null;
+        SuccessMessage = null;
+
+        try
+        {
+            // Find executable in folder
+            var executablePath = _gameUtilityService.FindExecutableInFolder(folderPath);
+
+            if (string.IsNullOrWhiteSpace(executablePath))
+            {
+                ErrorMessage = "文件夹中没有找到可执行文件";
+                return;
+            }
+
+            // Calculate folder size
+            var folderSize = _gameUtilityService.CalculateFolderSize(folderPath);
+
+            // Create game entry
+            var game = new GameInfo
+            {
+                NameOriginal = System.IO.Path.GetFileNameWithoutExtension(executablePath),
+                InstallPath = folderPath,
+                MainExecutable = executablePath,
+                AddedTime = DateTime.UtcNow,
+                UpdatedTime = DateTime.UtcNow,
+                SizeBytes = folderSize,
+                IsScraped = false
+            };
+
+            // Check if game already exists
+            var existingGame = await _dbContext.Games
+                .FirstOrDefaultAsync(g => g.InstallPath == folderPath);
+
+            if (existingGame != null)
+            {
+                ErrorMessage = "该游戏文件夹已在游戏库中";
+                return;
+            }
+
+            // Add to database
+            _dbContext.Games.Add(game);
+            await _dbContext.SaveChangesAsync();
+
+            // Update total count
+            TotalGamesCount = await _dbContext.Games.CountAsync();
+
+            // Add to recent games
+            RecentGames.Insert(0, game);
+
+            // Set as quick launch game if none exists
+            if (QuickLaunchGame == null)
+            {
+                QuickLaunchGame = game;
+            }
+
+            SuccessMessage = $"已将 '{game.DisplayName}' 添加到游戏库";
+            _logger.LogInformation("Added new game: {GameName} from {FolderPath}", game.DisplayName, folderPath);
+
+            // Clear success message after delay
+            await Task.Delay(3000);
+            SuccessMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding game from {FolderPath}", folderPath);
+            ErrorMessage = $"添加游戏失败：{ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 }
