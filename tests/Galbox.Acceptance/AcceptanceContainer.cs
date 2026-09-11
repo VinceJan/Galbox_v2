@@ -1,4 +1,5 @@
 using Galbox.App.Services;
+using Galbox.Core;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -133,11 +134,34 @@ public static class AcceptanceContainer
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        // --- moyu patch discovery (verbatim from App.xaml.cs) -------------------------
+        // This replica must register the same things the shipping app does: a missing registration
+        // here would let the application fail to build its container while every check still
+        // passed. A63 relies on the recorder below to assert the requests actually sent.
+        services.AddHttpClient<MoyuHttpClient>()
+            .AddHttpMessageHandler(sp => new RecordingHttpMessageHandler(sp.GetRequiredService<HttpTrafficRecorder>(), "MoyuHttpClient"))
+            .ConfigureHttpClient(client =>
+            {
+                client.BaseAddress = MoyuOptions.DefaultBaseAddress;
+                client.DefaultRequestHeaders.Add("User-Agent", MoyuComplianceGuard.UserAgent);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+
+        services.AddSingleton<IMoyuKeyStore>(_ => new MoyuDpapiKeyStore());
+        services.AddSingleton<IMoyuRateLimiter>(sp => new MoyuRateLimiter(sp.GetRequiredService<MoyuOptions>()));
+        services.AddSingleton(sp => MoyuOptions.FromKeyStore(sp.GetRequiredService<IMoyuKeyStore>()));
+        services.AddSingleton(sp => new MoyuDownloadWatcher(sp.GetRequiredService<MoyuOptions>()));
+        services.AddSingleton<MoyuBrowserLauncher>();
+
+        // The local patch engine, which is where an adopted download goes. Mirrors App.xaml.cs.
+        services.AddGalboxPatches();
+
         // --- API clients (verbatim) ---------------------------------------------------
         services.AddTransient<BangumiApi>();
         services.AddTransient<VndbApi>();
         services.AddTransient<YmgalApi>();
         services.AddTransient<CngalApi>();
+        services.AddTransient<MoyuApi>();
 
         // --- Business services (verbatim minus the UI-bound navigation service) -------
         services.AddTransient<IGameScrapingService, GameScrapingService>();

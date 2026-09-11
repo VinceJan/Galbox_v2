@@ -1,6 +1,7 @@
 using Galbox.App.Converters;
 using Galbox.App.Services;
 using Galbox.App.ViewModels;
+using Galbox.Core;
 using Galbox.Core.Api;
 using Galbox.Data.Entities;
 using Galbox.Data.Migrations;
@@ -142,11 +143,61 @@ public partial class App : Application
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
 
+        // ------------------------------------------------- moyu patch discovery (BYOK, /v2/moyu)
+        // The ONLY moyu endpoint this application is allowed to reach is the official NextMoe
+        // "moyu face" documented at https://developer.nextmoe.dev/specs/moyu-openapi.yaml.
+        //
+        // The patch site's own data endpoints live under /api/v1/* and its robots.txt says
+        // `Disallow: /api`. They answer 200 anonymously - the research report proved that - but
+        // "it works" is not "it is allowed", and this product is distributed. MoyuComplianceGuard
+        // builds every request URI and refuses anything outside this surface, so the promise is
+        // enforced by the code rather than by this comment. Acceptance check A63 asserts it.
+        //
+        // The face needs the user's own `nmk_` key. Galbox ships none: a key baked into a release
+        // would leak immediately and spend somebody else's quota. See MoyuOptions/MoyuDpapiKeyStore.
+        //
+        // User-Agent: the existing four clients send a bare "Galbox/1.0". That is not enough for a
+        // free community site to identify who is calling it, so the moyu client sends the full
+        // identifier (version + project URL).
+        services.AddHttpClient<MoyuHttpClient>()
+            .ConfigureHttpClient(client =>
+            {
+                client.BaseAddress = MoyuOptions.DefaultBaseAddress;
+                client.DefaultRequestHeaders.Add("User-Agent", MoyuComplianceGuard.UserAgent);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+
+        // The key store is a singleton: DPAPI plus one small file, read once at startup.
+        services.AddSingleton<IMoyuKeyStore>(_ => new MoyuDpapiKeyStore());
+
+        // The rate limiter MUST be a singleton - a per-call instance would pace nothing. It is the
+        // client-side self-restraint the research report asks for (report section 6.6).
+        services.AddSingleton<IMoyuRateLimiter>(sp =>
+            new MoyuRateLimiter(sp.GetRequiredService<MoyuOptions>()));
+
+        // Options are built once from the key store, so the application and the acceptance replica
+        // cannot disagree about where the key comes from.
+        services.AddSingleton(sp =>
+            MoyuOptions.FromKeyStore(sp.GetRequiredService<IMoyuKeyStore>()));
+
+        services.AddSingleton<MoyuDownloadWatcher>(sp =>
+            new MoyuDownloadWatcher(sp.GetRequiredService<MoyuOptions>()));
+
+        services.AddSingleton<MoyuBrowserLauncher>();
+
+        // ---------------------------------------------------------- local patch installer engine
+        // IPatchEngine is what actually unpacks and lays a downloaded patch over a game directory,
+        // with a preview, a ledger and a rollback. It was not registered anywhere before this
+        // change, which meant the patch discovery below had nothing to hand a downloaded package to.
+        // Registering it is the whole of the wiring this work line does in Galbox.App.
+        services.AddGalboxPatches();
+
         // API Clients
         services.AddTransient<BangumiApi>();
         services.AddTransient<VndbApi>();
         services.AddTransient<YmgalApi>();
         services.AddTransient<CngalApi>();
+        services.AddTransient<MoyuApi>();
 
         // Services
         services.AddSingleton<INavigationService, NavigationService>();

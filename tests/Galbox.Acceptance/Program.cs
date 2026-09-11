@@ -69,7 +69,8 @@ internal static class Program
             new A63MoyuComplianceGuardCheck(),
             new A64MoyuSizeAndAnchorCheck(),
             new A65MoyuDownloadWatchCheck(),
-            new A66MoyuBrowserLaunchCheck()
+            new A66MoyuBrowserLaunchCheck(),
+            new A67MoyuConditionalRequestCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));

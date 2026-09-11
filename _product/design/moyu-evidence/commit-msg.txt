@@ -1,0 +1,45 @@
+feat(moyu): implement the moyu.moe patch-discovery source (service layer only)
+
+Adds MoyuApi for the official NextMoe "moyu face" (/v2/moyu), DPAPI-protected
+key storage, and the "browser hop + adopt the download" flow. No UI code is
+touched: the only Galbox.App change is the DI block in App.xaml.cs.
+
+Compliance is the first constraint of this work, not a side note.
+moyu.moe/robots.txt says `Disallow: /api`, and every usable first-party data
+endpoint (search, patch detail, resource list, and /patch/resource/{id}/link
+which returns a direct URL) lives under /api/v1/*. The research report proved
+those endpoints answer 200 anonymously. That is not the question: the site says
+no, and a distributed product does not get to overrule it. So:
+
+  * only https://api.nextmoe.dev/v2/moyu/* is ever requested;
+  * MoyuComplianceGuard.EnsureApiUri is the sole constructor of a request URI
+    and refuses anything else, including the right host with a /api path;
+  * no prefetching, no polling, no bulk traversal; requests are serialised and
+    paced at <= 1/s and <= 30/min, and only a user action triggers one;
+  * the User-Agent identifies the client and carries a project URL;
+  * A63 asserts the whole matrix, and types A60-A67 turn it into a gate.
+
+Because the authorised surface carries no download link by design, the download
+half is a browser hop plus a downloads-folder watcher that hands the adopted
+file to the existing IPatchEngine. Nothing here unpacks or overwrites anything.
+
+New (src/Galbox.Core/Api):
+  MoyuComplianceGuard, MoyuOptions, MoyuResults, MoyuRef, MoyuSize,
+  MoyuKeyStore (DPAPI + memory), MoyuRateLimiter, MoyuModels (+ domain models),
+  MoyuApi, MoyuBrowserLauncher, MoyuDownloadWatcher, MoyuDownloadsFolder
+
+Also:
+  * Galbox.Core.csproj gains System.Security.Cryptography.ProtectedData.
+  * App.xaml.cs registers the moyu services AND services.AddGalboxPatches() -
+    IPatchEngine was registered nowhere, so an adopted file had nothing to be
+    handed to. That is a prerequisite for the handover, not part of the UI.
+  * Acceptance checks A60-A67, plus CheckStatus.Skip so a check that cannot be
+    measured (e.g. no nmk_ key) reports SKIP with a reason instead of passing.
+
+Evidence (raw runner output, _product/design/moyu-evidence):
+  00-baseline-run-FAIL.txt   PASSED 10 / FAILED 7  (A60-A67 absent), exit 1
+  10-final-run-PASS.txt      PASSED 18 / FAILED 0, exit 0
+
+Verified: 3 consecutive clean runs at the default timeout; the one intermittent
+failure observed across 5 further runs was in A9 (pre-existing startup-log
+timing window in that check), never in A60-A67.

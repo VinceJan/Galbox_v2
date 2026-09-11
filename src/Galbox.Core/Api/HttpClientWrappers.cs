@@ -83,3 +83,30 @@ public class CngalHttpClient
         HttpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 }
+
+/// <summary>
+/// Typed HttpClient wrapper for the official NextMoe "moyu face" (<c>/v2/moyu</c>).
+/// Provides type-safe dependency injection for <see cref="MoyuApi"/>.
+/// </summary>
+/// <remarks>
+/// This is the only moyu HttpClient in the application, and its BaseAddress is
+/// <c>https://api.nextmoe.dev/</c> — never the patch site itself. The site's own data endpoints
+/// live under <c>/api</c>, which its <c>robots.txt</c> disallows; see
+/// <see cref="MoyuComplianceGuard"/> for why that is the whole design of this integration.
+/// </remarks>
+public class MoyuHttpClient
+{
+    /// <summary>
+    /// Gets the underlying HttpClient instance.
+    /// </summary>
+    public HttpClient HttpClient { get; }
+
+    /// <summary>
+    /// Creates a moyu HttpClient wrapper.
+    /// </summary>
+    /// <param name="httpClient">HttpClient configured for the NextMoe moyu face</param>
+    public MoyuHttpClient(HttpClient httpClient)
+    {
+        HttpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    }
+}
