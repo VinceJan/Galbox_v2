@@ -1,0 +1,56 @@
+=== GALBOX PATCH CENTRE - REAL MACHINE LAUNCH ===
+UTC started : 2026-09-11 16:23:13Z
+Executable  : E:\tmp\Galbox_patchui_base\src\Galbox.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+Exists      : True
+Launched    : pid 32152
+MainWindowHandle : 0x490224
+MainWindowTitle  : 'WinUI Desktop'
+Alive            : True
+AutomationElement: 'WinUI Desktop' class=WinUIDesktopWin32WindowClass
+
+--- BEFORE navigation - window content ---
+    [Pane] Non Client Input Sink Window
+    [Pane] AppWindow Custom Title Bar
+    [Button] Minimize
+    [Button] Maximize
+    [Button] Close
+    [Text] Galbox
+    [Button] 返回
+    [Button] 关闭导航
+    [ListItem] 主页
+    [ListItem] 游戏库
+    [ListItem] 存档管理
+    [ListItem] 补丁中心
+    [ListItem] 刮削进度
+    [ListItem] 错误报告
+    [ListItem] 设置
+    [Text] 欢迎使用 Galbox
+    [Text] 1 个游戏在你的游戏库中
+    [Text] 添加游戏
+    [Text] 游戏库
+    [ScrollBar] 垂直
+    [TitleBar] WinUI Desktop
+    [MenuBar] 系统菜单栏
+    [MenuItem] 系统
+    [Button] 最小化
+    [Button] 最大化
+    [Button] 关闭
+
+NavItem found    : '补丁中心' type=ControlType.ListItem
+Invoked via      : SelectionItemPattern.Select()
+
+Alive after nav  : True (HasExited=False)
+
+--- AFTER navigation - patch centre page content ---
+
+--- content markers ---
+    [MISS ] 本地补丁包（已下载）
+    [MISS ] 选择补丁压缩包
+    [MISS ] 在线补丁源：未实现
+    [MISS ] 刷新台账
+
+Window rect      : 0 x 0
+Screenshot failed: Exception calling ".ctor" with "2" argument(s): "Parameter is not valid."
+
+RESULT: FAIL - missingMarkers=4 exited=True
+Process stopped.

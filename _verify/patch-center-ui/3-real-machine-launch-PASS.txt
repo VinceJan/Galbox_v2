@@ -1,0 +1,106 @@
+=== GALBOX PATCH CENTRE - REAL MACHINE LAUNCH ===
+UTC started : 2026-09-11 16:33:38Z
+Executable  : E:\tmp\Galbox_patchui\src\Galbox.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+Exists      : True
+Launched    : pid 33048
+MainWindowHandle : 0x55095E
+MainWindowTitle  : 'WinUI Desktop'
+Alive            : True
+AutomationElement: 'WinUI Desktop' class=WinUIDesktopWin32WindowClass
+
+--- BEFORE navigation - window content ---
+    [Pane] Non Client Input Sink Window
+    [Pane] AppWindow Custom Title Bar
+    [Button] Minimize
+    [Button] Maximize
+    [Button] Close
+    [Text] Galbox
+    [Button] 返回
+    [Button] 关闭导航
+    [ListItem] 主页
+    [ListItem] 游戏库
+    [ListItem] 存档管理
+    [ListItem] 补丁中心
+    [ListItem] 刮削进度
+    [ListItem] 错误报告
+    [ListItem] 设置
+    [Text] 欢迎使用 Galbox
+    [Text] 1 个游戏在你的游戏库中
+    [Text] 添加游戏
+    [Text] 游戏库
+    [ScrollBar] 垂直
+    [TitleBar] WinUI Desktop
+    [MenuBar] 系统菜单栏
+    [MenuItem] 系统
+    [Button] 最小化
+    [Button] 最大化
+    [Button] 关闭
+
+NavItem found    : '补丁中心' type=ControlType.ListItem
+Invoked via      : SelectionItemPattern.Select()
+
+Alive after nav  : True (HasExited=False)
+
+--- AFTER navigation - patch centre page content ---
+    [Pane] Non Client Input Sink Window
+    [Pane] AppWindow Custom Title Bar
+    [Button] Minimize
+    [Button] Maximize
+    [Button] Close
+    [Text] Galbox
+    [Button] 返回
+    [Button] 关闭导航
+    [ListItem] 主页
+    [ListItem] 游戏库
+    [ListItem] 存档管理
+    [ListItem] 补丁中心
+    [ListItem] 刮削进度
+    [ListItem] 错误报告
+    [ListItem] 设置
+    [Text] 补丁中心
+    [Text] 1
+    [Text] 需要补丁的游戏
+    [Text] 0
+    [Text] 已安装补丁
+    [Text] 需要补丁的游戏
+    [Edit] 搜索游戏...
+    [ListItem] Galbox.Data.Entities.GameInfo
+    [Text] 魔女的夜宴
+    [Text] Yuzusoft
+    [Text] 可用补丁： 魔女的夜宴
+    [ComboBox] 补丁类型
+    [Text] 魔女的夜宴
+    [Text] Yuzusoft
+    [Text] 0 个可用补丁
+    [Button] 查看游戏
+    [Text] 暂无可用补丁
+    [Text] 尚未配置在线补丁源，本地也还没有这个游戏的补丁记录。你仍然可以用下面的「本地补丁包」安装一个已经下载好的补丁。
+    [Text] 本地补丁包（已下载）
+    [Text] 选一个你已经下载到本机的补丁压缩包。Galbox 会先把它解压到临时沙箱，列出每个文件的落点、哪些会被覆盖、哪些条目会被拒绝；你确认之后才写入游戏目录，覆盖前会先备份。
+    [Text] 信息图标
+    [Text] 在线补丁源：未实现
+    [Text] 在线补丁源：未实现。本页只处理你已经下载到本机的补丁包 —— 不联网、不调用补丁站 API、不需要任何密钥。
+    [Text] 选择补丁压缩包...
+    [Button] 重新预览
+    [Button] 刷新台账
+    [ScrollBar] 垂直
+    [TitleBar] WinUI Desktop
+    [MenuBar] 系统菜单栏
+    [MenuItem] 系统
+    [Button] 最小化
+    [Button] 最大化
+    [Button] 关闭
+
+--- content markers ---
+    [FOUND] 本地补丁包（已下载）
+    [FOUND] 选择补丁压缩包
+    [FOUND] 在线补丁源：未实现
+    [FOUND] 刷新台账
+
+Window rect      : 1800 x 1200
+PrintWindow      : first=True second=True
+Screenshot       : E:\tmp\_galbox_patchui_scratch\patchcenter-printwindow.png (99959 bytes)
+Screen capture   : E:\tmp\_galbox_patchui_scratch\patchcenter-screencopy.png (220445 bytes)
+
+RESULT: PASS - window present, patch centre opened, page contains the local-package workflow
+Process stopped.
