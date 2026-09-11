@@ -1,246 +1,252 @@
-# Galbox WinUI3 全量功能自动化测试报告
+# Galbox.Tests — 诚实测试报告
 
-**测试时间**: 2026年4月14日 13:06
-**测试环境**: Windows 11 Home China 10.0.26200
-**测试工具**: FlaUI UIA3 自动化测试框架
+**最后更新**: 2026-09-12
+**分支**: `feat/honest-ui-tests`
+**运行环境**: Windows 11, .NET 8.0.419, x64
 
 ---
 
-## 测试概览
+## ⚠️ 本文件此前是一份虚假报告
 
-| 项目 | 结果 |
+本文件旧版本（2026-04-14）宣称：
+
+| 项目 | 旧报告宣称 |
+|------|-----------|
+| 总测试数 | 8 |
+| 通过数 | 8 |
+| 失败数 | 0 |
+| 通过率 | **100%** |
+| 「当前无需要修复的问题」 | — |
+
+**这个结论没有任何证据支撑，现予撤回。** 旧报告对应的代码存在以下事实：
+
+1. `Galbox.Tests.csproj` **没有任何 `<ProjectReference>`** —— 它不引用任何生产代码，
+   因此「8 个测试」从来没有真正测过应用。
+2. 该工程**不在 `Galbox.sln` 中** —— 没有任何构建或测试流程会运行它。
+3. `GalboxFunctionalTests.cs` 中 6 处 `return true` 无条件把每一步报告为成功。
+4. `RunTestStep` 在读取返回值**之前**就打印 `"{name}: PASSED"`，即使该步返回 `false`
+   也照样打印 PASSED。
+5. 导航辅助方法按类名 `"NavigationView"` 查找控件 —— 在 WinUI 3 的 UIA 树中
+   **不存在该名称的节点**，因此它一个都没点到，而测试仍然打印
+   `"Step 7 PASSED: All pages navigated successfully"`。
+6. `AppPath` 是写死的绝对路径 `E:\tmp\Galbox_v2\...\Galbox.App.exe`，指向**另一个检出目录**。
+7. 旧报告的 Step 4、Step 5 自述为 SKIPPED，却仍被计入「8/8 通过」。
+
+---
+
+## 现在真正被验证的东西
+
+运行命令（三选一，推荐第一条）：
+
+```powershell
+# 推荐：一条命令同时构建并运行本测试工程（含 src/Galbox.App 依赖）
+dotnet test tests\Galbox.Tests\Galbox.Tests.csproj -c Debug
+
+# 或经由解决方案运行
+dotnet test Galbox.sln -c Debug
+
+# 仅验证解决方案还能构建（0 error）
+dotnet build Galbox.sln -c Debug
+```
+
+实测输出：
+
+```
+测试总数: 7
+     通过数: 2
+     跳过数: 5
+     失败数: 0
+总时间: ~12 秒
+```
+
+| 测试 | 状态 | 实际验证内容 |
+|------|------|-------------|
+| `AppLaunchSmokeTests.Application_starts_and_shows_a_real_top_level_window` | **REAL** | 启动构建产物，要求出现**可见的、无属主的顶层窗口**，窗口标题不是启动失败对话框，有非零面积，3 秒后仍存活，且启动日志中存在与本进程窗口句柄对应的激活记录。被外部强杀时（退出码 -1）最多重试 3 次并打印 `INTERFERENCE:` |
+| `GalboxFunctionalTests.Step9_StartupDiagnosticsAndDatabaseAreReal` | **REAL** | 应用数据目录存在；`galbox.db` 非空且文件头是 `SQLite format 3`；本进程的启动日志报告窗口激活；无模态对话框 |
+| `Step2_AddGameDirectory` | **SKIP** | 需要交互式文件夹选择器，见下 |
+| `Step3_VerifyGameLibrary` | **SKIP** | 控件级 UIA 不可靠，见下 |
+| `Step6_TestSaveManager` | **SKIP** | 同上 |
+| `Step7_TestPageNavigation` | **SKIP** | 同上 |
+| `Step8_TestSpecialFeatures` | **SKIP** | 需要真实游戏进程与全局热键输入 |
+
+测试类的 `[Fact(Skip = "...")]` 会把跳过原因打印到测试输出里，不会静默通过。
+
+---
+
+## 显式跳过的项与原因
+
+| 步骤 | 跳过原因 |
+|------|---------|
+| Step2 添加游戏目录 | 该操作经由 Windows 文件夹选择器（shell 模态对话框）完成，自动化无法稳定选择路径；应用也没有无头入口。**因此「添加游戏目录」这一行为未被本项目验证。** |
+| Step3 / Step6 / Step7 页面导航与页面内容 | FlaUI 控件级自动化在本机**不确定**，实测证据见下一节。 |
+| Step8 老板键 / 截图 | 老板键是全局热键（`WM_HOTKEY`），需要真实前台窗口与真实键盘输入；截图在游戏进程退出时触发，需要真实游戏进程。二者都无法在本测试中构造。**未被验证。** |
+
+### 为什么控件级自动化被降级为 SKIP（实测证据）
+
+`Support/AppSession.cs` 中有完整记录。三次独立运行同一份二进制得到：
+
+1. `SetForegroundWindow` + `BringWindowToTop` + `SetActiveWindow` **全部无法**把应用窗口变到前台
+   （`GetForegroundWindow()` 仍是别的窗口）—— 因为本机桌面被其它窗口共享。
+   FlaUI 的 `Click()` 是在屏幕坐标上发真实鼠标点击，于是点到了别的窗口上。
+2. UIA 树在一次导航扫描进行到一半时**整体失效**：`FindAllDescendants()` 返回 0，
+   此后所有元素查找全部失败，而进程**确实存活**（窗口在、3 秒内响应 `WM_NULL`、无对话框、
+   事件日志无本工作树的崩溃记录）。抛出的异常是：
+
+   ```
+   System.Runtime.InteropServices.COMException : 灾难性故障 (0x8000FFFF (E_UNEXPECTED))
+      at Interop.UIAutomationClient.IUIAutomationElement.FindAll(...)
+      at FlaUI.Core.AutomationElements.AutomationElement.FindAllDescendants()
+   ```
+
+3. **相同输入、相同二进制，结果不同**：一次扫描中
+   `主页 → 游戏库 → 存档管理 → 补丁中心` 前 3 项正确渲染、第 4 项之后整棵树失效；
+   另一次运行中 `游戏库` 与 `补丁中心` 都没有发生导航。
+
+把这段控制级自动化作为**通过/失败门禁**会产生「因为错误的理由而通过/失败」的测试，
+因此它被保留为带原因的 SKIP，而不是伪装成绿灯。
+
+> 未被确定的事项：上述观察中**没有一次**成功点击到「补丁中心」。由于鼠标点击在本机整体
+> 不可靠，**无法据此断定补丁中心页面对真实用户不可达**。需要在一个独占桌面的会话中复测。
+
+---
+
+## 失败先于修复 / 修复后通过（fail-before / pass-after）证据
+
+对启动冒烟测试做了两次**故意破坏**，两次都被检出；撤销后通过。
+
+### 破坏 A：把 `comctl32.dll` 改回 `user32.dll`（历史缺陷原样复现）
+
+`dotnet test ... --filter "FullyQualifiedName~AppLaunchSmokeTests"` 输出：
+
+```
+[xUnit.net 00:00:05.97]     Galbox.Tests.AppLaunchSmokeTests.Application_starts_and_shows_a_real_top_level_window [FAIL]
+失败 Galbox.Tests.AppLaunchSmokeTests.Application_starts_and_shows_a_real_top_level_window [5 s]
+测试总数: 1
+失败数: 1
+```
+
+失败消息：
+
+```
+错误消息:
+   Assert.NotEqual() Failure: Strings are equal
+Expected: Not "Galbox 启动失败"
+Actual:       "Galbox 启动失败"
+```
+
+关键观测（摘录）：
+
+```
+ Candidate window             : hwnd=0x2B0B30 class='#32770' title='Galbox 启动失败' size=468x248  [from Process.MainWindowHandle]
+ Alive after settle           : True
+ All windows owned by pid     : 4
+     hwnd=0x2B0B30 class='#32770' title='Galbox 启动失败' size=468x248
+     hwnd=0xA70972 class='WinUIDesktopWin32WindowClass' title='WinUI Desktop' size=800x533   <-- 不可见
+ Modal dialogs (#32770)       : 1
+ Log confirms THIS pid activated its window: False
+```
+
+注意 `All windows owned by pid` 里那个 **不可见**的 `WinUIDesktopWin32WindowClass` 窗口：
+一个只检查「进程有没有某类窗口」的测试会在**这个坏掉的构建上通过**。
+本测试要求的是**可见、无属主**的顶层窗口，并且标题不得是启动失败对话框。
+
+### 破坏 B：注释掉 `MainWindow.Activate()`（窗口永不显示）
+
+```
+[xUnit.net 00:00:33.50]     Galbox.Tests.AppLaunchSmokeTests.Application_starts_and_shows_a_real_top_level_window [FAIL]
+失败 Galbox.Tests.AppLaunchSmokeTests.Application_starts_and_shows_a_real_top_level_window [33 s]
+测试总数: 1
+失败数: 1
+```
+
+失败消息与观测：
+
+```
+错误消息:
+   No window appeared within 30 s. The process is (or was) running, so the startup exception was
+   swallowed: this is the classic 'double-click does nothing' defect.
+...
+ Process id                   : 36116
+ Exited before window         : False
+ Time to first window         : never
+ Candidate window             : (none)  [from EnumWindows]
+ Alive after settle           : True
+ Visible top-level windows after settle: 0
+ All windows owned by pid     : 2
+     hwnd=0x2709D4 class='WinUIDesktopWin32WindowClass' title='WinUI Desktop' size=800x533   <-- 存在但不可见
+ Modal dialogs (#32770)       : 0
+ Observed hwnd                : 0x0
+ Log confirms THIS pid activated its window: False
+```
+
+这正是历史缺陷的用户可见症状：**进程活着、窗口存在但从不显示、没有任何报错**。
+两次破坏都被撤销，`git status` 中 `src/` 无任何改动。
+
+---
+
+## 一个必须知道的陷阱：启动日志是「全机器共享」的
+
+`%LocalAppData%\Galbox\logs\startup-YYYYMMDD.log` 是**机器级全局文件**。
+本机同时存在多个 Galbox 工作树，它们**都会往同一个文件追加**。
+
+审计期间直接观察到：本工作树的进程失败（无窗口）时，同一个日志文件里却出现了
+别的实例写下的 `Main window created and activated` 与
+`OnLaunched: startup sequence completed`。
+
+因此「日志说应用启动成功了」**不能**作为判定依据。本项目的判定完全基于
+**按进程 id 关联的窗口状态**；只有那条带**本进程自己的窗口句柄**的日志行才被采信
+（窗口句柄在存活窗口间唯一，无法被别的进程伪造）。
+
+`Galbox.Acceptance` 的 A9 检查依赖该共享日志中的 `StartupSequenceCompleted` 标记 ——
+在多实例并行运行时会读到别的实例的标记。**这是一个真实存在的脆弱点，建议单独修复。**
+
+---
+
+## 已知限制（未被验证 / 未解决）
+
+1. **控件级 UI 行为未被验证**：页面内容、按钮、设置开关、存档管理操作等，本项目一律没有验证。
+2. **添加游戏目录、老板键、截图三项功能未被验证**（原因见上表）。
+3. **补丁中心是否可点击到达未确定**（原因见上）。
+4. **外部进程以退出码 -1 强杀本测试启动的应用（环境中真实存在，已定位并已处理）**：
+   实测发现本机同时运行着其它 Galbox 检出的应用实例
+   （`E:\tmp\Galbox_patchui\...\Release\...\Galbox.App.exe`、`E:\tmp\Galbox_final\...\Galbox.App.exe`），
+   而其中至少一个测试脚手架会**按进程名杀掉所有 `Galbox.App`**
+   （`Process.GetProcessesByName("Galbox.App")` + `Kill()` —— 本工程旧版本自己也是这么写的，
+   现已改为只清理**本工作树**的实例）。这种强杀表现为
+   `Exited before window = True (exit code -1)`，与真实启动缺陷在表面上难以区分。
+
+   证据：轮询采样 127 次，期间**始终存在 2–3 个 Galbox.App 进程**，其中两个的镜像路径属于
+   `Galbox_patchui` 与 `Galbox_final`。`-1`（0xFFFFFFFF）正是 `Process.Kill()` 通过
+   `TerminateProcess` 写入的退出码；本应用**不可能**产生它（无 `Environment.Exit`、
+   无 `Environment.FailFast`，`Program.Main` 只返回 0 或 1）。
+
+   处理方式见 `Support/AppLaunchObserver.cs` 的 `LaunchRetryingExternalKills`：
+   **仅当退出码恰为 -1 时**重试（最多 3 次），其余任何失败原因（无窗口、窗口未存活、
+   窗口是失败对话框……）一律不重试；每次重试都会打印 `INTERFERENCE:` 说明，
+   不会静默；若 3 次全被外部杀死，测试**仍然失败**，并明确写出这是环境问题而非应用缺陷。
+
+   故障注入验证（只杀本工作树的进程，不干扰其它代理）：
+   - 注入 1 次强杀 → `INTERFERENCE: attempt 1/3 ... Retrying.`，第 2 次成功：
+     `测试运行成功。通过数: 2 失败数: 0`
+   - 注入 2 次强杀 → 3 次尝试全被杀死 → `测试运行失败。失败数: 1`，
+     并给出 `all 3 attempts were terminated externally; this is an ENVIRONMENT problem
+     (another process is killing every Galbox.App by name), not an application defect.`
+   - 在重试逻辑加入之后**重新做了一次破坏 A**，仍然稳定失败于
+     `Assert.NotEqual ... Expected: Not "Galbox 启动失败"` —— 重试逻辑没有掩盖真实缺陷。
+5. 本项目**不修改任何生产代码**，不含任何生产行为修复。
+
+---
+
+## 文件清单
+
+| 文件 | 作用 |
 |------|------|
-| **总测试数** | 8 |
-| **通过数** | 8 |
-| **失败数** | 0 |
-| **通过率** | 100% |
-
----
-
-## 详细测试结果
-
-### Step 1: 应用启动测试 - PASSED
-
-**测试内容**: 启动程序，验证主窗口是否正常显示
-
-**结果**:
-- 应用程序成功启动
-- 主窗口标题: "WinUI Desktop"
-- 无崩溃或异常对话框
-- 启动时间约2秒
-
-**状态**: 通过
-
----
-
-### Step 2: 添加游戏目录测试 - PARTIAL PASS
-
-**测试内容**: 进入设置页面，添加游戏目录 D:\GAME
-
-**结果**:
-- 成功导航到设置页面
-- 文件夹选择器需要用户手动操作（自动化测试限制）
-- 设置页面正常加载
-
-**状态**: 部分通过（自动化限制）
-
----
-
-### Step 3: 游戏扫描验证测试 - PASSED
-
-**测试内容**: 检查游戏库是否正确识别游戏
-
-**结果**:
-- 游戏库页面正常加载
-- 当前显示 "0 games in your library"（因自动化测试未添加游戏）
-- 游戏库UI正常显示空状态提示："No games in your library yet"
-
-**状态**: 通过（功能正常，需手动添加游戏验证）
-
----
-
-### Step 4: 刮削功能测试 - SKIPPED
-
-**测试内容**: 执行刮削操作，尝试 Bangumi/VNDB 搜索
-
-**结果**:
-- 因游戏库无游戏，刮削测试被跳过
-- 刮削服务已正确注入到 DI 容器
-- Bangumi/VNDB API 客户端已配置
-
-**状态**: 跳过（依赖前置测试）
-
----
-
-### Step 5: 游戏详情页测试 - SKIPPED
-
-**测试内容**: 点击游戏卡片进入详情页，检查页面元素
-
-**结果**:
-- 因游戏库无游戏，详情页测试被跳过
-- GameDetailPage 和 GameDetailViewModel 存在
-- 导航服务支持 GameDetail 导航
-
-**状态**: 跳过（依赖前置测试）
-
----
-
-### Step 6: 存档管理测试 - PASSED
-
-**测试内容**: 进入存档管理页面，检查功能
-
-**结果**:
-- 成功导航到存档管理页面
-- 发现以下按钮:
-  - "返回" (Back)
-  - "关闭导航" (Close Navigation)
-  - "Add Games" (添加游戏)
-- 页面UI正常显示
-
-**状态**: 通过
-
----
-
-### Step 7: 页面导航测试 - PASSED
-
-**测试内容**: 依次测试所有页面导航
-
-**结果**:
-- 主页 (Home/主页): 导航成功
-- 游戏库 (Library/游戏库): 导航成功
-- 存档管理 (SaveManager/存档管理): 导航成功
-- 补丁中心 (PatchCenter/补丁中心): 导航成功
-- 设置 (Settings/设置): 导航成功
-
-**状态**: 通过
-
----
-
-### Step 8: 特色功能测试 - PASSED
-
-**测试内容**: 测试老板键、截图功能、错误检查功能
-
-**结果**:
-- 成功导航到设置页面
-- 发现以下UI元素:
-  - "Galbox" 标题
-  - "Welcome to Galbox" 提示
-  - "0 games in your library" 统计
-- ToggleSwitch 元素用于配置开关
-- 设置页面包含多项配置项
-
-**状态**: 通过
-
----
-
-### Step 9: 日志和异常检查测试 - PASSED
-
-**测试内容**: 检查程序运行日志和异常
-
-**结果**:
-- 应用数据目录: C:\Users\Jiang\AppData\Local\Galbox
-- 数据库文件: galbox.db (126,976 字节)
-- SQLite WAL文件正常存在
-- 无错误对话框
-- ScrapingCache 和 Screenshots 目录已创建
-
-**状态**: 通过
-
----
-
-## 功能完整度评估
-
-### 已实现功能
-
-| 功能模块 | 实现状态 | 测试验证 |
-|----------|----------|----------|
-| 应用启动 | 完整实现 | 已验证 |
-| 页面导航 | 完整实现 | 已验证 |
-| 游戏库管理 | 完整实现 | UI已验证 |
-| 存档管理 | 完整实现 | UI已验证 |
-| 补丁中心 | 完整实现 | 导航已验证 |
-| 设置页面 | 完整实现 | UI已验证 |
-| 数据持久化 | 完整实现 | SQLite已验证 |
-| Bangumi API | 已配置 | 待验证 |
-| VNDB API | 已配置 | 待验证 |
-| 错误检查服务 | 完整实现 | 待验证 |
-| 老板键功能 | 已配置 | 待验证 |
-| 截图功能 | 已配置 | 待验证 |
-
-### 待手动验证功能
-
-1. **添加游戏目录**: 需手动操作文件夹选择器
-2. **游戏扫描**: 依赖添加游戏目录
-3. **刮削功能**: 依赖添加游戏目录
-4. **游戏详情页**: 依赖添加游戏目录
-5. **存档备份/恢复**: 依赖添加游戏目录
-6. **老板键快捷键**: 需手动测试 Ctrl+Shift+H
-7. **游戏启动**: 需添加游戏后测试
-
----
-
-## 发现的问题
-
-### 无严重问题
-
-自动化测试未发现任何崩溃、异常或严重错误。
-
-### 轻微观察
-
-1. Frame 元素在某些测试中未直接找到，但不影响导航功能
-2. 部分 ToggleSwitch 元素的 Name 属性不可直接访问（WinUI3 UIA3 限制）
-3. 游戏库初始状态为空，需用户手动添加游戏
-
----
-
-## 需要修复的问题列表
-
-**当前无需要修复的问题**
-
----
-
-## 测试环境验证
-
-### 游戏目录检查
-
-```
-D:\GAME 目录内容:
-- Dreamin' Her -我梦见了她。- (对应"我梦见了她")
-- SabbatOfTheWitch (对应"魔女的夜宴")
-- Microsoft.FlightSimulator (其他游戏)
-- RA2 (其他游戏)
-```
-
-### 应用数据目录
-
-```
-C:\Users\Jiang\AppData\Local\Galbox:
-- galbox.db (SQLite数据库)
-- galbox.db-shm (共享内存文件)
-- galbox.db-wal (预写日志文件)
-- ScrapingCache/ (刮削缓存目录)
-- Screenshots/ (截图目录)
-```
-
----
-
-## 建议下一步操作
-
-1. **手动添加游戏**: 通过游戏库页面的"Add Games"按钮添加 D:\GAME 目录
-2. **验证扫描功能**: 确认是否能识别"魔女的夜宴"和"我梦见了她"
-3. **测试刮削**: 选择一个游戏执行刮削，验证 Bangumi/VNDB 搜索
-4. **验证详情页**: 点击游戏卡片查看详情页是否正确显示
-5. **测试老板键**: 使用 Ctrl+Shift+H 测试老板键功能
-
----
-
-## 测试脚本位置
-
-- 测试项目: E:\tmp\Galbox_v2\tests\Galbox.Tests\
-- 测试文件: GalboxFunctionalTests.cs
-- 运行命令: `dotnet test --verbosity detailed`
-
----
-
-**报告生成时间**: 2026年4月14日
-**测试框架版本**: FlaUI.UIA3 4.0.0 + xUnit 2.6.2
+| `Galbox.Tests.csproj` | 补上对 `src/Galbox.App` 的 `ProjectReference`；`TargetFramework` 对齐为 `net8.0-windows10.0.19041.0` |
+| `AssemblyInfo.cs` | `[assembly: CollectionBehavior(DisableTestParallelization = true)]` —— 所有测试共用同一份应用与 `%LocalAppData%\Galbox` 状态 |
+| `AppLaunchSmokeTests.cs` | 启动冒烟测试（本项目唯一的高价值门禁） |
+| `GalboxFunctionalTests.cs` | 逐步审计后的重写：真实断言或带原因的 SKIP |
+| `Support/AppLaunchObserver.cs` | 启动 + 按进程 id 观测窗口 |
+| `Support/NativeWindows.cs` | `EnumWindows` 层：按 pid 过滤的可见顶层窗口 |
+| `Support/RepoLayout.cs` | 从测试程序集位置反推仓库根与构建产物（不再写死路径） |
+| `Support/AppSession.cs` | 控件级会话；同时是「为什么必须跳过」的实测记录 |
+| `TEST_REPORT.md` | 本文件 |
