@@ -1,0 +1,98 @@
+================================================================================
+集成验证记录：release/1.0.0 首次全量复验
+================================================================================
+时间      ：2026-09-12 00:14
+验证人    ：主对话（协调窗口）
+验证对象  ：集成分支 release/1.0.0 @ fbde579
+验证方式  ：主对话亲自构建并运行验收程序（非代理自述）
+
+--------------------------------------------------------------------------------
+1. 该提交包含什么
+--------------------------------------------------------------------------------
+合并链（零冲突）：
+    fbde579  Merge 'wip/2026-04-16-fixes' -> release/1.0.0
+    582196a  观感与数据安全批次 W13/W14/W15/W16/W18/W19/W20/W21 + 验收 A11–A19
+    de2ca09  Merge 'docs/delivery' -> release/1.0.0
+    25e34ec  Merge 'feat/distributable-packaging' -> release/1.0.0
+    5f3fac9  验收程序：数据库按进程隔离（主对话提交）
+    0e051ea  合并补丁安装器 + 存档节点工作线
+
+能力清单：
+    - 补丁安装引擎（189/189 断言，独立验证过）
+    - 存档节点数据层 + 解析器 + 扫描服务（107/107、ALL CHECKS、11/11）
+    - 可分发打包修复（自包含绿色版，实机验证可跑）
+    - 中文资源本地化修复
+    - 验收程序并发隔离（run-{pid} / images-{pid}）
+    - W13 删除游戏 / W14 文件夹丢失检测 / W15 图片下载链路 / W16 窗口标题
+    - W18 快速切换安全 / W19 恢复真回滚 / W20 拒绝安装目录当存档目录 / W21 零容差校验
+    - 交付文档（README / 用户手册 / 开发者指南 / CHANGELOG）
+
+--------------------------------------------------------------------------------
+2. 合并冲突情况
+--------------------------------------------------------------------------------
+**零冲突。** 以下四个高风险文件全部由 git 自动合并成功：
+    src/Galbox.App/App.xaml.cs                （DI 注册，多方修改）
+    src/Galbox.App/Galbox.App.csproj          （打包属性 + 版本号，多方修改）
+    tests/Galbox.Acceptance/AcceptanceContainer.cs （两套 PID 隔离，双方各改一处）
+    tests/Galbox.Acceptance/Program.cs        （检查注册，追加式合并）
+
+合并规模：38 files changed, 8390 insertions(+), 146 deletions(-)
+
+**两套 PID 隔离都保留了**（合并结果实测）：
+    AcceptanceContainer.cs:60   $"run-{Environment.ProcessId}"    <- 数据库
+    AcceptanceContainer.cs:68   $"images-{Environment.ProcessId}" <- 图片缓存
+
+--------------------------------------------------------------------------------
+3. 构建
+--------------------------------------------------------------------------------
+命令：dotnet build Galbox.sln -c Debug
+结果：已成功生成。0 个警告 0 个错误。耗时 26.54 秒。
+
+--------------------------------------------------------------------------------
+4. 验收结果（原始输出摘要）
+--------------------------------------------------------------------------------
+Acceptance DB : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-28156\acceptance.db
+
+ ID   STATUS        TIME  CHECK
+ A0   PASS       1662 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   PASS         16 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS        139 ms  CalculateFolderSize reports the real folder size
+ A3   PASS         13 ms  DetectSaveLocationAsync finds the Ren'Py save folder
+ A4   PASS         37 ms  CheckGameAsync runs without internal failure
+ A5   PASS       1365 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       2088 ms  Upstream APIs are reachable and hold this game
+ A8   PASS         94 ms  Navigation, page and XAML resource completeness
+ A9   PASS       2931 ms  The GUI application opens a window while scrape-cache data is present
+ A11  PASS        126 ms  Quick switch aborts when the current save cannot be backed up
+ A12  PASS        153 ms  A failed restore rolls the save folder back and records it
+ A13  PASS         32 ms  Save detection refuses the game installation folder
+ A14  PASS         97 ms  Restore verification rejects same-size/different-content restores
+ A15  PASS       2054 ms  Scraped cover and character images are downloaded as real image files
+ A16  PASS        200 ms  Deleting a game removes its records and keeps the game files
+ A17  PASS         10 ms  A missing game folder is detected and blocks the launch
+ A18  PASS       2169 ms  The application window title is the product name
+ A19  PASS       2706 ms  Every navigation destination loads inside the running application
+
+ PASSED : 19    FAILED : 0    ERRORS : 0    TOTAL : 19
+ EXIT CODE: 0  (all checks PASS)
+
+注册表实测为并集：A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A11 A12 A13 A14 A15 A16 A17 A18 A19
+（A10 预留给存档节点扫描线，尚未合入）
+
+--------------------------------------------------------------------------------
+5. 结论
+--------------------------------------------------------------------------------
+集成分支在**零冲突**的前提下把补丁引擎、存档节点底层、打包修复、观感与数据安全批次、
+交付文档、验收并发隔离全部整合，并**由主对话独立复验为 19/19 PASS、退出码 0**。
+
+这是本项目历史上第一次：**所有已完成的工作线同时存在、同时构建通过、同时验收全绿。**
+
+仍未合入（各自在途）：
+    - feat/save-node-ui      存档节点界面（A10）      - 有未提交改动
+    - feat/honest-ui-tests   W12 测试诚实性           - 有未提交改动
+    - feat/patch-center-ui   补丁中心界面（A30+）     - 领先 3 个提交
+    - feat/metadata-sources  ymgal/cngal（A40+）      - 领先 2 个提交
+    - fix/rapid-navigation-crash  导航崩溃（A50+）    - 刚起步
+    - feat/moyu-source       moyu.moe 合规源（A60+）  - 刚起步
+================================================================================
