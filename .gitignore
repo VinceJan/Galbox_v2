@@ -49,3 +49,8 @@ Screenshots/
 Thumbs.db
 desktop.ini
 $RECYCLE.BIN/
+
+# 验收程序的运行产物（隔离数据库、下载的图片、逐次运行的原始输出）。
+# 需要留档的那一次运行按 _product/design/acceptance-runs/ 的既有约定另存一份。
+_verify/acceptance/
+_verify/runs/

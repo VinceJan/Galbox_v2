@@ -100,7 +100,20 @@ internal static class Program
             new A64MoyuSizeAndAnchorCheck(),
             new A65MoyuDownloadWatchCheck(),
             new A66MoyuBrowserLaunchCheck(),
-            new A67MoyuConditionalRequestCheck()
+            new A67MoyuConditionalRequestCheck(),
+
+            // --- Reserved interfaces (A90+; A68-A89 belong to other work lines) ------------
+            // The two P2 features are specified as 第一版只预留接口、前端隐藏 (spec lines 173-174).
+            // A90 pins the shape of the reserved layer, A91 proves the front end is actually hidden
+            // (no navigation key, no page, no menu item, no button - the "假按钮" defect class of
+            // spec §8.2 line 816), A92 proves the reservation does not fake availability: no
+            // implementation, no registration, no placeholder body, no schema change. They are
+            // resolved by name (ReservedInterfaceProbe) so this harness compiles against the
+            // revision that does not have the layer yet, which is what makes the recorded
+            // FAIL -> PASS pair possible from one harness revision.
+            new A90ReservedInterfaceShapeCheck(),
+            new A91ReservedFeatureHiddenCheck(),
+            new A92ReservedNoFakeAvailabilityCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
