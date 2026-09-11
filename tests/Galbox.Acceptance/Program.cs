@@ -57,7 +57,12 @@ internal static class Program
             new A6MetadataFieldsCheck(),
             new A7UpstreamContractCheck(),
             new A8NavigationPageCheck(),
-            new A9StartupWithCacheCheck()
+            new A9StartupWithCacheCheck(),
+            // A40+ : metadata source line (ymgal / cngal). Appended after the existing checks;
+            // the order and numbering of A0-A9 is deliberately untouched.
+            new A40YmgalSearchCheck(),
+            new A41CngalSearchCheck(),
+            new A42MetadataSourceContractCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
