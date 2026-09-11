@@ -74,15 +74,91 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        // Set initial size
-        var appWindow = this.AppWindow;
-        appWindow.Resize(new Windows.Graphics.SizeInt32(1200, 800));
+        // Set initial size.
+        //
+        // AppWindow sizes are PHYSICAL pixels. With a fixed 1200x800 the application opened an
+        // 800x533-logical window on this machine's 150% display, which left the patch centre's
+        // right-hand panel about 130 logical pixels wide and clipped it at the window edge
+        // (measured with UI Automation: the 补丁中心 card's content extended past the window's right
+        // border). Scale the design size by the window's own DPI and clamp it to the work area so the
+        // window is actually the size the layout assumes.
+        var appWindow = AppWindow;
+        appWindow.Resize(CalculateInitialWindowSize(appWindow));
 
         // Subscribe to window closed event for cleanup
         Closed += OnWindowClosed;
 
         // Setup window subclass for WM_HOTKEY handling
         SetupWindowSubclass();
+    }
+
+    /// <summary>Design size of the main window, in logical (96 dpi) pixels.</summary>
+    private const int DesignWidth = 1200;
+
+    /// <summary>Design height of the main window, in logical (96 dpi) pixels.</summary>
+    private const int DesignHeight = 800;
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo lpmi);
+
+    private const uint MonitorDefaultToNearest = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int cbSize;
+        public System.Drawing.Rectangle rcMonitor;
+        public System.Drawing.Rectangle rcWork;
+        public uint dwFlags;
+    }
+
+    /// <summary>
+    /// Computes the startup size in physical pixels: the design size scaled by this window's DPI and
+    /// clamped to the monitor's work area, so the window is never larger than the screen and never
+    /// smaller than a usable minimum.
+    /// </summary>
+    /// <remarks>
+    /// The clamp uses <c>GetMonitorInfo</c> rather than WinUI's <c>DisplayArea</c>: on this machine
+    /// several virtual display adapters are present and <c>DisplayArea</c> reported a work area
+    /// (1800x1200) larger than the desktop the window actually appears on (1707x960), so the clamp
+    /// silently did nothing.
+    /// </remarks>
+    private Windows.Graphics.SizeInt32 CalculateInitialWindowSize(Microsoft.UI.Windowing.AppWindow appWindow)
+    {
+        var scale = 1.0;
+        var hwnd = WindowHandle;
+        if (hwnd != IntPtr.Zero)
+        {
+            var dpi = GetDpiForWindow(hwnd);
+            if (dpi > 0) scale = dpi / 96.0;
+        }
+
+        var width = (int)Math.Round(DesignWidth * scale);
+        var height = (int)Math.Round(DesignHeight * scale);
+
+        if (hwnd != IntPtr.Zero)
+        {
+            var monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+            if (monitor != IntPtr.Zero)
+            {
+                var info = new MonitorInfo { cbSize = Marshal.SizeOf<MonitorInfo>() };
+                if (GetMonitorInfo(monitor, ref info))
+                {
+                    var workWidth = info.rcWork.Right - info.rcWork.Left;
+                    var workHeight = info.rcWork.Bottom - info.rcWork.Top;
+                    if (workWidth > 0) width = Math.Min(width, workWidth);
+                    if (workHeight > 0) height = Math.Min(height, workHeight);
+                }
+            }
+        }
+
+        return new Windows.Graphics.SizeInt32(Math.Max(960, width), Math.Max(640, height));
     }
 
     /// <summary>

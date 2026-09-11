@@ -9,6 +9,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- Windows DPAPI, used to seal the user's own moyu `nmk_` API key before it touches the disk
+         (MoyuDpapiKeyStore). ProtectedData is not in the base class library on .NET Core; this is
+         the supported way to reach it, and it is Windows-only - which matches this project's
+         net8.0-windows target exactly. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <!-- Read-only RAR / 7z / tar support for the local patch installer.
          SharpCompress is MIT licensed and pure managed; RAR creation is intentionally not used.
          1.0.0 is the first release that fixes GHSA-6c8g-7p36-r338 (zip slip in the library's own

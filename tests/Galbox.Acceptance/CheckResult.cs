@@ -10,7 +10,17 @@ public enum CheckStatus
     Fail,
 
     /// <summary>The check could not complete (unhandled exception in the code path).</summary>
-    Error
+    Error,
+
+    /// <summary>
+    /// The check was deliberately not measured, and states why.
+    ///
+    /// This exists so that a condition which cannot be exercised here (most often: the optional
+    /// moyu <c>nmk_</c> API key is not configured, so no live call is possible) is reported for
+    /// what it is instead of being dressed up as a pass. A SKIP never turns a red run green:
+    /// the summary reports it separately and the reason is always printed.
+    /// </summary>
+    Skip
 }
 
 /// <summary>
@@ -51,6 +61,13 @@ public sealed class CheckResult
     /// <summary>Creates a FAIL result.</summary>
     public static CheckResult Fail(string id, string title, string expected, string actual) =>
         new() { Id = id, Title = title, Status = CheckStatus.Fail, Expected = expected, Actual = actual };
+
+    /// <summary>
+    /// Creates a SKIP result: the check was not measured and <paramref name="actual"/> says why.
+    /// Callers must never use this to hide a failure.
+    /// </summary>
+    public static CheckResult Skipped(string id, string title, string expected, string reason) =>
+        new() { Id = id, Title = title, Status = CheckStatus.Skip, Expected = expected, Actual = reason };
 
     /// <summary>Creates an ERROR result.</summary>
     public static CheckResult Error(string id, string title, string expected, string actual, Exception ex) =>

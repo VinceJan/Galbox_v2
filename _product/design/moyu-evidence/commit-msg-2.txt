@@ -1,0 +1,17 @@
+feat(moyu): add a one-command verifier and the implementation report
+
+tools/Galbox.MoyuVerifier is the answer to "how does the user re-verify this
+after minting an nmk_ key". It runs with no key at all - only the live-call
+section is skipped, and it says so - and covers the compliance guard matrix,
+the parsers, the DPAPI store, the downloads-folder takeover and the handover to
+IPatchEngine. With a key it adds at most TWO requests (a VNDB anchor, and that
+page's resources), serialised and paced, triggered only by that explicit run.
+
+The key never appears in the output: every diagnostic is built from a SHA-256
+fingerprint or from a ToString that was written to describe presence.
+
+Also tightens A64 with the `save` discriminator and the twelve-value type
+vocabulary (including that an unknown value passes through unchanged rather
+than being relabelled), and the full solution now builds with 0 warnings.
+
+Added to Galbox.sln so a normal build compiles it and it cannot silently rot.

@@ -30,6 +30,11 @@ namespace Galbox.Acceptance;
 ///      the ViewModels are NOT registered: they are the only registrations that depend on
 ///      <c>Microsoft.UI.Xaml.Controls</c>, which cannot be loaded outside a WinUI host.
 ///      They are not needed to drive any business service, so nothing under test is lost.
+///   3. <see cref="ISaveManagementService"/> is constructed with an isolated backup root
+///      (<see cref="IsolatedBackupRoot"/>) instead of the shipping
+///      <c>%LocalAppData%\Galbox\SaveBackups</c>. Same implementation, same behaviour, one
+///      different folder: acceptance runs create real backup archives and must not appear in the
+///      user's backup list.
 ///
 /// Everything else - loggers, typed/named HttpClients with their base addresses and
 /// user agents, API clients and business services - is identical to the shipping app.
@@ -67,6 +72,12 @@ public static class AcceptanceContainer
     /// (<c>%TEMP%\Galbox\acceptance-patchdata</c>). Never the user's real Galbox folder.
     /// </summary>
     public static string PatchDataRoot { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Root of the acceptance-time SAVE backup store (<c>{run directory}\SaveBackups</c>).
+    /// Never <c>%LocalAppData%\Galbox\SaveBackups</c>.
+    /// </summary>
+    public static string IsolatedBackupRoot { get; private set; } = string.Empty;
 
     /// <summary>
     /// Builds the service provider. <paramref name="logSink"/> receives every log record
@@ -177,17 +188,51 @@ public static class AcceptanceContainer
                 client.Timeout = TimeSpan.FromSeconds(60);
             });
 
+        // --- moyu patch discovery (verbatim from App.xaml.cs) -------------------------
+        // This replica must register the same things the shipping app does: a missing registration
+        // here would let the application fail to build its container while every check still
+        // passed. A63 relies on the recorder below to assert the requests actually sent.
+        services.AddHttpClient<MoyuHttpClient>()
+            .AddHttpMessageHandler(sp => new RecordingHttpMessageHandler(sp.GetRequiredService<HttpTrafficRecorder>(), "MoyuHttpClient"))
+            .ConfigureHttpClient(client =>
+            {
+                client.BaseAddress = MoyuOptions.DefaultBaseAddress;
+                client.DefaultRequestHeaders.Add("User-Agent", MoyuComplianceGuard.UserAgent);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+
+        services.AddSingleton<IMoyuKeyStore>(_ => new MoyuDpapiKeyStore());
+        services.AddSingleton<IMoyuRateLimiter>(sp => new MoyuRateLimiter(sp.GetRequiredService<MoyuOptions>()));
+        services.AddSingleton(sp => MoyuOptions.FromKeyStore(sp.GetRequiredService<IMoyuKeyStore>()));
+        services.AddSingleton(sp => new MoyuDownloadWatcher(sp.GetRequiredService<MoyuOptions>()));
+        services.AddSingleton<MoyuBrowserLauncher>();
+
+        // The local patch engine, which is where an adopted download goes. Mirrors App.xaml.cs.
+        services.AddGalboxPatches();
+
         // --- API clients (verbatim) ---------------------------------------------------
         services.AddTransient<BangumiApi>();
         services.AddTransient<VndbApi>();
         services.AddTransient<YmgalApi>();
         services.AddTransient<CngalApi>();
+        services.AddTransient<MoyuApi>();
 
         // --- Business services (verbatim minus the UI-bound navigation service) -------
         services.AddTransient<IGameScrapingService, GameScrapingService>();
-        services.AddSingleton<ISaveManagementService, SaveManagementService>();
         services.AddSingleton<IProcessMonitorService, ProcessMonitorService>();
         services.AddSingleton<IAutoScrapingService, AutoScrapingService>();
+
+        // The one deliberate construction deviation from App.xaml.cs (the app registers this by
+        // type): the backup store is moved under the run's own directory. The shipping default is
+        // %LocalAppData%\Galbox\SaveBackups, and a check that creates a REAL backup zip must not
+        // write there - the user's backup list and its per-game retention pruning are the user's
+        // data. Everything else about the service (detection, zip creation, verification,
+        // rollback) is the shipping implementation.
+        IsolatedBackupRoot = Path.Combine(dbDirectory, "SaveBackups");
+        services.AddSingleton<ISaveManagementService>(sp => new SaveManagementService(
+            sp.GetRequiredService<IDbContextFactory<GalboxDbContext>>(),
+            sp.GetRequiredService<ILogger<SaveManagementService>>(),
+            IsolatedBackupRoot));
 
         // --- Local patch installer -----------------------------------------------------
         // Same registrations as the shipping app (App.xaml.cs), with ONE deliberate deviation that

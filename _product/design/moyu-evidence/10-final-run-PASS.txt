@@ -1,0 +1,877 @@
+====================================================================================================
+ GALBOX HEADLESS ACCEPTANCE RUN
+====================================================================================================
+ UTC started        : 2026-09-11 16:36:50Z
+ OS                 : Microsoft Windows 10.0.26200
+ Process arch       : X64
+ Runtime            : .NET 8.0.31
+ Executable         : E:\tmp\Galbox_moyu\tests\Galbox.Acceptance\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.Acceptance.exe
+ Working directory  : E:\tmp\Galbox_moyu
+ Game folder        : D:\GAME\Dreamin'_Her (exists: True)
+ Scraping query     : "Dreamin' Her"
+ Acceptance DB      : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-32900\acceptance.db
+ Real app DB        : C:\Users\Jiang\AppData\Local\Galbox\galbox.db (untouched)
+ Verbose logs       : False
+
+ Dependency-injection preflight (UI-free replica of App.xaml.cs ConfigureServices):
+   [OK]      IGameUtilityService      GameUtilityService
+   [OK]      ISaveManagementService   SaveManagementService
+   [OK]      IGameScrapingService     GameScrapingService
+   [OK]      IErrorCheckingService    ErrorCheckingService
+   [OK]      IScrapingCacheService    ScrapingCacheService
+   [OK]      IBangumiAuthService      BangumiAuthService
+   [OK]      IAutoScrapingService     AutoScrapingService
+   [OK]      IProcessMonitorService   ProcessMonitorService
+   [INFO]    INavigationService type present in Galbox.App assembly: True (intentionally not registered: it requires Microsoft.UI.Xaml.Controls)
+ moyu patch-source registrations (UI-free replica of App.xaml.cs):
+   [OK]      MoyuHttpClient           MoyuHttpClient
+   [OK]      MoyuApi                  MoyuApi
+   [OK]      MoyuOptions              MoyuOptions
+   [OK]      IMoyuKeyStore            MoyuDpapiKeyStore
+   [OK]      MoyuDownloadWatcher      MoyuDownloadWatcher
+   [OK]      MoyuBrowserLauncher      MoyuBrowserLauncher
+ Preflight failures : 0
+====================================================================================================
+
+####################################################################################################
+# [A0] Database isolation, schema creation and GameInfo round-trip
+####################################################################################################
+EXPECTED : fresh acceptance.db is (re)created, GameInfo persists and reads back identically, and a second reset proves the run is repeatable
+ACTUAL   : created=True, roundTrip=True, repeatable=True
+DETAILS  :
+  Acceptance DB path : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-32900\acceptance.db
+  Real app DB path   : C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+  In isolation       : True
+  EnsureDeleted()    : False
+  EnsureCreated()    : True
+  DB file exists     : True (4096 bytes)
+  Tables created     : 12 [Characters, Documents, ErrorRecords, Games, MediaFiles, Patches, SaveBackups, SaveGroups, SaveNodes, Screenshots, UserSettings, sqlite_sequence]
+  --- game library state on the fresh database ---
+    total games        : 0
+    IsScraped == true  : 0
+    IsScraped == false : 0   (library is empty on a fresh DB)
+  --- inserted test game, read back with AsNoTracking ---
+    Id                 : 1
+    NameOriginal       : Dreamin' Her
+    InstallPath        : D:\GAME\Dreamin'_Her
+    MainExecutable     : D:\GAME\Dreamin'_Her\dreaminher.exe
+    IsScraped          : False
+    EngineType         : Unknown
+    DisplayName        : Dreamin' Her
+    AddedTime (UTC)    : 2026-09-11 16:36:51Z
+  --- second EnsureDeleted()/EnsureCreated() (simulates the next run) ---
+    games after reset  : 0 (expected 0)
+    DB size after reset: 4096 bytes
+  --- re-seeded test game for later checks: Id=1 ---
+RESULT   : PASS  (1472 ms)
+
+####################################################################################################
+# [A1] FindExecutableInFolder picks the intended launcher
+####################################################################################################
+EXPECTED : Path.GetFileName(result) == dreaminher.exe
+ACTUAL   : dreaminher.exe
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Folder exists      : True
+  *.exe found        : 2
+    raw[0] (OS order, first is what the service returns): dreaminher-32.exe
+    raw[1] (OS order, first is what the service returns): dreaminher.exe
+  exe files (sorted) : dreaminher-32.exe, dreaminher.exe
+  Service result     : D:\GAME\Dreamin'_Her\dreaminher.exe
+  Service result name: dreaminher.exe
+    exists           : True
+    size             : 123392 bytes
+RESULT   : PASS  (15 ms)
+
+####################################################################################################
+# [A2] CalculateFolderSize reports the real folder size
+####################################################################################################
+EXPECTED : > 900.00 MB (943718400 bytes)
+ACTUAL   : 1079379981 bytes (1.005 GB)
+DETAILS  :
+  Folder             : D:\GAME\Dreamin'_Her
+  Service result     : 1079379981 bytes (1.005 GB)
+  Independent walk   : 1079379981 bytes (1.005 GB) over 1062 files
+  Deviation          : 0 bytes (0%)
+RESULT   : PASS  (138 ms)
+
+####################################################################################################
+# [A3] DetectSaveLocationAsync finds the Ren'Py save folder
+####################################################################################################
+EXPECTED : Success == true, EngineType == Renpy, a detected path ending in 'saves', and a non-empty save-file list
+ACTUAL   : Success=true, EngineType=Renpy, PrimarySavePath=(null), AlternativePaths=1, SaveFiles=12
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.NameCn    : (null)
+  GameInfo.NameOriginal : Dreamin' Her
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.EngineType (stored, pre-detection) : Unknown
+  Expected engine    : Renpy
+  Detector folder key: Dreamin'_Her
+  AppData Roaming    : C:\Users\Jiang\AppData\Roaming
+  AppData folders matching 'Dreamin'_Her' / 'Dreamin'_Her-*' : 0
+  game\saves folder exists            : True
+  game\saves *.save file count        : 12
+  --- DetectSaveLocationAsync result (raw) ---
+  Success            : True
+  EngineType         : Renpy
+  PrimarySavePath    : (null)
+  AlternativePaths   : 1
+    alt[0]          : D:\GAME\Dreamin'_Her\game\saves (exists: True)
+  SaveFiles          : 12
+    D:\GAME\Dreamin'_Her\game\saves\1-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\1-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-1-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-10-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-2-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-3-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-4-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-5-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-6-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-7-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-8-LT1.save
+    D:\GAME\Dreamin'_Her\game\saves\auto-9-LT1.save
+  ErrorMessage       : (null)
+  ExtendedInfo       : 1 entries
+    GameName = Dreamin'_Her
+RESULT   : PASS  (8 ms)
+
+####################################################################################################
+# [A4] CheckGameAsync runs without internal failure
+####################################################################################################
+EXPECTED : call returns a list, no internal ERROR is logged, and every item has a title, category and severity (0 items is a valid result)
+ACTUAL   : 0 finding(s), 0 row(s) persisted
+DETAILS  :
+  GameInfo.Id        : 1
+  GameInfo.InstallPath  : D:\GAME\Dreamin'_Her
+  GameInfo.MainExecutable: D:\GAME\Dreamin'_Her\dreaminher.exe
+  GameInfo.NameOriginal : Dreamin' Her
+  Findings           : 0
+  (no issues reported - this is a valid outcome for an English-path Ren'Py game)
+  ErrorRecords rows persisted for this game: 0
+RESULT   : PASS  (28 ms)
+
+####################################################################################################
+# [A5] SearchGameAsync returns live results from the four sources
+####################################################################################################
+EXPECTED : at least one source returns >= 1 item AND ScrapingResult.BestMatch != null
+ACTUAL   : HasResults=true, BestMatch=Bangumi, total items=6
+DETAILS  :
+  Query string       : "Dreamin' Her"
+  Persistent cache   : DISABLED for this run (guarantees a live network query)
+  HttpClient timeout : 30s per request, as configured by the container
+  Total elapsed      : 1644 ms
+  SourceResults keys : Bangumi, Vndb, Ymgal, Cngal
+  HasResults         : True
+  BestMatch          : Bangumi (4 items)
+  Result.Errors      : 0
+  
+  ================ SOURCE: Bangumi ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1282
+    Items               : 4
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : 309736
+          TitleCn       : Dreamin' Her -我梦见了她。-
+          TitleOriginal : Dreamin'Her  -僕は、彼女の夢を見る。-
+          Titles        : ["Dreamin'Her  -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。-"]
+          Rating        : 6.90
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+          ReleaseDate   : 2022-04-28
+          Developer     : LIFE0
+          Description   : 五十嵐蒼は疲れていた。
+母親の希望に合わせた受験勉強漬けの日々。
+趣味の小説もうまく書けない。
+自分の存在意義まで疑う高校３年生の夏。
+
+彼の癒やしは幼馴染の七瀬未来だけ。
+彼女と一緒にいられる時間が、
+唯一、蒼に安らぎをもたらしてくれていた。
+
+だが、そんな未来にすら理由もわからず拒絶され、
+絶望...
+      [1] IsBestMatch=False MatchScore=0
+          SourceId      : 534948
+          TitleCn       : 
+          TitleOriginal : ドリーミン・アワー
+          Titles        : ["ドリーミン・アワー"]
+          Rating        : (null)
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/cd/2c/534948_9663j.jpg
+          ReleaseDate   : 2025-01-25
+          Developer     : ツナ
+          Description   : 食べた夢の影響で姿が変わってしまう特異体質な
+夢魔幼なじみくんと日々会話する短編ノベルゲームです。
+わりと乙女向けで恋愛。基本優しい雰囲気、たまにシリアス。
+
+
+会話をすることで、
+ふたりのこれまで/これからが見えてくる…かもしれません。
+
+そうしたら、あとは選ぶだけです。
+      [2] IsBestMatch=False MatchScore=53.33
+          SourceId      : 683318
+          TitleCn       : 
+          TitleOriginal : The DREAMFIN PEAK
+          Titles        : ["The DREAMFIN PEAK"]
+          Rating        : (null)
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/ce/23/683318_Y3yb8.jpg
+          ReleaseDate   : (null)
+          Developer     : Levelonesucks
+          Description   : THE DREAMFIN PEAK is a short cozy game where you'll leap and latch through magic cliffs, then cast your rod to catch a fish.
+
+On paths untamed by feet before,...
+      [3] IsBestMatch=False MatchScore=23.33
+          SourceId      : 454778
+          TitleCn       : 
+          TitleOriginal : Touhou Artificial Dream in Arcadia
+          Titles        : ["Touhou Artificial Dream in Arcadia"]
+          Rating        : 7.30
+          CoverImageUrl : https://lain.bgm.tv/pic/cover/l/79/a6/454778_q7r4x.jpg
+          ReleaseDate   : 2023-09-22
+          Developer     : Bar Holographic Otaku
+          Description   : Explore Gensokyo from an outsider's perspective in this old-school Touhou DRPG!
+Touhou Artificial Dream in Arcadia Steam charts, data, update history.
+  
+  ================ SOURCE: Vndb ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : True
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1554
+    Items               : 2
+    ExtendedErrorInfo   : (null)
+    Items (raw, in returned order):
+      [0] IsBestMatch=True MatchScore=90
+          SourceId      : v28915
+          TitleCn       : Dreamin' Her -我梦见了她。-
+          TitleOriginal : Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-
+          Titles        : ["Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-" | "Dreamin' Her -僕は、彼女の夢を見る。-" | "Dreamin' Her -我梦见了她。-"]
+          Rating        : 77.30
+          CoverImageUrl : https://t.vndb.org/cv/01/84401.jpg
+          ReleaseDate   : 2022-04-28
+          Developer     : (null)
+          Description   : (null)
+      [1] IsBestMatch=False MatchScore=13.64
+          SourceId      : v50441
+          TitleCn       : (null)
+          TitleOriginal : Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop
+          Titles        : ["Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop" | "벚나무의 정령을 아이돌로 만드는 법" | "How to turn a Cherry tree spirit into an idol" | "桜の木の精霊をアイドルにする方法"]
+          Rating        : 60.60
+          CoverImageUrl : https://t.vndb.org/cv/58/111658.jpg
+          ReleaseDate   : 2024-03-22
+          Developer     : (null)
+          Description   : (null)
+  
+  ================ SOURCE: Ymgal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+  
+  ================ SOURCE: Cngal ================
+    SearchQuery         : "Dreamin' Her"
+    Success             : False
+    ErrorMessage        : (null)
+    ElapsedMilliseconds : 1
+    Items               : 0
+    ExtendedErrorInfo   : (null)
+    (no items)
+RESULT   : PASS  (1656 ms)
+
+####################################################################################################
+# [A6] Scraped metadata is complete enough to use
+####################################################################################################
+EXPECTED : the best-matching item has a non-empty title AND a non-empty cover image URL
+ACTUAL   : title=Dreamin' Her -我梦见了她。-, coverUrl=present
+DETAILS  :
+  Query              : "Dreamin' Her"
+  Total items across all sources: 6
+  
+  Per-source totals:
+    source   | items | TitleCn | TitleOriginal | Rating | CoverImageUrl
+    ---------+-------+---------+---------------+--------+--------------
+    Bangumi  |     4 |       1 |             4 |      2 |             4
+    Cngal    |     0 |       0 |             0 |      0 |             0
+    Vndb     |     2 |       1 |             2 |      2 |             2
+    Ymgal    |     0 |       0 |             0 |      0 |             0
+  
+  Per-item field presence:
+    [Bangumi] SourceId=309736 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。-
+        TitleOriginal : Dreamin'Her  -僕は、彼女の夢を見る。-
+        Rating        : 6.90
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg
+        Description   : 260 chars
+        Tags          : 15
+        Characters    : 0
+    [Bangumi] SourceId=534948 MatchScore=0 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : ドリーミン・アワー
+        Rating        : MISSING
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/cd/2c/534948_9663j.jpg
+        Description   : 145 chars
+        Tags          : 4
+        Characters    : 0
+    [Bangumi] SourceId=683318 MatchScore=53.33 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : The DREAMFIN PEAK
+        Rating        : MISSING
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/ce/23/683318_Y3yb8.jpg
+        Description   : 701 chars
+        Tags          : 0
+        Characters    : 0
+    [Bangumi] SourceId=454778 MatchScore=23.33 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Touhou Artificial Dream in Arcadia
+        Rating        : 7.30
+        CoverImageUrl : https://lain.bgm.tv/pic/cover/l/79/a6/454778_q7r4x.jpg
+        Description   : 151 chars
+        Tags          : 10
+        Characters    : 0
+    [Vndb] SourceId=v28915 MatchScore=90 IsBestMatch=True
+        TitleCn       : Dreamin' Her -我梦见了她。-
+        TitleOriginal : Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-
+        Rating        : 77.30
+        CoverImageUrl : https://t.vndb.org/cv/01/84401.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+    [Vndb] SourceId=v50441 MatchScore=13.64 IsBestMatch=False
+        TitleCn       : MISSING
+        TitleOriginal : Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop
+        Rating        : 60.60
+        CoverImageUrl : https://t.vndb.org/cv/58/111658.jpg
+        Description   : MISSING
+        Tags          : 0
+        Characters    : 0
+  
+  BestMatch structure (ScrapingResult.BestMatch is a SourceScrapingResult):
+    BestMatch.Source            : Bangumi
+    BestMatch.Items.Count       : 4
+    BestMatch.Items[0]          : SourceId=309736, TitleCn=Dreamin' Her -我梦见了她。-, TitleOriginal=Dreamin'Her  -僕は、彼女の夢を見る。-, MatchScore=90
+    item with IsBestMatch=true  : SourceId=309736, TitleCn=Dreamin' Her -我梦见了她。-, TitleOriginal=Dreamin'Her  -僕は、彼女の夢を見る。-, MatchScore=90
+  
+  Best-match row title present      : True
+  Best-match row cover URL present  : True
+RESULT   : PASS  (7 ms)
+
+####################################################################################################
+# [A7] Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+####################################################################################################
+EXPECTED : Bangumi and VNDB are both reachable AND both return >= 1 hit for this game when asked with a request shape they accept
+ACTUAL   : bangumiReachable=True, bangumiHasGame=True, vndbReachable=True, vndbHasGame=True
+DETAILS  :
+  --- HttpClient configuration built by the container ---
+    BangumiHttpClient  BaseAddress=https://api.bgm.tv/  Timeout=30s  UserAgent=Galbox/1.0
+    VndbHttpClient     BaseAddress=https://api.vndb.org/kana/  Timeout=30s  UserAgent=Galbox/1.0
+    YmgalHttpClient    BaseAddress=(null)  Timeout=30s  UserAgent=Galbox/1.0
+    CngalHttpClient    BaseAddress=(null)  Timeout=30s  UserAgent=Galbox/1.0
+  
+  === [2] traffic recorded from the application's own HttpClient pipelines ===
+      (captured by a transparent recording handler appended to each pipeline)
+  
+    --- BangumiHttpClient: 1 HTTP exchange(s) ---
+        POST https://api.bgm.tv/v0/search/subjects  ->  HTTP 200
+          request body : {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+          response top-level JSON keys : [data, total, limit, offset]
+          response body : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美 ... [TRUNCATED, total 8701 chars]
+  
+    --- VndbHttpClient: 1 HTTP exchange(s) ---
+        POST https://api.vndb.org/kana/vn  ->  HTTP 200
+          request body : {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, alttitle, titles{lang,title,official,main}, image.url, rating, released, length_minutes","results":10}
+          response top-level JSON keys : [more, results]
+          response body : {"more":false,"results":[{"alttitle":"Dreamin' Her -僕は、彼女の夢を見る。-","id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"released":"2022-04-28","title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"alttitle":"벚나무의 정령을 아이돌로 만드는 법","id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"released":"2024-03-22","title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title ... [TRUNCATED, total 896 chars]
+  
+    --- YmgalHttpClient: 0 HTTP exchange(s) ---
+        NO HTTP REQUEST WAS MADE by this client during A5.
+        A source that reports 0 items without issuing a request is a stub,
+        not a search that found nothing.
+  
+    --- CngalHttpClient: 0 HTTP exchange(s) ---
+        NO HTTP REQUEST WAS MADE by this client during A5.
+        A source that reports 0 items without issuing a request is a stub,
+        not a search that found nothing.
+  
+    --- interpretation ---
+    BangumiResponse readable by BangumiSearchResponse : True  (model binds [total, limit, offset, data])
+    VNDB app-shaped HTTP status                       : 200  (a non-200 is an app-side request bug)
+    ymgal requests issued during A5                   : 0
+    cngal requests issued during A5                   : 0
+  
+  === [3a] Bangumi, corrected request (v0 search API, matches the app's own model) ===
+    POST https://api.bgm.tv/v0/search/subjects
+    body: {"keyword":"Dreamin\u0027 Her","filter":{"type":[4]}}
+    HTTP status : 200 
+    body        : {"data":[{"date":"2022-04-28","platform":"游戏","images":{"small":"https://lain.bgm.tv/r/200/pic/cover/l/39/e0/309736_l0KhY.jpg","grid":"https://lain.bgm.tv/r/100/pic/cover/l/39/e0/309736_l0KhY.jpg","large":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","medium":"https://lain.bgm.tv/r/800/pic/cover/l/39/e0/309736_l0KhY.jpg","common":"https://lain.bgm.tv/r/400/pic/cover/l/39/e0/309736_l0KhY.jpg"},"image":"https://lain.bgm.tv/pic/cover/l/39/e0/309736_l0KhY.jpg","summary":"五十嵐蒼は疲れていた。\r\n母親の希望に合わせた受験勉強漬けの日々。\r\n趣味の小説もうまく書けない。\r\n自分の存在意義まで疑う高校３年生の夏。\r\n\r\n彼の癒やしは幼馴染の七瀬未来だけ。\r\n彼女と一緒にいられる時間が、\r\n唯一、蒼に安らぎをもたらしてくれていた。\r\n\r\nだが、そんな未来にすら理由もわからず拒絶され、\r\n絶望に染まる蒼の夢に、\"彼女\"は突然現れた。\r\n\r\n――そこは、美しい海だった。\r\n薄桃色の砂浜に、一人の少女が佇んでいる。\r\n\r\n七瀬未来にそっくりな、夢の中の彼女――\r\n\r\n夢が、現実を侵していく……","name":"Dreamin'Her  -僕は、彼女の夢を見る。-","name_cn":"Dreamin' Her -我梦见了她。-","tags":[{"name":"Galgame","count":210,"total_coun ... [TRUNCATED, total 8701 chars]
+    total reported by Bangumi : 4
+    first 'data[0]' : id=309736, name=Dreamin'Her  -僕は、彼女の夢を見る。-, name_cn=Dreamin' Her -我梦见了她。-
+  
+  === [3b] VNDB, corrected request (array filter + titles{...} sub-fields) ===
+    POST https://api.vndb.org/kana/vn
+    body: {"filters":["search","=","Dreamin\u0027 Her"],"fields":"id, title, titles{lang,title,official,main}, image.url, rating, length_minutes","results":10}
+    HTTP status : 200 
+    body        : {"more":false,"results":[{"id":"v28915","image":{"url":"https://t.vndb.org/cv/01/84401.jpg"},"length_minutes":367,"rating":77.3,"title":"Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-","titles":[{"lang":"ja","main":true,"official":true,"title":"Dreamin' Her -僕は、彼女の夢を見る。-"},{"lang":"zh-Hans","main":false,"official":false,"title":"Dreamin' Her -我梦见了她。-"}]},{"id":"v50441","image":{"url":"https://t.vndb.org/cv/58/111658.jpg"},"length_minutes":105,"rating":60.6,"title":"Beonnamuui Jeongnyeongeul Idol-ro Mandeuneun Beop","titles":[{"lang":"en","main":false,"official":true,"title":"How to turn a Cherry tree spirit into an idol"},{"lang":"ja","main":false,"official":true,"title":"桜の木の精霊をアイドルにする方法"},{"lang":"ko","main":true,"official":true,"title":"벚나무의 정령을 아이돌로 만드는 법"}]}]}
+    count reported by VNDB    : (absent - kana API returns 'more'/'results' only)
+    results[] length          : 2
+    first 'results[0]' : id=v28915, title=Dreamin' Her -Boku wa, Kanojo no Yume o Miru.-, rating=77.3
+  
+  --- verdict inputs ---
+    Bangumi reachable        : True (app traffic HTTP [200], corrected HTTP 200)
+    Bangumi holds this game  : True (total=4)
+    VNDB reachable           : True (corrected HTTP 200)
+    VNDB holds this game     : True (results[]=2)
+RESULT   : PASS  (2299 ms)
+
+####################################################################################################
+# [A8] Navigation, page and XAML resource completeness (no feature without a door)
+####################################################################################################
+EXPECTED : every navigation key resolves to an existing page, every DI-registered ViewModel is referenced by a view (or whitelisted with a reason), every page is reachable, every converter a view uses is registered, and every MainWindow menu item maps to a navigation key
+ACTUAL   : 8 navigation keys, 8 ViewModels, 8 views, 73 converter reference(s) all consistent
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_moyu
+  Views folder         : E:\tmp\Galbox_moyu\src\Galbox.App\Views (exists: True)
+  View XAML files      : 8
+  View code-behind files: 8
+  
+  --- A8.1 navigation keys -> page types ---
+    [OK]   Home             -> Galbox.App.Views.MainPage
+    [OK]   Library          -> Galbox.App.Views.LibraryPage
+    [OK]   SaveManager      -> Galbox.App.Views.SaveManagerPage
+    [OK]   PatchCenter      -> Galbox.App.Views.PatchCenterPage
+    [OK]   Settings         -> Galbox.App.Views.SettingsPage
+    [OK]   GameDetail       -> Galbox.App.Views.GameDetailPage
+    [OK]   ScrapingProgress -> Galbox.App.Views.ScrapingProgressPage
+    [OK]   ErrorReport      -> Galbox.App.Views.ErrorReportPage
+  
+  --- A8.2 ViewModels registered in App.xaml.cs -> view that references them ---
+    Registered ViewModels: 8
+    [OK]   ErrorReportViewModel       referenced by: ErrorReportPage.xaml.cs
+    [OK]   GameDetailViewModel        referenced by: GameDetailPage.xaml.cs
+    [OK]   LibraryViewModel           referenced by: LibraryPage.xaml.cs
+    [OK]   MainViewModel              referenced by: MainPage.xaml.cs
+    [OK]   PatchCenterViewModel       referenced by: PatchCenterPage.xaml.cs
+    [OK]   SaveManagerViewModel       referenced by: SaveManagerPage.xaml.cs
+    [OK]   ScrapingProgressViewModel  referenced by: ScrapingProgressPage.xaml.cs
+    [OK]   SettingsViewModel          referenced by: SettingsPage.xaml.cs
+  
+  --- A8.3 every page in Views/ is reachable ---
+    [OK]   ErrorReportPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   GameDetailPage           navigationKey=True, explicitNavigateTo=True
+    [OK]   LibraryPage              navigationKey=True, explicitNavigateTo=True
+    [OK]   MainPage                 navigationKey=True, explicitNavigateTo=True
+    [OK]   PatchCenterPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   SaveManagerPage          navigationKey=True, explicitNavigateTo=True
+    [OK]   ScrapingProgressPage     navigationKey=True, explicitNavigateTo=True
+    [OK]   SettingsPage             navigationKey=True, explicitNavigateTo=True
+  
+  --- A8.4 converters referenced by a view are registered ---
+    App.xaml resource keys: 11
+    [OK]   ErrorReportPage.xaml       7 converter reference(s), all registered
+    [OK]   GameDetailPage.xaml        12 converter reference(s), all registered
+    [OK]   LibraryPage.xaml           9 converter reference(s), all registered
+    [OK]   MainPage.xaml              9 converter reference(s), all registered
+    [OK]   PatchCenterPage.xaml       10 converter reference(s), all registered
+    [OK]   SaveManagerPage.xaml       9 converter reference(s), all registered
+    [OK]   ScrapingProgressPage.xaml  4 converter reference(s), all registered
+    [OK]   SettingsPage.xaml          13 converter reference(s), all registered
+    Total converter references checked: 73
+  
+  --- A8.5 MainWindow.xaml menu items -> navigation keys ---
+    [OK]   menu Tag 'ErrorReport' -> ErrorReportPage
+    [OK]   menu Tag 'Home' -> MainPage
+    [OK]   menu Tag 'Library' -> LibraryPage
+    [OK]   menu Tag 'PatchCenter' -> PatchCenterPage
+    [OK]   menu Tag 'SaveManager' -> SaveManagerPage
+    [OK]   menu Tag 'ScrapingProgress' -> ScrapingProgressPage
+  
+  Sub-check failures : 0
+RESULT   : PASS  (66 ms)
+
+####################################################################################################
+# [A9] The GUI application opens a window while scrape-cache data is present
+####################################################################################################
+EXPECTED : with at least one search_*.json cache file present, Galbox.App.exe is still alive and owns a visible top-level window within 30s
+ACTUAL   : window present: MainWindowHandle=0x10C09F0 ("WinUI Desktop"), startup log reports completion, pid alive after 2353 ms
+DETAILS  :
+  Repository root      : E:\tmp\Galbox_moyu
+  Application          : E:\tmp\Galbox_moyu\src\Galbox.App\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe
+  Application built    : 2026-09-11 16:36:26Z (newest file in the output folder)
+  Newest source file   : 2026-09-11 16:29:52Z (src/Galbox.App, obj/bin excluded)
+  Cache precondition  : 2 existing search_*.json file(s), left untouched:
+      search_dreamin'_her.json (11859 bytes)
+      search_sabbatofthewitch.json (1640 bytes)
+  Cache directory      : C:\Users\Jiang\AppData\Local\Galbox\ScrapingCache
+  Startup log          : C:\Users\Jiang\AppData\Local\Galbox\logs\startup-20260912.log (exists: True, bytes before launch: 190955)
+  Launched             : pid 30620
+  Alive when measured  : True (measured before the cleanup kill)
+  MainWindowHandle     : 0x10C09F0 (non-zero)
+  Visible top-level windows owned by the process: 1
+  Elapsed              : 2353 ms (timeout 30s)
+  Exited before window : False
+  Cache files now      : 2 search_*.json
+  --- startup log lines written by this launch (9) ---
+      (ValidateScopes=true, ValidateOnBuild=true)
+      2026-09-12 00:36:57.033 [tid:1] OnLaunched: startup sequence begins
+      2026-09-12 00:36:57.798 [tid:1] Preparing database: C:\Users\Jiang\AppData\Local\Galbox\galbox.db
+      2026-09-12 00:36:57.882 [tid:1] Database initialization: mode=AlreadyUpToDate, applied=0
+      2026-09-12 00:36:58.244 [tid:1] BangumiAuthService initialized
+      2026-09-12 00:36:58.350 [tid:1] ScrapingCacheService initialized (entries: 2)
+      2026-09-12 00:36:58.739 [tid:1] Main window created and activated: handle=0x10C09F0
+      2026-09-12 00:36:58.755 [tid:1] Process monitor: started=True, registered=1/1
+      2026-09-12 00:36:58.756 [tid:1] OnLaunched: startup sequence completed
+  Window title         : "WinUI Desktop"
+  Window is the startup-failure dialog: False
+  Startup log says     : completed=True, failed=False
+RESULT   : PASS  (2633 ms)
+
+####################################################################################################
+# [A60] MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
+####################################################################################################
+EXPECTED : MoyuApi + IMoyuKeyStore + MoyuOptions + MoyuDownloadWatcher + MoyuBrowserLauncher resolve; BaseAddress=https://api.nextmoe.dev/, UA identifies Galbox and carries a project URL, Timeout in (0, 60]s, and MoyuApi shares the container's rate limiter
+ACTUAL   : all 7 registrations resolve; BaseAddress=https://api.nextmoe.dev/, UA="Galbox/2.0 (+https://github.com/VinceJan/Galbox_v2)", Timeout=30s, pacing=1.0s/30 per minute on a shared limiter
+DETAILS  :
+  Resolved from the container:
+     [OK]      MoyuHttpClient         MoyuHttpClient
+     [OK]      MoyuApi                MoyuApi
+     [OK]      IMoyuKeyStore          MoyuDpapiKeyStore
+     [OK]      MoyuOptions            MoyuOptions
+     [OK]      IMoyuRateLimiter       MoyuRateLimiter
+     [OK]      MoyuDownloadWatcher    MoyuDownloadWatcher
+     [OK]      MoyuBrowserLauncher    MoyuBrowserLauncher
+  
+  HttpClient.BaseAddress : https://api.nextmoe.dev/
+  HttpClient.User-Agent  : Galbox/2.0 (+https://github.com/VinceJan/Galbox_v2)
+  HttpClient.Timeout     : 30s
+  Key store              : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Galbox\secrets\moyu-api-key.bin, Configured = no }
+  Key                    : not configured (source=none)
+  Pacing                 : 1.0s between requests, 30 per rolling minute
+  Download folder        : C:\Users\Jiang\Downloads
+  MoyuApi shares the container's limiter instance : yes
+RESULT   : PASS  (3 ms)
+
+####################################################################################################
+# [A61] No configured nmk_ key is reported as a distinct failure, never as an empty result
+####################################################################################################
+EXPECTED : with no key configured, the call reports Failure.Code == NotConfigured with a message naming the missing key, and sends ZERO HTTP requests
+ACTUAL   : Failed=true, Code=NotConfigured, 0 HTTP request(s) sent, 6 ms
+DETAILS  :
+  Container MoyuOptions.ApiKey   : not configured
+  Container ApiKeySource         : none
+  Key store                      : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Galbox\secrets\moyu-api-key.bin, Configured = no }
+  
+  Key-less options.HasApiKey     : False
+  Key-less options.DescribeKey() : not configured
+  
+  Result.Failed              : True
+  Result.Failure.Code        : NotConfigured
+  Result.Failure.Message     : 尚未配置 moyu 的 nmk_ API 密钥，因此没有发起任何请求。请在 https://developer.nextmoe.dev 免费自助铸造一把密钥并填入 Galbox。
+  Result.Failure.HttpStatus  : (none)
+  Result.Value               : (null)
+  HTTP requests actually sent: 0
+  Elapsed                    : 6 ms
+  Container moyu requests    : 0
+RESULT   : PASS  (9 ms)
+
+####################################################################################################
+# [A62] The nmk_ key is DPAPI-encrypted on disk and never stored in plaintext
+####################################################################################################
+EXPECTED : Set writes an opaque blob containing no plaintext, DPAPI(CurrentUser) with the app's entropy decrypts it, a foreign entropy does not, Get() round-trips through a fresh instance, Set(null) clears it, and no printable surface reveals the key
+ACTUAL   : 278-byte DPAPI blob, 0 plaintext occurrences, CurrentUser decrypt under the app's entropy succeeds and a foreign entropy fails, round-trip and clear OK, no secret in any diagnostic
+DETAILS  :
+  Store type           : Galbox.Core.Api.MoyuDpapiKeyStore
+  Kind                 : windows-dpapi
+  Store path           : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-32900-462907aa16a440a69c597856d28ff8dc\secrets\moyu-api-key.bin
+  IsConfigured (empty) : False
+  
+  File size            : 278 bytes
+  Header (hex)         : 47414C424F582D4D4F59552D4B455901
+  Plaintext in file    : False
+  DPAPI(CurrentUser) decrypt with the app's entropy : True
+  Decryptable with foreign entropy                  : False
+  
+  IsConfigured (after) : True
+  Get() after reload   : (equals the key that was set)
+  Damaged file: IsConfigured=False, Get()=(null)
+  
+  Fingerprint                      : 912E967BA5DF
+  MoyuOptions.ToString()           : MoyuOptions { ApiKey = configured (source=memory, fingerprint=912E967BA5DF), BaseAddress = https://api.nextmoe.dev/, Pacing = 1.0s / 30 per minute }
+  MoyuOptions.DescribeKey()        : configured (source=memory, fingerprint=912E967BA5DF)
+  MoyuDpapiKeyStore.ToString()     : MoyuDpapiKeyStore { Path = C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\dpapi-32900-462907aa16a440a69c597856d28ff8dc\secrets\moyu-api-key.bin, Configured = yes }
+  MoyuMemoryKeyStore.ToString()    : MoyuMemoryKeyStore { Configured = True }
+  Fingerprint differs for a different key : yes (it is a digest, not a constant)
+  
+  After Set(null): file exists = False, IsConfigured = False
+RESULT   : PASS  (22 ms)
+
+####################################################################################################
+# [A63] No request path under /api is reachable (robots.txt Disallow: /api)
+####################################################################################################
+EXPECTED : every /api path is refused and every /v2/moyu path accepted; a driven client issues only /v2/moyu requests; no recorded moyu request targets /api
+ACTUAL   : 9/9 forbidden paths refused, 4/4 legitimate paths accepted, 4/4 driven requests inside the allow-list, 0 recorded pipeline request(s) inside the allow-list
+DETAILS  :
+  URL guard matrix:
+     rejected         https://www.moyu.moe/api/v1/search?keywords=CLANNAD&type=resource&page=1&limit=3
+     rejected         https://www.moyu.moe/api/v1/patch/86/resource
+     rejected         https://www.moyu.moe/api/v1/patch/resource/223/link
+     rejected         https://www.moyu.moe/api/v1/galgame?page=1
+     rejected         https://www.moyu.moe/API/V1/search
+     rejected         https://api.nextmoe.dev/api/v1/moyu/patches
+     rejected         https://api.nextmoe.dev/v1/moyu/patches
+     rejected         http://api.nextmoe.dev/v2/moyu/patches
+     rejected         https://evil.example/v2/moyu/patches
+     accepted         https://api.nextmoe.dev/v2/moyu/patches?refs=vndb%3Av4
+     accepted         https://api.nextmoe.dev/v2/moyu/patches/86?include=resources
+     accepted         https://api.nextmoe.dev/v2/moyu/patches/86/resources?limit=50
+     accepted         https://api.nextmoe.dev/v2/moyu/resources/6262
+  
+  EnsureApiUri('/api/v1/…') threw instead of returning a URI: True
+  
+  Requests a driven client produced (4):
+     GET  /v2/moyu/patches?refs=vndb%3Av4&include=resources
+          host=api.nextmoe.dev  -> allowed
+     GET  /v2/moyu/patches/86?include=resources
+          host=api.nextmoe.dev  -> allowed
+     GET  /v2/moyu/patches/86/resources?limit=50
+          host=api.nextmoe.dev  -> allowed
+     GET  /v2/moyu/resources/6262
+          host=api.nextmoe.dev  -> allowed
+  
+  Moyu/nextmoe requests recorded on the application's own pipelines: 0
+RESULT   : PASS  (37 ms)
+
+####################################################################################################
+# [A64] size strings parse as binary units and game anchors accept only vndb:/catalog:
+####################################################################################################
+EXPECTED : the calibrated sample "17.953 MB" parses to 18825520 within 0.001 MB display-rounding slack; exact samples are bit-exact; junk returns 0 without throwing; anchors accept vndb:/catalog: and refuse a bare number, a Bangumi id and whitespace-padded forms
+ACTUAL   : 7 exact samples bit-exact, the calibrated sample within 525 bytes of the known size, 21 malformed inputs returned 0, 6 anchors accepted and 12 refused
+DETAILS  :
+  Exact expectations (values the binary units represent bit-exactly):
+     size "1.5 GB" -> 1610612736 (want 1610612736) OK
+     size "512 B" -> 512 (want 512) OK
+     size "2 KB" -> 2048 (want 2048) OK
+     size "0.5 MB" -> 524288 (want 524288) OK
+     size "1 TB" -> 1099511627776 (want 1099511627776) OK
+     size "3 GB" -> 3221225472 (want 3221225472) OK
+     size "1.5 MB" -> 1572864 (want 1572864) OK
+  
+  Calibrated sample (the only one with an independently known byte count):
+     size "17.953 MB" -> 18825085 bytes
+     true byte count  -> 18825520 (report section 4.2, content-range total)
+     delta            -> 435 bytes
+     18825520 / 1048576 = 17.953415
+     within the 525-byte display-rounding slack: OK
+  
+  Conclusion this check encodes: the upstream `size` string is a display value with millisecond-of-a-megabyte precision, so the download matcher must use a tolerance (MoyuDownloadWatchOptions.SizeTolerance) rather than an equality test. A65 asserts the tolerance refuses a genuinely wrong-sized file.
+  
+  Whitespace-padded input (accepted and trimmed - the value is complete, only padded):
+     size " 17.953 MB" -> 18825085 (want 18825085) OK
+     size "17.953 MB " -> 18825085 (want 18825085) OK
+     size "<NBSP>17.953 MB" -> 18825085 (want 18825085) OK
+     size "\t1.5 GB\n" -> 1610612736 (want 1610612736) OK
+     size "  512 B  " -> 512 (want 512) OK
+  
+  Unparseable or malformed input (must return 0 and must not throw):
+     size "" -> 0 OK
+     size " " -> 0 OK
+     size "\t" -> 0 OK
+     size "abc" -> 0 OK
+     size "17.953 MB extra" -> 0 OK
+     size "MB 17.953" -> 0 OK
+     size "-5 MB" -> 0 OK
+     size "-0.5 MB" -> 0 OK
+     size "1e3 MB" -> 0 OK
+     size "MB" -> 0 OK
+     size "17.953" -> 0 OK
+     size "17.953 MiB" -> 0 OK
+     size "17.953 Mi" -> 0 OK
+     size "1,5 MB" -> 0 OK
+     size "999999 TB" -> 0 OK
+     size "17.953MBx" -> 0 OK
+     size "+5 MB" -> 0 OK
+     size "1..5 MB" -> 0 OK
+     size ".5 MB" -> 0 OK
+     size "5. MB" -> 0 OK
+     size "0x10 MB" -> 0 OK
+  
+  Format() round-trip (the string the UI shows, re-parsed):
+     18825520 bytes -> "17.953 MB" -> 18825085 bytes
+     863819448 bytes -> "823.802 MB" -> 863819006 bytes
+     512 bytes -> "512 B" -> 512 bytes
+     0 bytes -> "未知" -> 0 bytes
+     1024 bytes -> "1 KB" -> 1024 bytes
+  
+  Anchor accept/refuse matrix (Parse trims, like the size parser, so padding is accepted):
+     accepted as vndb:v4                      "vndb:v4 " (padded)
+     accepted as vndb:v4                      " vndb:v4" (padded)
+     accepted as vndb:v4                      "\tvndb:v4\n" (padded)
+     accepted (vndb:v4)                       "vndb:v4"
+     accepted (vndb:v65869)                   "vndb:v65869"
+     accepted (vndb:V4)                       "VNDB:V4"
+     accepted (catalog:86)                    "catalog:86"
+     accepted (catalog:61311)                 "catalog:61311"
+     accepted (vndb:v4)                       "vndb%3Av4"
+     rejected (correct)                       "1"
+     rejected (correct)                       "86"
+     rejected (correct)                       "bangumi:1234"
+     rejected (correct)                       "vndb:"
+     rejected (correct)                       "vndb:abc"
+     rejected (correct)                       "catalog:"
+     rejected (correct)                       ""
+     rejected (correct)                       " "
+     rejected (correct)                       "v4"
+     rejected (correct)                       "catalog:86x"
+     rejected (correct)                       "vndb:v4 mid"
+     rejected (correct)                       "vndb:v4:catalog:5"
+  
+  The Bangumi-anchor dependency (report section 6.3):
+     PickAnchor(null, null)          -> null (no anchor, no request possible)
+     PickAnchor(null, "61311")      -> catalog:61311
+     PickAnchor("v4", "61311")     -> vndb:v4 (VNDB is moyu's own dedupe key, so it wins)
+     FromVndbId("1234")             -> vndb:v1234
+     FromVndbId("bangumi:1234")    -> (null)
+     FromVndbId("v65869")          -> vndb:v65869
+  
+  The `save` type discriminator:
+     IsSaveType([save]) -> True (want True) OK
+     IsSaveType([manual]) -> False (want False) OK
+     IsSaveType([manual,save]) -> True (want True) OK
+     IsSaveType([SAVE]) -> True (want True) OK
+     IsSaveType([(empty)]) -> False (want False) OK
+  
+  Upstream type vocabulary (12 values, spec line 508) -> Chinese labels:
+     manual               -> 人工翻译补丁
+     ai                   -> AI 翻译补丁
+     machine_polishing    -> 机翻润色
+     machine              -> 机翻补丁
+     save                 -> 全 CG 存档
+     crack                -> 破解补丁
+     fix                  -> 修正补丁
+     mod                  -> 魔改补丁
+     r18                  -> 18+
+     decensor             -> 去马赛克补丁
+     image                -> 修图补丁
+     other                -> 其它
+     something_new        -> something_new (unknown values pass through unchanged, so a contract change stays visible instead of being relabelled `其它`)
+RESULT   : PASS  (7 ms)
+
+####################################################################################################
+# [A65] The downloads-folder watcher adopts the new file and times out cleanly
+####################################################################################################
+EXPECTED : a file appearing in the watched folder is adopted (Found) once its size is stable; a watch that sees nothing returns TimedOut; an oversized mismatch is not adopted
+ACTUAL   : adopted "A65-synthetic-patch.rar" after 971 ms by size match; a 64 KB file was refused against a declared 170 MB; the empty watch reported TimedOut; cancellation and a missing folder are reported states
+DETAILS  :
+  Watched folder    : C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-32900-e4934b53834f4a49aa3b15f333b0b438
+  Expected size     : 4096 bytes
+  Stability window  : 300 ms
+  The file is written 600 ms AFTER the watch starts, on purpose: a watch that adopted a pre-existing file would grab last week's download.
+  
+  Positive watch    : State=Found, File=C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-32900-e4934b53834f4a49aa3b15f333b0b438\A65-synthetic-patch.rar, Size=4096, Elapsed=971 ms
+    Reason          : 已接管 A65-synthetic-patch.rar（4 KB，与来源声明的 4 KB 匹配）。该文件将交给本机补丁引擎做预览与安装，Galbox 不会自行解压或覆盖游戏目录。
+    Considered      : A65-synthetic-patch.rar：4 KB，期望 4 KB
+  
+  IPatchEngine from DI : PatchInstaller
+    InspectAsync("A65-synthetic-patch.rar") -> kind=Unknown, formatId=unknown, entries=0, encrypted=False, requiresManualRun=False
+  
+  Size-mismatch watch: State=TimedOut, File=(none)
+  
+  Empty watch       : State=TimedOut, elapsed=750 ms (timeout was 700 ms)
+    Reason          : 等待 0 分钟后仍未在 C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\watch-timeout-32900-d965216ba95540bda4e3232cf0a56869 中发现匹配的文件。如果浏览器还在下载，或者你把它存到了别处，可以从下载文件夹手动选择补丁包安装。
+  
+  Cancelled watch   : State=Cancelled
+  
+  Missing folder    : State=Failed, Reason=下载文件夹不存在：C:\Users\Jiang\AppData\Local\Temp\GalboxMoyuAcceptance\does-not-exist-e803b2165ca74cfa9279dd5012fe4f02
+RESULT   : PASS  (2701 ms)
+
+####################################################################################################
+# [A66] The browser hop accepts only HTTPS moyu pages and refuses API URLs
+####################################################################################################
+EXPECTED : ValidateWebUrl accepts https://www.moyu.moe/patch/… and refuses http, /api, the API/CDN hosts, other schemes and other hosts; a dry run reports success without starting a process, and a refused URL is reported as a failure
+ACTUAL   : 3 legitimate page URL(s) accepted, 12 dangerous URL(s) refused, dry run started no process, a refused URL reported failure
+DETAILS  :
+  URL validation:
+     accepted         https://www.moyu.moe/patch/86/introduction
+     accepted         https://www.moyu.moe/patch/223/resources
+     accepted         https://moyu.moe/patch/86/introduction
+     rejected         http://www.moyu.moe/patch/86/introduction
+     rejected         https://www.moyu.moe/api/v1/patch/resource/223/link
+     rejected         https://www.moyu.moe/api/v1/search?keywords=CLANNAD
+     rejected         https://api.nextmoe.dev/v2/moyu/patches
+     rejected         https://dl.imoe.uk/moyu/ec3ecb28-2e7e-51fa-bb03-c0df69bc9ac7.rar
+     rejected         https://oss.moyu.moe/patch/243/690eac.rar
+     rejected         https://evil.example/patch/86
+     rejected         file:///C:/Windows/System32/calc.exe
+     rejected         javascript:alert(1)
+     rejected         not a url
+     rejected         (empty string)
+     rejected         https://www.moyu.moe
+  
+  Dry-run Launch    : Succeeded=True, DryRun=True, ProcessId=(none), Url=https://www.moyu.moe/patch/86/introduction
+    Message         : dry run：地址通过校验，未启动浏览器。
+  
+  Refused launch    : Succeeded=False, Message=拒绝打开这个地址：只允许在浏览器中打开 https://www.moyu.moe/ 下的补丁页面，不接受该站点 API 路径、其它主机或非 HTTPS 地址。收到：https://www.moyu.moe/api/v1/patch/resource/223/link
+  
+  MoyuApi.BuildWebUrl(resource) -> https://www.moyu.moe/patch/86/resources/6262
+  Launch(BuildWebUrl(resource without web_url)) -> Succeeded=False, Message=没有可打开的补丁页面地址。
+RESULT   : PASS  (2 ms)
+
+####################################################################################################
+# [A67] 429 Retry-After is honoured and a 304 reuses the cached document
+####################################################################################################
+EXPECTED : a 429 carrying Retry-After=2 is not retried immediately; a second call sends If-None-Match and a 304 returns the cached rows; Retry-After beyond the cap is reported instead of waited out
+ACTUAL   : If-None-Match sent on the second call and the 304 reused the cache; Retry-After: 2 honoured (2012 ms); Retry-After: 3600 reported as RateLimited without waiting; the key is absent from every error surface; pacing and the minute budget both hold
+DETAILS  :
+  Call 1            : Failed=False, rows=1, If-None-Match=(absent)
+  Call 2            : Failed=False, rows=1, If-None-Match="etag-a67"
+  
+  429 then 200     : attempts=2, elapsed=2012 ms, Failed=False, rows=1
+  
+  Retry-After: 3600 (cap 5s): attempts=1, elapsed=0 ms, Failed=True, Code=RateLimited, RetryAfter=3600s
+  
+  Key present in any failure/LastError surface: False
+  lastRateLimitNotice: (none)
+  
+  Pacing            : 3 acquisitions at 250 ms spacing took 505 ms (2 required a wait)
+  Minute budget     : 2/minute limiter allowed 2 of 5 immediate requests
+RESULT   : PASS  (2525 ms)
+
+====================================================================================================
+ ACCEPTANCE SUMMARY
+====================================================================================================
+ ID   STATUS        TIME  CHECK
+----------------------------------------------------------------------------------------------------
+ A0   PASS       1472 ms  Database isolation, schema creation and GameInfo round-trip
+ A1   PASS         15 ms  FindExecutableInFolder picks the intended launcher
+ A2   PASS        138 ms  CalculateFolderSize reports the real folder size
+ A3   PASS          8 ms  DetectSaveLocationAsync finds the Ren'Py save folder
+ A4   PASS         28 ms  CheckGameAsync runs without internal failure
+ A5   PASS       1656 ms  SearchGameAsync returns live results from the four sources
+ A6   PASS          7 ms  Scraped metadata is complete enough to use
+ A7   PASS       2299 ms  Upstream APIs are reachable and hold this game (app-shaped vs corrected request)
+ A8   PASS         66 ms  Navigation, page and XAML resource completeness (no feature without a door)
+ A9   PASS       2633 ms  The GUI application opens a window while scrape-cache data is present
+ A60  PASS          3 ms  MoyuApi resolves from DI with the official /v2/moyu HttpClient configuration
+ A61  PASS          9 ms  No configured nmk_ key is reported as a distinct failure, never as an empty result
+ A62  PASS         22 ms  The nmk_ key is DPAPI-encrypted on disk and never stored in plaintext
+ A63  PASS         37 ms  No request path under /api is reachable (robots.txt Disallow: /api)
+ A64  PASS          7 ms  size strings parse as binary units and game anchors accept only vndb:/catalog:
+ A65  PASS       2701 ms  The downloads-folder watcher adopts the new file and times out cleanly
+ A66  PASS          2 ms  The browser hop accepts only HTTPS moyu pages and refuses API URLs
+ A67  PASS       2525 ms  429 Retry-After is honoured and a 304 reuses the cached document
+----------------------------------------------------------------------------------------------------
+ PASSED : 18
+ FAILED : 0
+ ERRORS : 0
+ SKIPPED: 0
+ TOTAL  : 18
+
+ EXIT CODE: 0  (all checks PASS)
+ DATABASE : C:\Users\Jiang\AppData\Local\Galbox\acceptance\run-32900\acceptance.db
+ GAME     : D:\GAME\Dreamin'_Her
+====================================================================================================

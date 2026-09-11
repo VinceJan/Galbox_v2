@@ -17,6 +17,12 @@ public sealed partial class PatchCenterPage : Page
     /// </summary>
     public PatchCenterViewModel ViewModel { get; }
 
+    /// <summary>Lazily built details flyout (see <see cref="ShowPatchDetailsFlyout"/>).</summary>
+    private Flyout? _patchDetailsFlyout;
+
+    /// <summary>The live TextBlock inside <see cref="_patchDetailsFlyout"/>.</summary>
+    private TextBlock? _patchDetailsText;
+
     /// <summary>
     /// Creates a PatchCenterPage.
     /// </summary>
@@ -73,16 +79,53 @@ public sealed partial class PatchCenterPage : Page
     }
 
     /// <summary>
-    /// Shows patch details flyout when clicking Details button.
+    /// Shows the patch-details flyout for the given target.
     /// </summary>
+    /// <remarks>
+    /// The flyout is built here rather than declared in <c>Page.Resources</c>. See the comment in
+    /// PatchCenterPage.xaml: an <c>x:Bind</c> on a resource-dictionary element produced a null
+    /// TextBlock in the generated binding pass and killed the process the moment the page loaded
+    /// (0xc000027b in Microsoft.UI.Xaml.dll). Assigning the text to a live TextBlock that this method
+    /// created cannot hit that path.
+    /// </remarks>
     public void ShowPatchDetailsFlyout(FrameworkElement target)
     {
-        var flyout = (Flyout)Resources["PatchDetailsFlyoutKey"];
-        flyout.ShowAt(target);
+        if (_patchDetailsText is null || _patchDetailsFlyout is null)
+        {
+            _patchDetailsText = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 14
+            };
+
+            var body = new StackPanel { Spacing = 12 };
+            body.Children.Add(new TextBlock { Text = "补丁详情", FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.Bold });
+            body.Children.Add(_patchDetailsText);
+
+            _patchDetailsFlyout = new Flyout
+            {
+                Placement = FlyoutPlacementMode.Bottom,
+                ShouldConstrainToRootBounds = false,
+                Content = new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(16),
+                    MinWidth = 400,
+                    MaxWidth = 500,
+                    Child = body
+                }
+            };
+        }
+
+        _patchDetailsText.Text = string.IsNullOrEmpty(ViewModel.PatchDetailContent)
+            ? "（没有详情）"
+            : ViewModel.PatchDetailContent;
+
+        _patchDetailsFlyout.ShowAt(target);
     }
 
     /// <summary>
-    /// Forwards the clicked patch row to the ViewModel's details command.
+    /// Forwards the clicked patch row to the ViewModel's details command and opens the details flyout.
     /// </summary>
     /// <remarks>
     /// The patch cards live in a DataTemplate, which has its own XAML namescope: the previous
@@ -92,10 +135,13 @@ public sealed partial class PatchCenterPage : Page
     /// </remarks>
     private void OnPatchDetailsClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: PatchRecord patch })
+        if (sender is not FrameworkElement { Tag: PatchRecord patch } element)
         {
-            ViewModel.ShowPatchDetailsCommand.Execute(patch);
+            return;
         }
+
+        ViewModel.ShowPatchDetailsCommand.Execute(patch);
+        ShowPatchDetailsFlyout(element);
     }
 
     // ================================================================================
