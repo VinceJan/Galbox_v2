@@ -100,7 +100,13 @@ internal static class Program
             new A64MoyuSizeAndAnchorCheck(),
             new A65MoyuDownloadWatchCheck(),
             new A66MoyuBrowserLaunchCheck(),
-            new A67MoyuConditionalRequestCheck()
+            new A67MoyuConditionalRequestCheck(),
+
+            // --- Full chain (A80+; A68-A79 are reserved for other work lines) --------------
+            // Every check above measures ONE feature. This one measures the product: the whole
+            // journey over the real game, each step consuming the artifact the previous step
+            // produced. It is the only check that can answer "can a user actually do this".
+            new A80FullChainCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
