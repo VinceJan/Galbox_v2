@@ -112,16 +112,35 @@ Write-Ok "resources.pri: $([math]::Round($pri.Length / 1KB, 1)) KB"
 if (-not $SkipLaunchProbe) {
     Write-Step '3. 实机启动验证（窗口必须真的出现）'
 
-    # 同名进程会互相干扰（本仓库有过「遗留 Galbox.App.exe 杀掉同名进程」的记录），
-    # 所以先确认没有别的实例在跑，否则测量结果无法归因。
-    $existing = @(Get-Process -Name 'Galbox.App' -ErrorAction SilentlyContinue)
-    if ($existing.Count -gt 0) {
-        Write-Host "  发现 $($existing.Count) 个已有的 Galbox.App 实例，先结束它们（否则本次测量无法归因）" -ForegroundColor Yellow
-        $existing | ForEach-Object { try { $_.Kill() } catch {} }
+    $exe = Join-Path $publishDir 'Galbox.App.exe'
+
+    # 归属：先把「本次要验证的那个 exe」的残留实例清掉，**只清它自己的**。
+    #
+    # 这里原本是按名字把全机器的 Galbox.App 全部结束，理由是"同名进程会互相干扰，
+    # 不清理就无法归因"。归因的顾虑是对的，但做法伤到了别人：这台机器上常常同时有
+    # 别的 worktree 在跑验收，按名字杀会把【它正在测量的那个实例】一起打掉——
+    # 2026-09-12 就有一次验收因此在 A50 第 63 次切换时进程以退出码 0 正常结束，
+    # 而那次既不是崩溃也没人看懂为什么。见
+    # _product/design/acceptance-runs/16-known-flakiness-gui-checks.txt
+    #
+    # 现在：本发布目录下的残留实例结束掉（它们才是干扰归因的那个）；
+    # 其它路径的实例只报告、不碰，并说明测量结果可能受影响。
+    $allGalbox = @(Get-Process -Name 'Galbox.App' -ErrorAction SilentlyContinue)
+    $mine = @($allGalbox | Where-Object { try { $_.Path -eq $exe } catch { $false } })
+    $others = @($allGalbox | Where-Object { $_ -notin $mine })
+
+    if ($mine.Count -gt 0) {
+        Write-Host "  结束 $($mine.Count) 个本次发布目录下的残留实例（pid $($mine.Id -join ', ')）"
+        $mine | ForEach-Object { try { $_.Kill() } catch {} }
         Start-Sleep -Milliseconds 800
     }
-
-    $exe = Join-Path $publishDir 'Galbox.App.exe'
+    if ($others.Count -gt 0) {
+        Write-Host "  另有 $($others.Count) 个实例来自别处，不会碰它们：" -ForegroundColor Yellow
+        $others | ForEach-Object {
+            Write-Host ("      pid {0}  {1}" -f $_.Id, (try { $_.Path } catch { '(路径读不到)' })) -ForegroundColor Yellow
+        }
+        Write-Host "      它们可能影响本次测量；本提示只陈述事实，不代为处置。" -ForegroundColor Yellow
+    }
 
     # ---------------------------------------------------------------- 离屏启动（默认）
     #
