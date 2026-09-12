@@ -291,6 +291,12 @@ internal static class AppLaunchObserver
             UseShellExecute = false
         };
 
+        // This is a real launch of the shipping executable, and it must not put a window on the
+        // desktop of whoever ran `dotnet test`. Every assertion below is unaffected: the window is
+        // still real, still visible and still owned by this process - it is simply outside every
+        // monitor. See OffscreenLaunch.
+        OffscreenLaunch.Apply(startInfo);
+
         Process? process;
         try
         {

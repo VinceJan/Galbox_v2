@@ -256,16 +256,83 @@ Harness 覆盖的场景（`tests/Galbox.Data.Migrations.Harness/Program.cs`）�
 3. 三条硬规则：
    * **实测值放 `Actual` / `Details`，不要藏进 `Title`**——写不出"我量到了什么"的检查不是检查；
    * 失败要用 `CheckResult.Fail`，异常交给 runner 记成 `ERROR`（它已经统一处理）；
-   * **只许在 `tests/` 下加文件**。检查失败要改的是 `src/`。
+   * **只许在 `tests/` 下加文件**。检查失败要改的是 `src/`。唯一的例外是"让被测应用配合检查"的
+     测试开关——它必须默认关闭、只有显式设置才生效，且不得改变正常启动的任何行为（见 §6.1）。
 4. 需要检查**源码结构**（"功能有没有门"这类运行期看不见的问题）时，用
    `RepoLocator.FindRepoRoot()` 往上找 `Galbox.sln`，再读 `src/Galbox.App/Views`、
    `App.xaml.cs`、`NavigationService.cs`——A8 就是这么做的。
 5. 需要启动真实 GUI 时参考 A9：它准备了"刮削缓存非空"这个前置状态，
    启动 `Galbox.App.exe`，用 `MainWindowHandle` + `EnumWindows` 双重确认窗口存在，
    失败时附上最新的启动日志。注意它依赖 `src/Galbox.App/bin` 下已构建好的 exe。
+   **启动真实 GUI 的检查必须先读 §6.1，窗口必须离屏。**
 
-现有 10 项检查（A0–A9）各自量什么，见 `tests/Galbox.Acceptance/README.md` 与本仓库 README 的表格。
+检查清单以 `Program.cs` 的 `checks` 数组为准（当前 43 项），每项的详细说明见
+`tests/Galbox.Acceptance/README.md` 与本仓库 README 的表格。
 **新增检查后请更新这两处的清单**，否则清单会像旧文档一样过期。
+
+---
+
+## 6.1 GUI 类检查不得打扰开发者的桌面（硬性规定）
+
+**任何会启动真实 `Galbox.App.exe` 的检查，都必须让窗口落在所有显示器之外。**
+
+这不是洁癖，是真实发生过的事。当前有四项检查会启动真实 GUI：
+
+| 检查 | 会启动真实应用做什么 |
+|---|---|
+| A9 | 启动真实 GUI，要求进程存活 + 拥有可见顶层窗口 + 启动日志报完成 |
+| A18 | 从真实窗口句柄读窗口标题 |
+| A19 | 在真实运行的应用里逐个加载全部 8 个导航目的地 |
+| A50 | 在真实应用里快速连续切换导航 200 次（40 ms 一次） |
+
+其中 A19 会自己翻 8 页，A50 会自己翻 200 页。开发期间验收会被反复运行，多条工作线并行时更是如此，
+而这些检查跑在**开发者正在使用的那台机器**上——于是桌面上就不停地弹窗口、自己翻页。
+
+做法（两侧配合，缺一不可）：
+
+* **应用侧**：`MainWindow.OffscreenWindowVariable`，即环境变量
+  `GALBOX_TEST_OFFSCREEN_WINDOW=1`。窗口在被显示之前就移动到 `(-32000, -32000)`。
+  该移动发生在 `CalculateInitialWindowSize` 的 DPI / 工作区夹取**之前**，并在 `Activate()`
+  之后重新确认一次，所以启动路径上没有任何一步能把它拉回屏幕内。
+  开关**默认关闭**，且只有字面量 `1` 才生效：未设置 / 空 / `0` / `false` 时启动行为与改动前完全一致
+  （尺寸、位置、标题、导航、进程监控都不变）。
+* **验收侧**：`Checks/OffscreenWindow.cs`。
+  `OffscreenWindow.Request(startInfo)` 给子进程设上这个变量；
+  `OffscreenWindow.Measure(hwnd)` 用 `GetWindowRect` × `EnumDisplayMonitors` **实测**窗口矩形、
+  `IsWindowVisible` 与"是否与任何显示器相交"。
+
+**为什么这不削弱断言**：Win32 与窗口位置无关。屏幕外的窗口 `IsWindowVisible` 仍然为 `TRUE`、
+`Process.MainWindowHandle` 仍然非零、标题仍然可读、仍然挂在 UI Automation 根节点下，
+页面仍然真的加载、导航仍然真的切换（A50 实测仍是 200/200）。四项检查原有的条件一个字都没有改，
+只是**各多加了一条**：窗口矩形不得与任何显示器相交（`OffscreenWindow.WouldBeVisibleReason`）。
+这条是实测的，不是假设的——万一开关在某台机器上失效，检查会变红，而不是"安静地开始闪窗口"。
+
+变量名由 `OffscreenWindow.Variable` 直接引用应用的常量
+（`Galbox.App.MainWindow.OffscreenWindowVariable`），编译器保证两侧不会写歪。
+
+**扩展套件时请照做**：新增任何启动真实应用的检查，先调 `OffscreenWindow.Request(startInfo)`，
+再把 `placement.IsVisibleAndOffscreen` 放进通过与失败判定里。做不到就别在检查里启动 GUI。
+
+实测对照（2026-09-12，双屏 3840×2160 @150% + 2560×1440，单位是物理像素）：
+
+| 场景 | `GetWindowRect` | `IsWindowVisible` | `MainWindowHandle` | 与显示器相交 |
+|---|---|---|---|---|
+| 改动前 `release/1.0.0`（`b4c8086`） | `(342, 342, 2142, 1542)` | True | 非零 | **是** |
+| 改动后，开关未设置（正常启动） | `(380, 380, 2180, 1580)` | True | 非零 | **是**（这就是开发者的日常） |
+| 改动后，`GALBOX_TEST_OFFSCREEN_WINDOW=1` | `(-32000, -32000, -30200, -30800)` | True | 非零 | 否 |
+
+原始记录（含独立看门狗进程对整个验收过程的采样）：
+[`tests/Galbox.Acceptance/evidence/gui-checks-must-not-flash.md`](../tests/Galbox.Acceptance/evidence/gui-checks-must-not-flash.md)。
+
+**残余影响（已知，未处理）**：窗口虽然不在任何显示器上，任务栏里仍可能出现它。
+没有顺手去掉是因为唯一的手段——`WS_EX_TOOLWINDOW`（`AppWindow.IsShownInSwitchers = false`
+内部用的就是它）——有让 `Process.MainWindowHandle` 归零的风险，而"`MainWindowHandle` 非零"
+正是 A9 的核心断言之一。用断言的安全换一次任务栏闪烁，不划算。
+
+**验证这个开关本身**：它失效时检查会红，但想主动确认时可以用独立探针——
+`OffscreenWindow.Measure` 打印的那一行就是证据，`GetWindowRect` 必须是负的大坐标、
+`IsWindowVisible` 必须是 `True`、`intersects a monitor` 必须是 `False`。三个都要有，
+少一个就说明"离屏"被换成了"隐藏"。
 
 ---
 
@@ -334,6 +401,8 @@ UI 也还没接。要把它接到补丁中心，需要：注册服务 → 页面
 * [ ] 新增的 ViewModel 有对应视图，新增的页面有导航 key 与菜单项（否则 A8 会失败）；
 * [ ] 新增的服务在 `App.xaml.cs` **和** `AcceptanceContainer.cs` 都注册了；
 * [ ] UI 线程路径上没有 `ConfigureAwait(false)`；
+* [ ] **验收期间没有人会看见窗口**：新增或改动了启动真实 GUI 的检查时，它必须走
+      `OffscreenWindow`（§6.1），并且报告的 `GetWindowRect` 与所有显示器都不相交；
 * [ ] 没有留下"假实现"：不写只 sleep 然后改状态列的按钮，不生成假数据写进用户库，
       绑定不上的 `Command` 宁可把按钮删掉——这类"会说谎的功能"是本项目历史上最严重的缺陷类型
       （见 `_product/design/defect-postmortems.md` 缺陷 #5）；

@@ -364,6 +364,12 @@ public partial class App : Application
             MainWindow.InitializeNavigation();
             MainWindow.Activate();
 
+            // Inert unless GALBOX_TEST_OFFSCREEN_WINDOW=1 (see MainWindow.OffscreenWindowVariable):
+            // it re-asserts the off-screen position and the task-switcher hiding the constructor
+            // already applied, so activation cannot leave a window on the desktop of whoever is
+            // building this.
+            MainWindow.ReapplyOffscreenPlacementForTests();
+
             StartupDiagnostics.Log($"Main window created and activated: handle=0x{MainWindow.WindowHandle.ToInt64():X}");
 
             // Set the window handle for process monitor hotkey registration
