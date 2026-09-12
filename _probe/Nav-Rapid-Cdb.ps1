@@ -12,7 +12,21 @@ param(
     [Parameter(Mandatory = $true)][int]$Switches,
     [string]$Exe = 'E:\tmp\Galbox_crash\src\Galbox.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\Galbox.App.exe',
     [int]$StepMs = 40,
-    [string]$ArtifactDir = 'E:\tmp\Galbox_crash\_probe\artifacts'
+    [string]$ArtifactDir = 'E:\tmp\Galbox_crash\_probe\artifacts',
+
+    # DANGEROUS, and deliberately off by default.
+    #
+    # This script used to begin with `Get-Process Galbox.App | Stop-Process -Force`, which kills
+    # EVERY Galbox instance on the machine - including one somebody is using, and including the
+    # application another test is measuring. That is how a concurrent run got its window closed
+    # under it: an acceptance run on 2026-09-12 01:16 recorded A50 failing after 63 switches with
+    # exit code 0x00000000, i.e. a clean exit rather than a crash, while this script was running
+    # elsewhere on the same box. See
+    # _product/design/acceptance-runs/16-known-flakiness-gui-checks.txt
+    #
+    # Leftover instances are now only reported. Pass -KillExisting when you really mean it and
+    # nothing else on the machine is using Galbox.
+    [switch]$KillExisting
 )
 
 $ErrorActionPreference = 'Continue'
@@ -54,8 +68,21 @@ Say " pacing (StepMs) : $StepMs"
 Say " cdb log         : $cdbLog"
 Say " report          : $report"
 
-Get-Process Galbox.App -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Seconds 1
+$existing = @(Get-Process Galbox.App -ErrorAction SilentlyContinue)
+if ($existing.Count -gt 0) {
+    if ($KillExisting) {
+        Say " killing $($existing.Count) existing Galbox.App instance(s) (-KillExisting was passed)"
+        $existing | ForEach-Object { try { $_.Kill() } catch {} }
+        Start-Sleep -Seconds 1
+    } else {
+        Say " WARNING: $($existing.Count) Galbox.App instance(s) already running:"
+        $existing | ForEach-Object { Say "          pid $($_.Id)  started $($_.StartTime.ToString('HH:mm:ss'))" }
+        Say "          This script will NOT touch them (a machine-wide kill used to be the first"
+        Say "          thing it did, and that closed another test's window under it)."
+        Say "          Attribute your measurements accordingly, or pass -KillExisting if you are"
+        Say "          certain nothing else on this machine is using Galbox."
+    }
+}
 
 $p = Start-Process -FilePath $Exe -WorkingDirectory (Split-Path $Exe) -PassThru
 $appPid = $p.Id
