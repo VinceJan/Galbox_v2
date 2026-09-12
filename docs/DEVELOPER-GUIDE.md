@@ -54,7 +54,9 @@ Galbox.App      WinUI 3 界面：Views / ViewModels / Services / Converters
 * 单独一个 csproj 把"编排 + 存储"这条依赖显式化，一眼能看见。
 
 代价是：**`Galbox.App` 需要显式加一个 `ProjectReference` 才能真正用上它**。
-目前的现实是它还没加，所以存档节点功能没有界面入口（详见 `README.md` 的限制一节）。
+这个引用已经加上了（`src/Galbox.App/Galbox.App.csproj`），`ISaveNodeScanService` 也已在
+`App.xaml.cs` 注册（第 245-251 行），所以存档节点功能是有界面入口的——存档管理页上的
+时间线、CG 图鉴、剧情进度与快照标记就是它（验收项 A10 在真实存档上跑通）。
 
 ---
 
@@ -89,7 +91,8 @@ new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
 
 验收程序的容器（`tests/Galbox.Acceptance/AcceptanceContainer.cs`）用**同样的开关**复刻这套注册，
 只删掉两个必须依赖 `Microsoft.UI.Xaml.Controls` 的注册（`INavigationService` 与各 ViewModel），
-并把数据库换成 `%LocalAppData%\Galbox\acceptance\acceptance.db`。
+并把数据库换成每次运行独立的
+`%LocalAppData%\Galbox\acceptance\run-<pid>\acceptance.db`（`GALBOX_ACCEPTANCE_DIR` 可改）。
 
 ### 3.2 加一个新服务
 
@@ -226,9 +229,17 @@ Harness 覆盖的场景（`tests/Galbox.Data.Migrations.Harness/Program.cs`）�
 8. **缓存**：不要为"空结果或部分失败"写缓存（`SearchGameAsync` 只缓存
    `HasResults && Errors.Count == 0` 的结果，理由见注释）。
 
-> 现状提醒：`YmgalApi` / `CngalApi` 是**明确的空壳**，返回
-> `Success = false` + `"integration pending"`，且没有配 `BaseAddress`。它们是"照抄这个模板"
-> 最接近的参考，但**不是可用的实现**。
+> 现状提醒：`YmgalApi` / `CngalApi` **现在是四源里两个真实可用的实现**，不再是空壳。
+> ymgal 走 OAuth2 `client_credentials`（使用官方文档公开的公共客户端，用户无需申请密钥，
+> 可用 `GALBOX_YMGAL_CLIENT_ID` / `GALBOX_YMGAL_CLIENT_SECRET` 换成自己的），
+> cngal 的 API 本身无需 key；两个 `HttpClient` 的基础地址集中在
+> `Galbox.Core/Api/HttpClientWrappers.cs`（`MetadataHttpClientDefaults`），
+> 配置对象在 `MetadataSourceOptions.cs`。A40 / A41 / A42 是它们的验收项。
+> 照抄这个模板来加第五个源仍然是最省事的做法——但请注意它们已经从"诚实占位"
+> 变成"要限流、要区分未配置/连不上/查无结果"的真实客户端了。
+
+**反面教材**：这个仓库历史上出现过"界面在、逻辑是桩"的源（返回固定失败 + `"integration pending"`）。
+新增源时不要那样做——宁可让开关如实报"未配置"，也不要让用户以为在查。
 
 ---
 
@@ -264,7 +275,11 @@ Harness 覆盖的场景（`tests/Galbox.Data.Migrations.Harness/Program.cs`）�
    启动 `Galbox.App.exe`，用 `MainWindowHandle` + `EnumWindows` 双重确认窗口存在，
    失败时附上最新的启动日志。注意它依赖 `src/Galbox.App/bin` 下已构建好的 exe。
 
-现有 10 项检查（A0–A9）各自量什么，见 `tests/Galbox.Acceptance/README.md` 与本仓库 README 的表格。
+现有 **43 项**检查，编号是分段的：`A0–A19`（基础与数据安全）、`A30–A32`（补丁中心接线与往返）、
+`A40–A42`（ymgal / cngal / 四源状态区分）、`A50`（快速导航存活）、`A60–A67`（moyu 补丁源服务层与合规）、
+`A70–A74`（游戏健康诊断与修复）、`A90–A92`（预留接口层）。
+每项量什么，见 `tests/Galbox.Acceptance/README.md` 与本仓库 README 的表格；
+**权威来源始终是 `tests/Galbox.Acceptance/Program.cs` 里的注册数组**（顺序即执行顺序）。
 **新增检查后请更新这两处的清单**，否则清单会像旧文档一样过期。
 
 ---
@@ -296,10 +311,13 @@ dotnet run --project tools\Galbox.PatchVerifier -c Release -- --scratch E:\tmp\_
 被拒条目、journal、外部 7z/RAR 样本），并把报告写到 `<scratch>\verify-report.txt`。
 退出码 0 表示全部断言通过。
 
-**接线现状**：`services.AddGalboxPatches()` 已实现但**没有任何调用者**，
-UI 也还没接。要把它接到补丁中心，需要：注册服务 → 页面加"选择补丁包"入口 →
-展示 `OverwritePreview`（新增/覆盖/冲突三级）→ 让用户确认冲突 →
-`InstallAsync` → 展示 `PatchStatusReport` 的 `Explanation` 原文。
+**接线现状**：`services.AddGalboxPatches()` 在 `App.xaml.cs:285-294` 被调用，
+`ILocalPatchService` 也已注册，补丁中心页已经把它接到了界面上——
+选包 → `OverwritePreview`（覆盖 / 新增 / 冲突 / 未变化 / 被拒绝五类分开列）→ 用户确认冲突 →
+`InstallAsync`（带进度、可取消）→ 逐文件结果与 `PatchStatusReport` 的 `Explanation` 原文 →
+回滚 → 状态台账 → 中断恢复。验收项 A30–A32 覆盖这条链路。
+**唯一还没接上的是在线补丁源（moyu）的界面**：服务层已实现（A60–A67），
+但 `PatchCenterViewModel.Patches.cs` 目前仍如实写着"在线补丁源：未实现"。
 
 ---
 
@@ -311,7 +329,7 @@ UI 也还没接。要把它接到补丁中心，需要：注册服务 → 页面
 | 启动成功/失败的判定标记 | 常量 `StartupDiagnostics.StartupCompletedMarker`（`OnLaunched: startup sequence completed`）与 `StartupFailureMarker`（`EXCEPTION in OnLaunched`），A9 也是按这两个字符串判定的 |
 | 启动失败弹窗 | 窗口还没建起来时会弹一个 Win32 MessageBox，标题 `Galbox 启动失败`，里面写着日志路径 |
 | 数据库 | `%LocalAppData%\Galbox\galbox.db`（要改先复制） |
-| 验收用的隔离库 | `%LocalAppData%\Galbox\acceptance\acceptance.db`（每次运行删除重建） |
+| 验收用的隔离库 | `%LocalAppData%\Galbox\acceptance\run-<pid>\acceptance.db`（每次运行新建并重建；可用 `GALBOX_ACCEPTANCE_DIR` 改到别处） |
 | 刮削缓存 | `%LocalAppData%\Galbox\ScrapingCache\search_*.json` |
 | 存档备份 | `%LocalAppData%\Galbox\SaveBackups\` |
 | 补丁备份与台账 | `%LocalAppData%\Galbox\patchbak\` 与 `<gameRoot>\.galbox\patch-manifest.json` |

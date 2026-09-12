@@ -9,6 +9,11 @@ It exists because "it compiles" was being treated as "it works".
 
 ## What it does
 
+> The table below explains only the checks that were documented when it was written
+> (A0–A10, A40–A42). The runner registers **43** checks in total; the authoritative list — ids,
+> titles and execution order — is the array in `Program.cs`, and a readable inventory is in the
+> repository README. Update this table when you add a check.
+
 | Check | What it measures |
 |-------|------------------|
 | A0 | The acceptance database is isolated from the real one, the EF Core model is created from scratch, a `GameInfo` round-trips through SQLite, and a second reset proves the run is repeatable. Also prints the state of the game library. |
@@ -72,13 +77,17 @@ Options:
 * **No WinUI.** The container registers every service the shipping app registers **except**
   `INavigationService`/`NavigationService`, which are the only ones that require
   `Microsoft.UI.Xaml.Controls`. Nothing that is under test is skipped.
-* **No user data.** The database lives at
-  `%LocalAppData%\Galbox\acceptance\acceptance.db` and is deleted and recreated on every run.
+* **No user data.** Each run gets its own database under a per-run folder,
+  `%LocalAppData%\Galbox\acceptance\run-<pid>\acceptance.db` (deleted and recreated per run).
   The real `%LocalAppData%\Galbox\galbox.db` is never opened.
-  Set `GALBOX_ACCEPTANCE_DIR` to an absolute folder to move it: the default path is shared by every
-  worktree on the machine, and two harnesses running at once corrupt each other (observed: A0
-  failing with `IOException: the file is being used by another process`, and a run that seeded a
-  screenshot picking up another worktree's game row).
+  Set `GALBOX_ACCEPTANCE_DIR` to an absolute folder to move it: otherwise the parent
+  `acceptance` folder is shared by every worktree on the machine, and two harnesses running at once
+  interfere with each other (observed: A0 failing with `IOException: the file is being used by
+  another process`, a run that seeded a screenshot picking up another worktree's game row, and —
+  because every harness starts and closes a `Galbox.App.exe` with the same image name — one
+  harness's GUI checks losing the window they were measuring).
+  Running two harnesses at once also means two windows appearing on the desktop; see the warning in
+  the repository README.
 * **No scraping cache.** The persistent cache is disabled
   (`AcceptanceContainer.DisableScrapingCache`), so A5 is always a genuine network query and
   `%LocalAppData%\Galbox\ScrapingCache` is neither read nor written.
