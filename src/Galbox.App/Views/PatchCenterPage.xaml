@@ -527,10 +527,11 @@
                             </StackPanel>
 
                             <!-- ==================================================================
-                                 本地补丁包（已下载）—— 补丁中心真正能做的事
+                                 本地补丁包（已下载）—— 补丁中心真正落盘的那一半
                                  引擎能力：Inspect / Preview / Install（可取消、带进度）/ Rollback /
                                  GetStatus / FindInterrupted + Recover。
-                                 在线补丁源未实现：这里只有一句说明，没有点了没反应的按钮。
+                                 上面「在线补丁源：moyu.moe」负责发现并把浏览器下载下来的文件接管到这个
+                                 入口（同一条链路），这里同时保留手动选包，两条路都进同一个引擎。
                                  ================================================================== -->
                             <Border
                                 Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"

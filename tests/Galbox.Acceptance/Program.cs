@@ -146,7 +146,25 @@ internal static class Program
             // produced. It is the only check that can answer "can a user actually do this".
             // It is appended last on purpose: A80.1 removes A0's seeded library row for the
             // reference install path, so every consumer of that fixture must have run already.
-            new A80FullChainCheck()
+            new A80FullChainCheck(),
+
+            // --- moyu.moe patch source wired into the patch centre (A110+) -----------------
+            // A60-A67 verified the service layer, and nothing in the user interface referenced it: a
+            // search of src/Galbox.App/Views and src/Galbox.App/ViewModels for the five moyu types
+            // returned zero hits, and the page said "在线补丁源：未实现". This block is the evidence
+            // that the door now exists, and - more importantly - that the four outcomes it creates
+            // are not interchangeable: no nmk_ key, no vndb id (which must cost ZERO requests), no
+            // results, and a failed query each get their own state, code and wording. A114 re-asserts
+            // the robots.txt boundary on the new path, because a new route to the network is exactly
+            // where a compliance promise rots. A110 also drives a query through the REAL ViewModel,
+            // so "the service is referenced" cannot pass without the service actually being called.
+            new A110MoyuUiWiringCheck(),
+            new A111MoyuUiMissingKeyCheck(),
+            new A112MoyuUiNoVndbIdCheck(),
+            new A113MoyuUiEmptyVsFailureCheck(),
+            new A114MoyuUiComplianceCheck(),
+            new A115MoyuUiBrowserAndDownloadCheck(),
+            new A116MoyuUiKeyEntryCheck()
         };
 
         using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
