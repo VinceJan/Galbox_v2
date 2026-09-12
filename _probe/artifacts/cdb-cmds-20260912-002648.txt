@@ -1,7 +1,0 @@
-.symfix E:\tmp\symcache
-.reload
-sxe -c "g" eh
-sxe -c "g" clr
-sxe -c "g" c000027b
-.shell -ci "cmd /c echo ready > "E:\tmp\Galbox_crash\_probe\artifacts\cdb-ready-20260912-002648.flag"" 
-.echo ########## BROKEN: waiting for the probe to resolve nav items ##########

@@ -1,6 +1,0 @@
-.symfix E:\tmp\symcache
-.reload
-sxe -c "g" eh
-sxe -c "g" clr
-sxe -c "g" c000027b
-.echo ########## BROKEN: waiting for the probe to resolve nav items ##########
