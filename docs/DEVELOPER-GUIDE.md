@@ -276,22 +276,25 @@ Harness 覆盖的场景（`tests/Galbox.Data.Migrations.Harness/Program.cs`）�
 
 **任何会启动真实 `Galbox.App.exe` 的检查，都必须让窗口落在所有显示器之外。**
 
-这不是洁癖，是真实发生过的事。当前有四项检查会启动真实 GUI：
+这不是洁癖，是真实发生过的事。全仓库目前有 **6 处**会启动真实应用，全部都要遵守这一条：
 
-| 检查 | 会启动真实应用做什么 |
-|---|---|
-| A9 | 启动真实 GUI，要求进程存活 + 拥有可见顶层窗口 + 启动日志报完成 |
-| A18 | 从真实窗口句柄读窗口标题 |
-| A19 | 在真实运行的应用里逐个加载全部 8 个导航目的地 |
-| A50 | 在真实应用里快速连续切换导航 200 次（40 ms 一次） |
+| 位置 | 谁在跑 | 启动真实应用做什么 | 现在 |
+|---|---|---|---|
+| `Checks/A9StartupWithCacheCheck.cs` | 验收 | 进程存活 + 拥有可见顶层窗口 + 启动日志报完成 | 离屏 |
+| `Checks/A18WindowTitleCheck.cs` | 验收 | 从真实窗口句柄读窗口标题 | 离屏 |
+| `Checks/A19PageLoadSmokeCheck.cs` | 验收 | 在真实运行的应用里逐个加载全部 8 个导航目的地 | 离屏 |
+| `Checks/A50RapidNavigationSurvivalCheck.cs` | 验收 | 在真实应用里快速连续切换导航 200 次（40 ms 一次） | 离屏 |
+| `Galbox.Tests/Support/AppLaunchObserver.cs`、`AppSession.cs` | **`dotnet test`（开发者的日常动作）** | 双击没反应的回归守卫；UIA 会话 | 离屏 |
+| `tools/release.ps1`（第 3 步实机启动验证） | 发布 | 已发布产物能否启动、标题、能否正常关窗 | 离屏（`-OnScreen` 可切回） |
 
-其中 A19 会自己翻 8 页，A50 会自己翻 200 页。开发期间验收会被反复运行，多条工作线并行时更是如此，
+A19 会自己翻 8 页，A50 会自己翻 200 页。开发期间验收会被反复运行，多条工作线并行时更是如此，
 而这些检查跑在**开发者正在使用的那台机器**上——于是桌面上就不停地弹窗口、自己翻页。
 
 做法（两侧配合，缺一不可）：
 
-* **应用侧**：`MainWindow.OffscreenWindowVariable`，即环境变量
-  `GALBOX_TEST_OFFSCREEN_WINDOW=1`。窗口在被显示之前就移动到 `(-32000, -32000)`。
+* **应用侧**：`MainWindow.OffscreenWindowVariable`（环境变量 `GALBOX_TEST_OFFSCREEN_WINDOW`）
+  与它的取值常量 `MainWindow.OffscreenWindowEnabledValue`。窗口在被显示之前就移动到
+  `(-32000, -32000)` 并置上 `WS_EX_TOOLWINDOW`（详见下面"任务栏"一节）。
   该移动发生在 `CalculateInitialWindowSize` 的 DPI / 工作区夹取**之前**，并在 `Activate()`
   之后重新确认一次，所以启动路径上没有任何一步能把它拉回屏幕内。
   开关**默认关闭**，且只有字面量 `1` 才生效：未设置 / 空 / `0` / `false` 时启动行为与改动前完全一致
@@ -299,35 +302,59 @@ Harness 覆盖的场景（`tests/Galbox.Data.Migrations.Harness/Program.cs`）�
 * **验收侧**：`Checks/OffscreenWindow.cs`。
   `OffscreenWindow.Request(startInfo)` 给子进程设上这个变量；
   `OffscreenWindow.Measure(hwnd)` 用 `GetWindowRect` × `EnumDisplayMonitors` **实测**窗口矩形、
-  `IsWindowVisible` 与"是否与任何显示器相交"。
+  `IsWindowVisible` 与"是否与任何显示器相交"。`Galbox.Tests` 里对应的是
+  `Support/OffscreenLaunch.cs`。
 
 **为什么这不削弱断言**：Win32 与窗口位置无关。屏幕外的窗口 `IsWindowVisible` 仍然为 `TRUE`、
-`Process.MainWindowHandle` 仍然非零、标题仍然可读、仍然挂在 UI Automation 根节点下，
-页面仍然真的加载、导航仍然真的切换（A50 实测仍是 200/200）。四项检查原有的条件一个字都没有改，
-只是**各多加了一条**：窗口矩形不得与任何显示器相交（`OffscreenWindow.WouldBeVisibleReason`）。
-这条是实测的，不是假设的——万一开关在某台机器上失效，检查会变红，而不是"安静地开始闪窗口"。
+`Process.MainWindowHandle` 仍然非零、标题仍然可读、仍然挂在 UI Automation 根节点下、
+`NativeWindows.VisibleTopLevelWindows` 仍然找得到它（它只看 `GW_OWNER` 和可见性），
+页面仍然真的加载、导航仍然真的切换（A50 实测仍是 200/200）。既有条件一个字都没有改，
+只是验收那四项**各多加了一条**：窗口矩形不得与任何显示器相交
+（`OffscreenWindow.WouldBeVisibleReason`）。这条是实测的，不是假设的——万一开关在某台机器上失效，
+检查会变红，而不是"安静地开始闪窗口"。
 
-变量名由 `OffscreenWindow.Variable` 直接引用应用的常量
-（`Galbox.App.MainWindow.OffscreenWindowVariable`），编译器保证两侧不会写歪。
+变量名与取值都由两侧直接引用应用的常量，不抄字面量，编译器保证不会写歪。
+`tools/release.ps1` 是 PowerShell，没有编译期约束，所以它在运行时从
+`src/Galbox.App/MainWindow.xaml.cs` 里读出这两个字面量，读不到就直接失败——因为抄一份会随时间腐烂，
+而腐烂的方式恰好是"悄悄又开始弹窗"。
 
-**扩展套件时请照做**：新增任何启动真实应用的检查，先调 `OffscreenWindow.Request(startInfo)`，
-再把 `placement.IsVisibleAndOffscreen` 放进通过与失败判定里。做不到就别在检查里启动 GUI。
+**扩展套件时请照做**：新增任何启动真实应用的检查，先调 `OffscreenWindow.Request(startInfo)`
+（或 `OffscreenLaunch.Apply(startInfo)`），再把 `placement.IsVisibleAndOffscreen`
+放进通过与失败判定里。做不到就别在检查里启动 GUI。
+
+### 任务栏与 Alt-Tab 也已处理（实测，不是推测）
+
+只把窗口移到屏幕外并**不够**：任务栏里还会出现它的按钮，而且每个 GUI 检查一次、出现又消失。
+所以开关生效时同时置上 `WS_EX_TOOLWINDOW`（`MainWindow.HideFromTaskbarAndAltTab()`）。
+
+这里曾经有一条**错误**的推测，被实测推翻了，记下来免得下次再绕：
+原先认为 `WS_EX_TOOLWINDOW` 会让 `Process.MainWindowHandle` 归零——而"非零"正是 A9 的核心断言，
+所以当初决定不动它。**这个推测是错的**：.NET 找主窗口的条件只有
+`GetWindow(hwnd, GW_OWNER) == 0 && IsWindowVisible(hwnd)`，与 `WS_EX_TOOLWINDOW` 无关。
+
+在一个活窗口上直接置位实测（2026-09-12，`exStyle` 0x00000100 → 0x00000180）：
+
+| 要测的 | 结果 | 判定 |
+|---|---|---|
+| `Process.MainWindowHandle` | 0x80A7A，**仍非零** | 符合 |
+| `IsWindowVisible` | **True** | 符合 |
+| 任务栏里的 Galbox 条目（UI Automation 扫 `Shell_TrayWnd`） | **PRESENT → ABSENT** | 符合 |
+| `GetWindowRect` | 仍为 `(-32000, -32000, -30200, -30800)` | 符合 |
+
+四项全部符合期望，所以采用了它。（唯一的手段换成 `AppWindow.IsShownInSwitchers = false`
+则**实测无效**：在 WinAppSDK 1.6.250205002 上它没有改动 `GWL_EXSTYLE`（仍是 0x00000100），
+任务栏条目也照旧。所以用的是原始 Win32 位。）
 
 实测对照（2026-09-12，双屏 3840×2160 @150% + 2560×1440，单位是物理像素）：
 
-| 场景 | `GetWindowRect` | `IsWindowVisible` | `MainWindowHandle` | 与显示器相交 |
-|---|---|---|---|---|
-| 改动前 `release/1.0.0`（`b4c8086`） | `(342, 342, 2142, 1542)` | True | 非零 | **是** |
-| 改动后，开关未设置（正常启动） | `(380, 380, 2180, 1580)` | True | 非零 | **是**（这就是开发者的日常） |
-| 改动后，`GALBOX_TEST_OFFSCREEN_WINDOW=1` | `(-32000, -32000, -30200, -30800)` | True | 非零 | 否 |
+| 场景 | `GetWindowRect` | `IsWindowVisible` | `MainWindowHandle` | 与显示器相交 | 任务栏条目 |
+|---|---|---|---|---|---|
+| 改动前 `release/1.0.0`（`b4c8086`） | `(342, 342, 2142, 1542)` | True | 非零 | **是** | 有 |
+| 改动后，开关未设置（正常启动） | `(380, 380, 2180, 1580)` | True | 非零 | **是**（这就是开发者的日常） | 有 |
+| 改动后，`GALBOX_TEST_OFFSCREEN_WINDOW=1` | `(-32000, -32000, -30200, -30800)` | True | 非零 | 否 | **无** |
 
 原始记录（含独立看门狗进程对整个验收过程的采样）：
 [`tests/Galbox.Acceptance/evidence/gui-checks-must-not-flash.md`](../tests/Galbox.Acceptance/evidence/gui-checks-must-not-flash.md)。
-
-**残余影响（已知，未处理）**：窗口虽然不在任何显示器上，任务栏里仍可能出现它。
-没有顺手去掉是因为唯一的手段——`WS_EX_TOOLWINDOW`（`AppWindow.IsShownInSwitchers = false`
-内部用的就是它）——有让 `Process.MainWindowHandle` 归零的风险，而"`MainWindowHandle` 非零"
-正是 A9 的核心断言之一。用断言的安全换一次任务栏闪烁，不划算。
 
 **验证这个开关本身**：它失效时检查会红，但想主动确认时可以用独立探针——
 `OffscreenWindow.Measure` 打印的那一行就是证据，`GetWindowRect` 必须是负的大坐标、
