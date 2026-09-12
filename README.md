@@ -99,15 +99,20 @@ dotnet build Galbox.sln -c Debug
   `AcceptanceContext.cs` 的 `MinimumFolderSizeBytes`）；指一个空目录会让 A1–A3 失败。
 * A5 / A7 / A40 / A41 / A42 是**真实联网查询**（刮削缓存被显式关闭），没有网络时这几项会失败。
 * A9 / A18 / A19 / A50 会**真的启动 `Galbox.App.exe`**，需要 Windows App SDK 运行时已安装。
+  窗口会**落在所有显示器之外、也不出现在任务栏里**（`dotnet test` 与 `tools\release.ps1` 同理），
+  所以你跑验收时桌面上不会弹窗、不会自己翻页。这条规矩见
+  [`docs/DEVELOPER-GUIDE.md` §6.1](docs/DEVELOPER-GUIDE.md)，并且**是可自动验证的**：
+  窗口若与任何显示器相交，那几项检查会直接判失败。
 * 它使用**每次运行独立的隔离数据库** `%LocalAppData%\Galbox\acceptance\run-<pid>\acceptance.db`
   （可用环境变量 `GALBOX_ACCEPTANCE_DIR` 指定到别处），补丁与图片也落在同一个隔离根下，
   **不读写你的真实游戏库**（`AcceptanceContainer.cs`）。
-* **同一台机器上不要并行跑多份验收程序**：每一份都会启动、关闭**同名**的 `Galbox.App.exe`，
-  其中一份可能在另一份正在测量窗口时把它的进程关掉。这一点写在检查自己的注释里
-  （`A19PageLoadSmokeCheck.cs:79-82`），实测也确实发生过（见下面的 A50）。
+* **同一台机器上不要并行跑多份验收程序。** 它们都会启动、关闭**同名**的 `Galbox.App.exe`。
+  实测后果是 GUI 类检查被拖慢（A50 从约 13 秒变成 250 秒，触到下限就提前停），也可能互相影响判定。
+  仓库里三处「按名字杀**全部**实例」的脚本已清掉，但并行仍然不可取。
 
-当前检查项（`tests/Galbox.Acceptance/Program.cs` 中注册的顺序即为执行顺序，共 43 项。
-编号是分段的：A0–A19、A30–A32、A40–A42、A50、A60–A67、A70–A74、A90–A92）：
+当前检查项（`tests/Galbox.Acceptance/Program.cs` 中注册的顺序即为执行顺序，共 **45** 项。
+编号是分段的：A0–A19、A30–A32、A40–A42、**A50**、A60–A67、A70–A74、**A80**、A90–A92、**A100**。
+**权威来源始终是那个注册数组**，本表可能滞后）：
 
 | 编号 | 检查内容 |
 |---|---|

@@ -148,6 +148,14 @@ internal static class Program
             // reference install path, so every consumer of that fixture must have run already.
             new A80FullChainCheck(),
 
+            // --- Backup-source regression (A100; A93-A99 are reserved for other work lines) ------
+            // A80 met the defect once, over the real game. This one isolates the rule that fixes it:
+            // which folder a backup may be taken from when the saves live only in an alternative
+            // folder, how that folder is proved before it is used, and that the folder actually used
+            // is recorded. It keeps the rule measured without a 40 GB installation, and pins the
+            // "never treat the game folder as a save folder" guard by name.
+            new A100BackupFallbackCheck(),
+
             // --- moyu.moe patch source wired into the patch centre (A110+) -----------------
             // A60-A67 verified the service layer, and nothing in the user interface referenced it: a
             // search of src/Galbox.App/Views and src/Galbox.App/ViewModels for the five moyu types
