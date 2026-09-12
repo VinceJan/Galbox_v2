@@ -108,7 +108,7 @@ A7 用应用自己的 HTTP 流量确认上游持有该游戏。修复前 A5/A6 �
 * 本轮迁移：`20260911145649_InitialBaseline`（基线，已冻结）、
   `20260911145834_AddGameStatusAndSaveNodes`（游戏状态字段 + 存档节点/存档组表）。
 
-### 4.2 Ren'Py 存档解析与存档节点（引擎侧完成，界面未接线）
+### 4.2 Ren'Py 存档解析与存档节点（引擎与界面均已接通）
 * `Galbox.Core/Saves`：零执行 pickle 扫描（`PickleScanner`，不反序列化任意对象）、
   `.rpa` 归档读取、`persistent` 读取、剧本 label 索引、存档分析器；
 * `Galbox.Data`：`SaveNode` / `SaveGroup` 实体与迁移，`GameInfo` 增加状态字段；
@@ -117,25 +117,33 @@ A7 用应用自己的 HTTP 流量确认上游持有该游戏。修复前 A5/A6 �
   （按已访问场景集合做 Jaccard 单链聚类，是"疑似路线"的唯一依据）；
 * 三条硬规则写进了实现：路线名只能带 `疑似路线` 前缀；进度是"已解锁场景数/总场景数"
   且分母未知时保持 NULL；解析失败也要落库并写明原因（不静默跳过）。
-* **注意**：`Galbox.App` 目前**不引用** `Galbox.Services`，`ISaveNodeScanService` 也未注册进 DI，
-  因此这些能力在当前版本**没有界面入口**。
+* **界面已接通**（此后补上）：`Galbox.App` 引用了 `Galbox.Services`，`ISaveNodeScanService`
+  已在 `App.xaml.cs` 注册；存档管理页里有时间线、CG 图鉴、剧情进度与快照标记
+  （`SaveManagerPage.xaml` + `SaveManagerViewModel.SaveNodes.cs`）。
+  验收项 A10 用真实存档跑通这条链路（12 个节点、CG 6/27）。
 
-### 4.3 本机补丁安装器（引擎侧完成，界面未接线）
-* `Galbox.Core/Patches`：沙箱解压 → 覆盖预览（新增/覆盖/冲突三级）→ 只备份将被覆盖的文件 →
+### 4.3 本机补丁安装器（引擎与界面均已接通）
+* `Galbox.Core/Patches`：沙箱解压 → 覆盖预览（覆盖/新增/冲突/未变化/被拒绝）→ 只备份将被覆盖的文件 →
   安装 + 逐文件哈希台账 → 回滚（`ByteIdenticalToPreInstall`）→ 断电恢复 →
   状态判定（明确区分 `Fact` / `Inference` / `None`，推测永不可能被包装成"已安装"）；
 * 安全边界在代码里而非文档里：路径逃逸/绝对路径/UNC/符号链接/保留名/长路径/自解压 exe
   全部有明确处理，`type` 含 `save` 的包硬拒绝；
 * 新增取证工具 `tools/Galbox.PatchVerifier`：造假游戏目录与恶劣压缩包，
   逐条打印预览清单、备份树、前后哈希、被拒条目与外部 7z/RAR 样本证据；
-* `services.AddGalboxPatches()` 已实现，但**尚无调用者**，UI 尚未接入。
+* **界面已接通**（此后补上）：`services.AddGalboxPatches()` 与 `ILocalPatchService` 都已注册，
+  补丁中心页可以选本地补丁包 → 预览 → 安装（带进度、可取消）→ 回滚 → 状态台账 → 中断恢复。
+  验收项 A30–A32 覆盖接线、逐字节往返与被拒绝内容的可见性。
 
 ### 4.4 无界面验收程序
 `tests/Galbox.Acceptance`：复刻 `App.xaml.cs` 的 DI 容器（只去掉必须依赖
 `Microsoft.UI.Xaml.Controls` 的 `INavigationService` 与 ViewModel），驱动真实业务服务，
 每项打印"期望值 / 实测值 / 原始证据 / 该检查期间的服务日志"，退出码 0 仅当全部通过。
-当前 **A0–A9 共 10 项**，其中 A8 是"功能必须有门"的源码级守卫，A9 是唯一会启动真实 GUI 的检查。
-它只使用隔离数据库 `%LocalAppData%\Galbox\acceptance\acceptance.db` 并每次重建，
+当前共 **43 项**，编号分段为 `A0–A19` / `A30–A32` / `A40–A42` / `A50` / `A60–A67` / `A70–A74` / `A90–A92`
+（权威清单始终是 `Program.cs` 里的注册数组）。其中 A8 是"功能必须有门"的源码级守卫；
+会启动真实 GUI 的不再只有 A9——A9 / A18 / A19 / A50 四项都会启动 `Galbox.App.exe`，
+A50 还会快速切换导航最多 200 次，**跑之前请先看仓库 README 的提醒**。
+它使用每次运行独立的隔离数据库
+`%LocalAppData%\Galbox\acceptance\run-<pid>\acceptance.db`（`GALBOX_ACCEPTANCE_DIR` 可改），
 且显式关闭刮削缓存以保证 A5 是真实网络查询。
 
 ### 4.5 启动诊断
@@ -152,6 +160,9 @@ A7 用应用自己的 HTTP 流量确认上游持有该游戏。修复前 A5/A6 �
 
 ## 五、验证
 
+> 下面是**本轮结束时**的实测快照，用于记录当轮的状态；它**不是当前数字**。
+> 当前检查总数与最近一次实测结果请看仓库 `README.md` 的「五、运行验收程序」。
+
 本轮结束时的实测（本机 Windows，游戏目录 `D:\GAME\Dreamin'_Her` 存在）：
 
 ```
@@ -166,6 +177,9 @@ Galbox.Acceptance.exe                       → PASSED 10 / FAILED 0 / ERRORS 0�
 ---
 
 ## 六、本轮**没有**处理的事（如实记录）
+
+> **本节是当轮的历史记录，其中的条目此后已被陆续解决。** 逐条现状见本节末尾的
+> 「后续进展」；判断当前状态请以仓库 `README.md` 的「当前状态与已知限制」为准。
 
 * **`tests/Galbox.Tests` 仍是零断言的假绿灯**：它不在 `Galbox.sln` 里，
   `FullIntegrationTest` 逐步 `return true`，同目录的 `TEST_REPORT.md` 宣称"8/8 通过"。
@@ -185,3 +199,21 @@ Galbox.Acceptance.exe                       → PASSED 10 / FAILED 0 / ERRORS 0�
 * **流程图追踪、社区成就** 仍未实现（源码中无相关代码，需要自建服务端）。
 * 设置页仍有一批"能存不能用"的项（见 `README.md` 的已知限制 §8.8）。
 * 安装包与分发形态：见 `README.md` 的「安装与分发（待补）」。
+
+### 后续进展（此节为后补，逐条对照上面的清单）
+
+| 当轮遗留 | 现状 |
+|---|---|
+| `tests/Galbox.Tests` 零断言假绿灯 | **已修**：已进 `Galbox.sln`、有项目引用、断言真实；`dotnet test` 2 通过 / 5 跳过（跳过项均有原因），`TEST_REPORT.md` 自己撤回了旧的 8/8 |
+| 快速切换缺 null 短路 | **已修**：当前存档无法备份时会中止并如实报错（验收项 A11） |
+| 恢复完整性校验带容差 | **已修**：改为逐文件 SHA-256 + 精确大小 + 精确文件数，零容差（`SaveManagementService.cs:671-682`，验收项 A14） |
+| 存档位置退化为安装根目录 | **已修**：新增拒绝闸门（`EngineSaveDetector.cs:142-144`，验收项 A13） |
+| 删除游戏 / 安装目录丢失 / 封面下载 / 窗口标题 | **已合并**（验收项 A16 / A17 / A15 / A18） |
+| 截图只有文件、没有界面 | **仍未修**（见 README §8.10） |
+| 存档节点界面、补丁中心的安装接线未完成 | **已完成**：存档节点界面（A10）、补丁中心本地安装链路（A30–A32）都已接通 |
+| 流程图追踪、社区成就未实现 | **按规格只做预留**：接口 + 数据模型 + 关闭的功能开关，前端隐藏（A90–A92，规格原文就是"第一版只预留接口"） |
+| 安装与分发形态待补 | **已补**：`tools/release.ps1` 一条命令产出自包含绿色版，见 README「九、安装与分发」 |
+
+**仍然真实存在、不要当成已修的**：截图不落库也不显示（README §8.10）；
+"自动备份"开关没有触发器（§8.9）；**存档只落在 `AlternativePaths` 的游戏备份会失败**
+（§8.9，正在修）；未做代码签名；A50 最近一次实测未通过（§五）。

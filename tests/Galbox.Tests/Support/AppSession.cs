@@ -98,12 +98,21 @@ internal sealed class AppSession : IDisposable
 
         RepoLayout.KillLeftoverInstancesOfThisWorkTree(repositoryRoot);
 
-        var process = Process.Start(new ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = executable,
             WorkingDirectory = Path.GetDirectoryName(executable)!,
             UseShellExecute = false
-        }) ?? throw new InvalidOperationException("Process.Start returned null");
+        };
+
+        // Off every monitor, like every other launch of the real application in this repository:
+        // UIA drives the window by handle and by pattern, so an off-screen window is driven exactly
+        // like an on-screen one, and `dotnet test` stops flashing a window at the developer.
+        // See OffscreenLaunch.
+        OffscreenLaunch.Apply(startInfo);
+
+        var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Process.Start returned null");
 
         var stopwatch = Stopwatch.StartNew();
         IntPtr handle = IntPtr.Zero;
