@@ -771,13 +771,24 @@ public partial class GameDetailViewModel : ObservableObject
 
             if (backup == null)
             {
-                ErrorMessage = "创建备份失败：未检测到存档文件。";
+                // The service records why it refused (which folder was tried, and why it could not
+                // be used); "未检测到存档文件" was wrong whenever save files HAD been detected but
+                // the folder holding them could not be proved usable.
+                ErrorMessage = _saveManagementService.LastBackupFailureReason is { Length: > 0 } reason
+                    ? $"创建备份失败：{reason}"
+                    : "创建备份失败：未检测到存档文件。";
                 _logger.LogWarning("No save files found to back up for {GameName}", DisplayName);
                 return;
             }
 
             SaveBackups.Insert(0, backup);
-            StatusMessage = $"已创建备份：{backup.Name}（{backup.FormattedSize}）";
+
+            // Tell the user which folder was archived, not merely that a backup exists.
+            var backedUpFolder = string.IsNullOrWhiteSpace(backup.OriginalSavePath)
+                ? "未知文件夹"
+                : backup.OriginalSavePath!;
+
+            StatusMessage = $"已创建备份：{backup.Name}（{backup.FormattedSize}，来源文件夹：{backedUpFolder}）";
             _logger.LogInformation(
                 "Created save backup {BackupName} for {GameName} at {BackupPath}",
                 backup.Name, DisplayName, backup.BackupPath);

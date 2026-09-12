@@ -104,6 +104,18 @@ public interface ISaveManagementService
     /// Gets the backup storage path.
     /// </summary>
     string BackupStoragePath { get; }
+
+    /// <summary>
+    /// Why the most recent <see cref="CreateBackupAsync"/> returned null, in the user's language,
+    /// or null when that call succeeded.
+    /// </summary>
+    /// <remarks>
+    /// A failed backup is reported by returning null, which used to leave the page with nothing to
+    /// say except "未检测到存档文件" - a sentence that is simply untrue when save files were found
+    /// but no usable save folder could be proved. The reason kept here names the folders that were
+    /// tried and why each was refused, so the page can show what actually happened.
+    /// </remarks>
+    string? LastBackupFailureReason { get; }
 }
 
 // Note: GameEngineType is now defined in Galbox.Data.Entities/GameInfo.cs
