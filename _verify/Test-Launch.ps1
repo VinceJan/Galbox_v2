@@ -109,6 +109,15 @@ if (-not $p.HasExited) {
     Start-Sleep -Milliseconds 800
 }
 # Reap any leftover children
-Get-Process -Name 'Galbox.App' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Leftover instances are only reported, never killed machine-wide.
+    # This line used to be Get-Process -Name 'Galbox.App' | Stop-Process -Force, which kills every
+    # Galbox on the box - including one somebody is using, and including the instance another test is
+    # measuring. That is how a concurrent acceptance run had its window closed under it on 2026-09-12
+    # (A50 failed after 63 switches with exit code 0, a clean exit rather than a crash). See
+    # _product/design/acceptance-runs/16-known-flakiness-gui-checks.txt
+    $leftover = @(Get-Process -Name 'Galbox.App' -ErrorAction SilentlyContinue)
+    if ($leftover.Count -gt 0) {
+        Write-Host "  NOTE: $($leftover.Count) Galbox.App instance(s) already running (not touched): $($leftover.Id -join ', ')" -ForegroundColor Yellow
+    }
 
 $report | ConvertTo-Json -Depth 4 | Out-Host
