@@ -54,3 +54,15 @@ $RECYCLE.BIN/
 # 需要留档的那一次运行按 _product/design/acceptance-runs/ 的既有约定另存一份。
 _verify/acceptance/
 _verify/runs/
+
+# ---------------------------------------------------------------- 临时实验与探针产物
+# 各条工作线在排查问题时会就地产生这些东西：探针脚本、崩溃转储分析、A/B 对照输出、
+# 抓图中间产物。它们对当时那次排查有用，但不是源码，也不该出现在公开仓库里。
+# 需要长期保留的证据请放进 _product/design/acceptance-runs/ 或 _verify/。
+_ab/
+_ab_backup/
+_probe/
+_baseline*.txt
+_baseline_run.txt
+*_probe_name_run.txt
+*run-postfix-noise*/
