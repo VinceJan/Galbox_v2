@@ -517,7 +517,7 @@
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                     HorizontalAlignment="Center"/>
                                 <TextBlock
-                                    Text="尚未配置在线补丁源，本地也还没有这个游戏的补丁记录。你仍然可以用下面的「本地补丁包」安装一个已经下载好的补丁。"
+                                    Text="数据库里还没有这个游戏的补丁记录。可以点上面的「查找在线补丁」到 moyu.moe 查这个作品，也可以用下面的「本地补丁包」安装一个已经下载好的补丁。"
                                     FontSize="12"
                                     Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                     TextWrapping="Wrap"
@@ -538,20 +538,232 @@
                                 Padding="16">
                                 <StackPanel Spacing="12">
 
+                                    <!-- ==================================================================
+                                         在线补丁源：moyu.moe（官方公开面 /v2/moyu）—— 已接通。
+                                         形态：查询 -> 打开补丁页（浏览器）-> 接管下载文件夹 -> 已有的
+                                         IPatchEngine 走「预览 -> 安装 -> 回滚」。
+                                         四种结果各有各的文案与状态码，不共用一个说法：
+                                           MOYU_NOT_CONFIGURED 未配置 nmk_ 密钥（且不发请求）
+                                           MOYU_NO_ANCHOR      该作品没有 vndb 标识（且不发请求）
+                                           MOYU_NO_RESULTS     查询成功但没有补丁
+                                           MOYU_QUERY_FAILED   查询失败（网络 / 上游 / 限流），带原始原因
+                                         站方 robots.txt 的 Disallow: /api 由 MoyuComplianceGuard 在
+                                         运行时强制，本页不构造任何越界的请求地址。
+                                         ================================================================== -->
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="{x:Bind ViewModel.MoyuSourceTitle, Mode=OneWay}" FontSize="16" FontWeight="SemiBold"/>
+                                        <TextBlock
+                                            Text="{x:Bind ViewModel.MoyuSourceDescription, Mode=OneWay}"
+                                            FontSize="12"
+                                            TextWrapping="Wrap"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+
+                                        <!-- 查询 -->
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button
+                                                Command="{x:Bind ViewModel.FindMoyuPatchesCommand}"
+                                                CommandParameter="{Binding SelectedGame}"
+                                                IsEnabled="{x:Bind ViewModel.IsMoyuQuerying, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
+                                                CornerRadius="8">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <FontIcon FontSize="14" Glyph="&#xE721;"/>
+                                                    <TextBlock Text="{x:Bind ViewModel.MoyuQueryButtonText, Mode=OneWay}"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <ProgressRing
+                                                IsActive="{x:Bind ViewModel.IsMoyuQuerying, Mode=OneWay}"
+                                                Width="20"
+                                                Height="20"
+                                                VerticalAlignment="Center"/>
+                                            <TextBlock
+                                                Text="{x:Bind ViewModel.MoyuLastQueryText, Mode=OneWay}"
+                                                FontSize="12"
+                                                VerticalAlignment="Center"
+                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                        </StackPanel>
+
+                                        <!-- 状态：永远显示，且四种结果的说法互不相同 -->
+                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6" Padding="10">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap">
+                                                    <Run Text="{x:Bind ViewModel.MoyuStatusCodeText, Mode=OneWay}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{x:Bind ViewModel.MoyuStatusMessage, Mode=OneWay}"/>
+                                                </TextBlock>
+                                                <TextBlock
+                                                    Text="{x:Bind ViewModel.MoyuAdvisoryMessage, Mode=OneWay}"
+                                                    FontSize="12"
+                                                    TextWrapping="Wrap"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Visibility="{x:Bind ViewModel.MoyuAdvisoryMessage, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                                <!-- 只有「查询失败」才有这一段：失败与「没有结果」因此不可能被看成同一件事 -->
+                                                <TextBlock
+                                                    Text="{x:Bind ViewModel.MoyuErrorDetail, Mode=OneWay}"
+                                                    FontSize="12"
+                                                    TextWrapping="Wrap"
+                                                    Foreground="#B91C1C"
+                                                    Visibility="{x:Bind ViewModel.MoyuErrorDetail, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                                <TextBlock
+                                                    FontSize="12"
+                                                    TextWrapping="Wrap"
+                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                    Visibility="{x:Bind ViewModel.MoyuAnchorUsed, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}">
+                                                    <Run Text="查询锚点："/>
+                                                    <Run Text="{x:Bind ViewModel.MoyuAnchorUsed, Mode=OneWay}"/>
+                                                    <Run Text="（moyu 只接受 vndb:/catalog: 两种锚点，不接受 Bangumi 条目 ID）"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- 密钥：这是什么、去哪申请、当前能不能查 -->
+                                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                            <Expander.Header>
+                                                <TextBlock Text="nmk_ 密钥（官方公开面要求自备）" FontSize="13" FontWeight="SemiBold"/>
+                                            </Expander.Header>
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="{x:Bind ViewModel.MoyuKeySummary, Mode=OneWay}" FontSize="12" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{x:Bind ViewModel.MoyuKeyHowTo, Mode=OneWay}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                <PasswordBox
+                                                    Header="密钥"
+                                                    PlaceholderText="nmk_..."
+                                                    PasswordChanged="OnMoyuKeyPasswordChanged"
+                                                    CornerRadius="8"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Button Content="保存密钥" Command="{x:Bind ViewModel.SaveMoyuKeyCommand}" CornerRadius="8"/>
+                                                    <Button Content="清除密钥" Command="{x:Bind ViewModel.ClearMoyuKeyCommand}" CornerRadius="8"/>
+                                                </StackPanel>
+                                                <TextBlock
+                                                    Text="{x:Bind ViewModel.MoyuKeySaveMessage, Mode=OneWay}"
+                                                    FontSize="12"
+                                                    TextWrapping="Wrap"
+                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Visibility="{x:Bind ViewModel.MoyuKeySaveMessage, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                            </StackPanel>
+                                        </Expander>
+
+                                        <!-- 找到的补丁页 -->
+                                        <ItemsControl ItemsSource="{x:Bind ViewModel.MoyuPatches, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6" Padding="10" Margin="0,2,0,2">
+                                                        <StackPanel Spacing="4">
+                                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                            <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                                <Run Text="{Binding TypesText}"/>
+                                                                <Run Text=" · "/>
+                                                                <Run Text="{Binding SizeText}"/>
+                                                                <Run Text=" · "/>
+                                                                <Run Text="{Binding UpdatedText}"/>
+                                                                <Run Text=" · "/>
+                                                                <Run Text="{Binding ResourceCountText}"/>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding WebUrlText}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                            <TextBlock Text="{Binding LanguagesText}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                <Button
+                                                                    Content="查看资源"
+                                                                    Command="{Binding RefreshCommand}"
+                                                                    CornerRadius="8"/>
+                                                                <Button
+                                                                    Command="{Binding OpenPageCommand}"
+                                                                    IsEnabled="{Binding HasWebUrl}"
+                                                                    CornerRadius="8">
+                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                        <FontIcon FontSize="14" Glyph="&#xE774;"/>
+                                                                        <TextBlock Text="打开补丁页"/>
+                                                                    </StackPanel>
+                                                                </Button>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- 资源：真正要下载的东西，以及「下载怎么发生」的那段说明 -->
+                                        <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.HasMoyuResources, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="这个补丁页上的资源" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock
+                                                Text="{x:Bind ViewModel.MoyuDownloadModelExplanation, Mode=OneWay}"
+                                                FontSize="12"
+                                                TextWrapping="Wrap"
+                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                            <ItemsControl ItemsSource="{x:Bind ViewModel.MoyuResources, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="6" Padding="10" Margin="0,2,0,2">
+                                                            <StackPanel Spacing="4">
+                                                                <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                                                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                                    <Run Text="{Binding TypesText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding SizeText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding StorageText}"/>
+                                                                    <Run Text=" · "/>
+                                                                    <Run Text="{Binding UpdatedText}"/>
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding WebUrlText}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                                                <TextBlock
+                                                                    Text="{Binding SaveTypeNotice}"
+                                                                    FontSize="11"
+                                                                    TextWrapping="Wrap"
+                                                                    Foreground="#B45309"/>
+                                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                                    <Button Command="{Binding OpenPageCommand}" IsEnabled="{Binding HasWebUrl}" CornerRadius="8">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                            <FontIcon FontSize="14" Glyph="&#xE774;"/>
+                                                                            <TextBlock Text="打开补丁页"/>
+                                                                        </StackPanel>
+                                                                    </Button>
+                                                                    <Button Command="{Binding AdoptCommand}" CornerRadius="8">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                            <FontIcon FontSize="14" Glyph="&#xE896;"/>
+                                                                            <TextBlock Text="接管下载"/>
+                                                                        </StackPanel>
+                                                                    </Button>
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <TextBlock
+                                            Text="{x:Bind ViewModel.MoyuResourcesEmptyReason, Mode=OneWay}"
+                                            FontSize="12"
+                                            TextWrapping="Wrap"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Visibility="{x:Bind ViewModel.MoyuResourcesEmptyReason, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                                        <!-- 浏览器跳转 与 下载接管 -->
+                                        <TextBlock
+                                            Text="{x:Bind ViewModel.MoyuLaunchMessage, Mode=OneWay}"
+                                            FontSize="12"
+                                            TextWrapping="Wrap"
+                                            Visibility="{x:Bind ViewModel.MoyuLaunchMessage, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+
+                                        <StackPanel Spacing="6" Visibility="{x:Bind ViewModel.IsMoyuWatchingDownload, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ProgressBar IsIndeterminate="True" ShowPaused="False" ShowError="False"/>
+                                            <TextBlock Text="{x:Bind ViewModel.MoyuWatchProgress, Mode=OneWay}" FontSize="12" TextWrapping="Wrap"/>
+                                            <Button Content="取消等待" Command="{x:Bind ViewModel.CancelMoyuDownloadCommand}" CornerRadius="8" HorizontalAlignment="Left"/>
+                                        </StackPanel>
+
+                                        <TextBlock
+                                            Text="{x:Bind ViewModel.MoyuDownloadMessage, Mode=OneWay}"
+                                            FontSize="12"
+                                            TextWrapping="Wrap"
+                                            Visibility="{x:Bind ViewModel.MoyuDownloadMessage, Mode=OneWay, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
+                                    </StackPanel>
+
+                                    <!-- 本地补丁包：接住上面那条链路产出的文件，也是手动选包的入口 -->
                                     <TextBlock Text="本地补丁包（已下载）" FontSize="16" FontWeight="SemiBold"/>
                                     <TextBlock
                                         Text="选一个你已经下载到本机的补丁压缩包。Galbox 会先把它解压到临时沙箱，列出每个文件的落点、哪些会被覆盖、哪些条目会被拒绝；你确认之后才写入游戏目录，覆盖前会先备份。"
                                         FontSize="12"
                                         TextWrapping="Wrap"
                                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
-
-                                    <!-- 在线补丁源：未实现。明确说明，不放假按钮。 -->
-                                    <InfoBar
-                                        IsOpen="True"
-                                        IsClosable="False"
-                                        Severity="Informational"
-                                        Title="在线补丁源：未实现"
-                                        Message="{x:Bind ViewModel.OnlinePatchSourceNotice, Mode=OneWay}"/>
 
                                     <!-- 选择补丁包 -->
                                     <StackPanel Orientation="Horizontal" Spacing="8">

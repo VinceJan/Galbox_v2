@@ -148,6 +148,26 @@ public sealed partial class PatchCenterPage : Page
     // 本地补丁包（已下载）
     // ================================================================================
 
+    // ================================================================================
+    // 在线补丁源：moyu.moe（官方公开面）
+    // ================================================================================
+
+    /// <summary>
+    /// Copies the key the user typed into the ViewModel.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="PasswordBox.Password"/> is not a bindable property, so the value is pushed across
+    /// here. It stays in memory only: the ViewModel writes it to the DPAPI store when the user presses
+    /// 保存密钥, and never reads it back into the box. Nothing on this path logs it.
+    /// </remarks>
+    private void OnMoyuKeyPasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is PasswordBox box)
+        {
+            ViewModel.MoyuKeyInput = box.Password;
+        }
+    }
+
     /// <summary>
     /// Opens the file picker and previews the chosen patch package.
     /// </summary>
