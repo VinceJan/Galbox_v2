@@ -494,6 +494,17 @@
                                                 Text="{Binding FormattedSize}"
                                                 FontSize="12"
                                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <!-- The folder the archive was really taken from; see the
+                                                 save manager's backup template for why this is shown
+                                                 on every row. -->
+                                            <TextBlock
+                                                FontSize="11"
+                                                TextWrapping="Wrap"
+                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                Visibility="{Binding OriginalSavePath, Converter={StaticResource EmptyStringToVisibilityConverter}}">
+                                                <Run Text="来源文件夹："/>
+                                                <Run Text="{Binding OriginalSavePath}"/>
+                                            </TextBlock>
                                         </StackPanel>
 
                                         <!-- Commands live on the page's ViewModel; a DataTemplate has

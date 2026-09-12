@@ -132,6 +132,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- Backup Header -->
@@ -171,8 +172,23 @@
                         MaxHeight="40"
                         Visibility="{Binding Description, Converter={StaticResource EmptyStringToVisibilityConverter}}"/>
 
+                    <!-- Source folder: which folder this archive was really taken from. A Ren'Py
+                         game usually keeps its saves in <install>\game\saves (the portable folder)
+                         rather than in the engine's canonical user savedir, so a backup can come
+                         from a folder the user did not expect. Showing it here - and not only in
+                         the confirmation message, which disappears - is what makes "恢复" honest. -->
+                    <TextBlock
+                        Grid.Row="2"
+                        FontSize="11"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Visibility="{Binding OriginalSavePath, Converter={StaticResource EmptyStringToVisibilityConverter}}">
+                        <Run Text="来源文件夹："/>
+                        <Run Text="{Binding OriginalSavePath}"/>
+                    </TextBlock>
+
                     <!-- Actions -->
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
                         <Button
                             Click="OnRestoreBackupClick"
                             Tag="{Binding}"

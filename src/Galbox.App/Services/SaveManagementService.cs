@@ -74,6 +74,9 @@ public class SaveManagementService : ISaveManagementService
     public string BackupStoragePath => _backupStoragePath;
 
     /// <inheritdoc/>
+    public string? LastBackupFailureReason { get; private set; }
+
+    /// <inheritdoc/>
     public Task<SaveLocationResult> DetectSaveLocationAsync(
         GameInfo game,
         CancellationToken cancellationToken = default)
@@ -153,11 +156,15 @@ public class SaveManagementService : ISaveManagementService
     {
         if (game == null)
         {
+            LastBackupFailureReason = "内部错误：没有拿到游戏信息，无法备份。";
             _logger.LogWarning("Cannot create backup: game is null");
             return null;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Cleared on every call: the reason below must always describe THIS backup attempt.
+        LastBackupFailureReason = null;
 
         _logger.LogInformation(
             "Creating backup for game: {GameName} (ID: {GameId})",
@@ -169,12 +176,42 @@ public class SaveManagementService : ISaveManagementService
             // Detect save location
             var saveLocation = await DetectSaveLocationAsync(game, cancellationToken).ConfigureAwait(false);
 
-            if (!saveLocation.Success || string.IsNullOrEmpty(saveLocation.PrimarySavePath))
+            // Which folder is actually going to be archived. This is NOT always PrimarySavePath:
+            // the detector reports the folder it found under PrimarySavePath only when that folder
+            // is the engine's canonical save folder, and puts everything else in AlternativePaths.
+            // Requiring PrimarySavePath here made the Backup button answer "未检测到存档文件" for a
+            // game whose own detection result carried 12 save files (PrimarySavePath=null,
+            // AlternativePaths=[<install>\game\saves]). See ResolveBackupSourceRoot for the rule
+            // and for what is proved before a folder is accepted.
+            var sourceRoot = ResolveBackupSourceRoot(
+                saveLocation,
+                game,
+                out var usedAlternativeFallback,
+                out var sourceRootFailureReason);
+
+            if (sourceRoot is null)
             {
+                LastBackupFailureReason = sourceRootFailureReason;
+
                 _logger.LogWarning(
-                    "No save location found for game: {GameName}",
-                    game.DisplayName);
+                    "No usable save folder to back up for game: {GameName}. {Reason}",
+                    game.DisplayName,
+                    sourceRootFailureReason);
+
                 return null;
+            }
+
+            if (usedAlternativeFallback)
+            {
+                _logger.LogInformation(
+                    "Backing up game '{GameName}' from the alternative save folder {SourceRoot} "
+                    + "(PrimarySavePath={PrimarySavePath}); the alternative folder was accepted only "
+                    + "because the detector recorded {FileCount} save file(s) inside it and they are "
+                    + "still on disk.",
+                    game.DisplayName,
+                    sourceRoot,
+                    saveLocation.PrimarySavePath ?? "(null)",
+                    saveLocation.SaveFiles.Count(f => IsPathInside(f, sourceRoot)));
             }
 
             // Collect files to backup
@@ -182,6 +219,8 @@ public class SaveManagementService : ISaveManagementService
 
             if (filesToBackup.Count == 0)
             {
+                LastBackupFailureReason =
+                    $"存档目录 {sourceRoot} 存在，但其中没有任何可以备份的文件。";
                 _logger.LogWarning("No save files found to backup for game: {GameName}", game.DisplayName);
                 return null;
             }
@@ -258,7 +297,13 @@ public class SaveManagementService : ISaveManagementService
                 GameInfoId = game.Id,
                 Name = GenerateBackupName(game, DateTime.UtcNow),
                 BackupPath = backupFilePath,
-                OriginalSavePath = saveLocation.PrimarySavePath,
+
+                // The folder the archive really was taken from - which is also the folder a restore
+                // goes back to (RestoreBackupAsync reads this column as its destination). It must be
+                // the folder that was backed up, not merely PrimarySavePath: that one can be null
+                // while an alternative folder held every save file. Writing the wrong folder here
+                // would make a restore write the saves somewhere the user never backed up.
+                OriginalSavePath = sourceRoot,
                 CreatedTime = DateTime.UtcNow,
                 SizeBytes = GetFileSizeSafe(backupFilePath),
                 Description = description
@@ -305,12 +350,190 @@ public class SaveManagementService : ISaveManagementService
         }
         catch (Exception ex)
         {
+            LastBackupFailureReason = $"备份过程中发生错误：{ex.Message}";
+
             _logger.LogError(
                 ex,
                 "Error creating backup for game: {GameName}",
                 game.DisplayName);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Decides which detected folder the backup is really taken from, and proves the choice.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists.</b> <see cref="EngineSaveDetector"/> reports a folder under
+    /// <see cref="SaveLocationResult.PrimarySavePath"/> only when that folder is the engine's
+    /// canonical save folder. For Ren'Py the canonical one is
+    /// <c>%APPDATA%\RenPy\&lt;config.save_directory&gt;</c>; a game that keeps its saves in the
+    /// portable folder <c>&lt;install&gt;\game\saves</c> gets that folder under
+    /// <see cref="SaveLocationResult.AlternativePaths"/> instead - with
+    /// <see cref="SaveLocationResult.Success"/> true and every save file listed in
+    /// <see cref="SaveLocationResult.SaveFiles"/>. Requiring <c>PrimarySavePath</c> turned that
+    /// healthy result into the user-visible lie "创建备份失败。未检测到存档文件。", printed while the
+    /// very same result object carried 12 save files.</para>
+    ///
+    /// <para><b>What this does NOT change.</b> The detector's Primary/Alternative split is a
+    /// product decision - which folder is the engine's canonical one - and stays exactly as it is.
+    /// This method only reconciles the backup service with the folder the detector already found,
+    /// and it falls back only when <c>PrimarySavePath</c> is empty (or is the installation folder
+    /// itself, which the detector refuses on its own).</para>
+    ///
+    /// <para><b>What is proved before an alternative folder is accepted.</b> The first entry of
+    /// <see cref="SaveLocationResult.AlternativePaths"/> is never taken on faith:</para>
+    /// <list type="number">
+    /// <item><description>the folder must exist;</description></item>
+    /// <item><description>it must not be the game installation folder, and must not be a folder
+    /// that contains it - restoring a backup deletes the contents of the folder it restores into,
+    /// so mistaking the installation (or its parent) for a save folder can destroy the game;</description></item>
+    /// <item><description>the detector itself must have recorded at least one save file inside it
+    /// (<see cref="SaveLocationResult.SaveFiles"/>), which is the only evidence that the folder
+    /// holds saves rather than game data;</description></item>
+    /// <item><description>at least one of those recorded files must still be on disk, so the
+    /// archive cannot be built from a folder that has since been emptied.</description></item>
+    /// </list>
+    /// <para>A folder that fails any of these is skipped with its reason collected, and the next
+    /// alternative is tried. When nothing is left, the reason is returned instead of a path.</para>
+    /// </remarks>
+    /// <param name="saveLocation">The detection result for the game.</param>
+    /// <param name="game">The game being backed up.</param>
+    /// <param name="usedAlternativeFallback">
+    /// True when the returned folder is an alternative rather than the primary one, so the caller
+    /// can say so in its log and in what the user sees.
+    /// </param>
+    /// <param name="failureReason">Why no folder could be used; empty when a path is returned.</param>
+    /// <returns>The folder to archive, or null when no folder could be proved to hold saves.</returns>
+    private static string? ResolveBackupSourceRoot(
+        SaveLocationResult saveLocation,
+        GameInfo game,
+        out bool usedAlternativeFallback,
+        out string failureReason)
+    {
+        usedAlternativeFallback = false;
+        failureReason = string.Empty;
+
+        if (!saveLocation.Success)
+        {
+            failureReason = saveLocation.ErrorMessage ?? "存档位置检测失败，没有找到可用的存档目录。";
+            return null;
+        }
+
+        // 1. A usable primary folder keeps exactly the behaviour it always had.
+        var primary = saveLocation.PrimarySavePath;
+        if (!string.IsNullOrWhiteSpace(primary))
+        {
+            if (!IsUnsafeSaveRoot(primary, game))
+            {
+                return primary;
+            }
+
+            // The detector refuses this path itself (RejectInstallRootAsSavePath); reaching this
+            // point means the result was assembled by hand. Fall through and look for a safe folder.
+            failureReason = $"已拒绝把游戏安装目录当作备份来源：{primary}。";
+        }
+
+        // 2. Fall back to the first alternative folder that is proved to hold save files.
+        var rejected = new List<string>();
+
+        foreach (var candidate in saveLocation.AlternativePaths)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            if (IsUnsafeSaveRoot(candidate, game))
+            {
+                rejected.Add($"{candidate}（拒绝：这是游戏安装目录，或包含游戏安装目录的上级目录）");
+                continue;
+            }
+
+            if (!Directory.Exists(candidate))
+            {
+                rejected.Add($"{candidate}（目录不存在）");
+                continue;
+            }
+
+            var detectedInside = saveLocation.SaveFiles.Count(file => IsPathInside(file, candidate));
+            if (detectedInside == 0)
+            {
+                rejected.Add($"{candidate}（检测器没有在该目录下记录任何存档文件）");
+                continue;
+            }
+
+            var stillOnDisk = saveLocation.SaveFiles.Count(file => IsPathInside(file, candidate) && File.Exists(file));
+            if (stillOnDisk == 0)
+            {
+                rejected.Add($"{candidate}（检测到的 {detectedInside} 个存档文件现在都不在磁盘上）");
+                continue;
+            }
+
+            usedAlternativeFallback = true;
+            failureReason = string.Empty;
+            return candidate;
+        }
+
+        var detail = rejected.Count == 0
+            ? "检测结果里没有备用存档目录"
+            : string.Join("；", rejected);
+
+        failureReason = string.IsNullOrWhiteSpace(primary)
+            ? $"未检测到可备份的存档文件：{detail}（检测器没有给出主存档目录）。"
+            : $"未检测到可备份的存档文件：{detail}（主存档目录 {primary} 不可用）。";
+
+        return null;
+    }
+
+    /// <summary>
+    /// True when <paramref name="candidatePath"/> is the game installation folder itself, or a
+    /// folder that contains it.
+    /// </summary>
+    /// <remarks>
+    /// The equality half is <see cref="EngineSaveDetector.IsGameInstallRoot"/>, which already
+    /// guards the whole detection path. The containment half is this service's own belt and
+    /// braces: a backup whose folder were <c>D:\GAME</c> for a game installed in
+    /// <c>D:\GAME\Dreamin'_Her</c> would put every file of the installation (and of its siblings)
+    /// into the archive, and restoring it would clear that folder first.
+    /// </remarks>
+    private static bool IsUnsafeSaveRoot(string? candidatePath, GameInfo game)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath))
+        {
+            return false;
+        }
+
+        if (EngineSaveDetector.IsGameInstallRoot(candidatePath, game))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(game.InstallPath)
+            && IsPathInside(game.InstallPath, candidatePath);
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> is strictly inside <paramref name="directory"/>
+    /// (case-insensitively, after trimming the trailing separator). The paths are compared as
+    /// text on purpose: the file paths handed to this service come from the same
+    /// <c>Directory.GetFiles</c> call that produced the directory, so they share a form.
+    /// </summary>
+    private static bool IsPathInside(string? path, string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(directory))
+        {
+            return false;
+        }
+
+        var root = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (root.Length == 0)
+        {
+            return false;
+        }
+
+        return path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc/>

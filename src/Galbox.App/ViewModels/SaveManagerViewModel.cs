@@ -553,7 +553,16 @@ public partial class SaveManagerViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedGameBackupCount));
 
                 NewBackupDescription = string.Empty;
-                SuccessMessage = $"备份创建成功：{backup.Name}";
+
+                // Name the folder that was really archived. For a Ren'Py game the saves usually
+                // live in the portable folder (<install>\game\saves) rather than in the engine's
+                // canonical user savedir, so the user must be able to see which folder this backup
+                // came from instead of assuming it is the one they had in mind.
+                var backedUpFolder = string.IsNullOrWhiteSpace(backup.OriginalSavePath)
+                    ? "未知文件夹"
+                    : backup.OriginalSavePath!;
+
+                SuccessMessage = $"备份创建成功：{backup.Name}（来源文件夹：{backedUpFolder}）";
                 _logger.LogInformation("Backup created: {BackupName} for game {GameId}", backup.Name, game.Id);
 
                 // Clear success message after delay
@@ -562,7 +571,12 @@ public partial class SaveManagerViewModel : ObservableObject
             }
             else
             {
-                ErrorMessage = "创建备份失败。未检测到存档文件。";
+                // The service records why it refused, so the page no longer claims that no save
+                // file was detected when the real problem was that none of the detected folders
+                // could be used.
+                ErrorMessage = _saveManagementService.LastBackupFailureReason is { Length: > 0 } reason
+                    ? $"创建备份失败：{reason}"
+                    : "创建备份失败。未检测到存档文件。";
             }
         }
         catch (Exception ex)
