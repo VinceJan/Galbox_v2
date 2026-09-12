@@ -277,9 +277,10 @@ Harness 覆盖的场景（`tests/Galbox.Data.Migrations.Harness/Program.cs`）�
    失败时附上最新的启动日志。注意它依赖 `src/Galbox.App/bin` 下已构建好的 exe。
    **启动真实 GUI 的检查必须先读 §6.1，窗口必须离屏。**
 
-现有 **43 项**检查，编号是分段的：`A0–A19`（基础与数据安全）、`A30–A32`（补丁中心接线与往返）、
+现有 **52 项**检查，编号是分段的：`A0–A19`（基础与数据安全）、`A30–A32`（补丁中心接线与往返）、
 `A40–A42`（ymgal / cngal / 四源状态区分）、`A50`（快速导航存活）、`A60–A67`（moyu 补丁源服务层与合规）、
-`A70–A74`（游戏健康诊断与修复）、`A90–A92`（预留接口层）。
+`A70–A74`（游戏健康诊断与修复）、`A80`（真实游戏全链路）、`A90–A92`（预留接口层）、
+`A100`（备份来源回退）、`A110–A116`（moyu 在线源接到补丁中心界面）。
 每项量什么，见 `tests/Galbox.Acceptance/README.md` 与本仓库 README 的表格；
 **权威来源始终是 `tests/Galbox.Acceptance/Program.cs` 里的注册数组**（顺序即执行顺序）。
 **新增检查后请更新这两处的清单**，否则清单会像旧文档一样过期。
@@ -409,8 +410,8 @@ dotnet run --project tools\Galbox.PatchVerifier -c Release -- --scratch E:\tmp\_
 选包 → `OverwritePreview`（覆盖 / 新增 / 冲突 / 未变化 / 被拒绝五类分开列）→ 用户确认冲突 →
 `InstallAsync`（带进度、可取消）→ 逐文件结果与 `PatchStatusReport` 的 `Explanation` 原文 →
 回滚 → 状态台账 → 中断恢复。验收项 A30–A32 覆盖这条链路。
-**唯一还没接上的是在线补丁源（moyu）的界面**：服务层已实现（A60–A67），
-但 `PatchCenterViewModel.Patches.cs` 目前仍如实写着"在线补丁源：未实现"。
+在线补丁源（moyu）的界面已经接上：查询 / 打开补丁页 / 接管下载 → 本机补丁引擎，
+验收项 A110–A116。服务层的合规护栏（A63 / A114）仍然有效：任何 `/api` 路径都不可达。
 
 ---
 

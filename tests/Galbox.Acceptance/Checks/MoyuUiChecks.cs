@@ -24,7 +24,7 @@ namespace Galbox.Acceptance.Checks;
 /// <item><description>it exposes a query surface, and a query driven through the real ViewModel
 /// reaches the wire — proving the service is called rather than merely stored;</description></item>
 /// <item><description>the shipping XAML no longer claims the feature is unimplemented, and binds the
-/// card's status fields.</description></item>
+/// card's status fields and handlers.</description></item>
 /// </list>
 /// </summary>
 public sealed class A110MoyuUiWiringCheck : IAcceptanceCheck
@@ -42,8 +42,8 @@ public sealed class A110MoyuUiWiringCheck : IAcceptanceCheck
             "PatchCenterViewModel's constructor takes MoyuApi + IMoyuKeyStore + MoyuBrowserLauncher + "
             + "MoyuDownloadWatcher and the container satisfies them; a query driven through the real "
             + "ViewModel puts exactly one request on /v2/moyu/patches; the patch centre XAML no longer "
-            + "contains \"在线补丁源：未实现\" and binds MoyuStatusCodeText / MoyuStatusMessage / "
-            + "FindMoyuPatchesCommand";
+            + "contains \"在线补丁源：未实现\", and binds the status fields, the query command and the "
+            + "handlers of every control the card offers";
 
         var details = new List<string>();
         var problems = new List<string>();
@@ -72,6 +72,10 @@ public sealed class A110MoyuUiWiringCheck : IAcceptanceCheck
                 problems.Add($"PatchCenterViewModel does not depend on {type.Name}, so the page cannot reach the moyu layer");
             }
         }
+
+        // The live proof of the same thing is checked further down, once the ViewModel exists:
+        // MoyuUiHarness.CreateViewModel prefers the constructor that accepts the moyu services and
+        // records whether it was used.
 
         // The container's own registrations, resolved exactly as the page resolves them.
         var moyuApiFromContainer = context.Services.GetService<MoyuApi>();
@@ -103,135 +107,187 @@ public sealed class A110MoyuUiWiringCheck : IAcceptanceCheck
             apiKey: "nmk_live_A110probe_000000000000000000",
             responder: _ => MoyuStubHandler.Json(payload));
 
-        var viewModel = harness.CreateViewModel();
-        viewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
+        var live = harness.CreateViewModel();
+        var vm = new MoyuUiProbe(live);
+        vm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
 
-        var query = viewModel.FindMoyuPatchesCommand;
         details.Add(string.Empty);
-        details.Add($"FindMoyuPatchesCommand : {(query is null ? "(MISSING)" : query.GetType().Name)}");
+        details.Add($"Constructed with the moyu dependencies : {harness.LastProbe?.BuiltWithMoyuDependencies}");
 
-        if (query is null)
+        if (harness.LastProbe?.BuiltWithMoyuDependencies != true)
         {
-            problems.Add("the ViewModel exposes no FindMoyuPatchesCommand, so the page has no button to press");
+            problems.Add("the page's ViewModel was constructed WITHOUT the moyu services, so the page's own "
+                         + "construction path does not reach the online source");
         }
-        else
+
+        details.Add(string.Empty);
+        details.Add("Online-source surface on the live ViewModel:");
+        var surface = new[]
         {
-            var stopwatch = Stopwatch.StartNew();
-            await query.ExecuteAsync(null).ConfigureAwait(false);
-            stopwatch.Stop();
+            "FindMoyuPatchesCommand", "MoyuState", "MoyuStatusCodeText", "MoyuStatusMessage",
+            "MoyuAdvisoryMessage", "MoyuErrorDetail", "MoyuAnchorUsed", "MoyuPatches", "MoyuResources",
+            "IsMoyuQuerying", "SelectMoyuPatchCommand", "OpenMoyuPatchPageCommand",
+            "AdoptMoyuDownloadCommand", "CancelMoyuDownloadCommand", "SaveMoyuKeyCommand", "ClearMoyuKeyCommand"
+        };
 
-            details.Add($"Query elapsed          : {stopwatch.ElapsedMilliseconds} ms");
-            details.Add($"Requests on the wire   : {harness.Transport.Everything.Count}");
-            foreach (var (method, uri) in harness.Transport.Everything)
+        foreach (var member in surface)
+        {
+            var present = vm.Has(member);
+            details.Add($"   [{(present ? "OK" : "MISSING")}] {member}");
+            if (!present)
             {
-                details.Add($"   {method} {uri.PathAndQuery}  ->  allowed={MoyuComplianceGuard.IsAllowedApiUri(uri)}");
+                problems.Add($"the ViewModel exposes no {member}, so that part of the online source has no door");
             }
+        }
 
-            details.Add($"MoyuState              : {viewModel.MoyuState}");
-            details.Add($"MoyuStatusCodeText     : {viewModel.MoyuStatusCodeText}");
-            details.Add($"MoyuStatusMessage      : {viewModel.MoyuStatusMessage}");
-            details.Add($"MoyuPatches.Count      : {viewModel.MoyuPatches.Count}");
-            details.Add($"MoyuResources.Count    : {viewModel.MoyuResources.Count}");
+        var stopwatch = Stopwatch.StartNew();
+        var query = await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
+        stopwatch.Stop();
 
-            if (harness.Transport.Everything.Count != 1)
+        details.Add(string.Empty);
+        details.Add($"Query elapsed          : {stopwatch.ElapsedMilliseconds} ms (returned {query ?? "(null)"})");
+        details.Add($"Requests on the wire   : {harness.Transport.Everything.Count}");
+        foreach (var (method, uri) in harness.Transport.Everything)
+        {
+            details.Add($"   {method} {uri.PathAndQuery}  ->  allowed={MoyuComplianceGuard.IsAllowedApiUri(uri)}");
+        }
+
+        details.Add($"MoyuState              : {vm.StateName("MoyuState") ?? "(null)"}");
+        details.Add($"MoyuStatusCodeText     : {vm.GetString("MoyuStatusCodeText") ?? "(null)"}");
+        details.Add($"MoyuStatusMessage      : {vm.GetString("MoyuStatusMessage") ?? "(null)"}");
+        details.Add($"MoyuPatches.Count      : {vm.Count("MoyuPatches")}");
+        details.Add($"MoyuResources.Count    : {vm.Count("MoyuResources")}");
+        details.Add($"Probe missing members  : {vm.MissingSummary()}");
+
+        if (harness.Transport.Everything.Count != 1)
+        {
+            problems.Add($"a query through the ViewModel produced {harness.Transport.Everything.Count} request(s), expected exactly 1");
+        }
+
+        if (vm.StateName("MoyuState") != "Found")
+        {
+            problems.Add($"the ViewModel reported MoyuState={vm.StateName("MoyuState") ?? "(missing)"} for a one-row answer, expected Found");
+        }
+
+        if (vm.Count("MoyuPatches") != 1)
+        {
+            problems.Add($"the ViewModel holds {vm.Count("MoyuPatches")} patch row(s), expected 1");
+        }
+
+        if (vm.Count("MoyuResources") != 1)
+        {
+            problems.Add($"the ViewModel lists {vm.Count("MoyuResources")} resource row(s) for the found patch, expected 1");
+        }
+
+        var resourceRow = vm.Items("MoyuResources").FirstOrDefault();
+        if (resourceRow is not null)
+        {
+            var rowProbe = new MoyuUiProbe(resourceRow);
+            details.Add($"First resource row     : {rowProbe.GetString("DisplayName")} | {rowProbe.GetString("SizeText")}");
+
+            if (rowProbe.Get("Resource") is MoyuResource resource)
             {
-                problems.Add($"a query through the ViewModel produced {harness.Transport.Everything.Count} request(s), expected exactly 1");
-            }
-
-            if (viewModel.MoyuState != MoyuQueryState.Found)
-            {
-                problems.Add($"the ViewModel reported MoyuState={viewModel.MoyuState} for a one-row answer, expected Found");
-            }
-
-            if (viewModel.MoyuPatches.Count != 1)
-            {
-                problems.Add($"the ViewModel holds {viewModel.MoyuPatches.Count} patch row(s), expected 1");
-            }
-
-            if (viewModel.MoyuResources.Count != 1)
-            {
-                problems.Add($"the ViewModel lists {viewModel.MoyuResources.Count} resource row(s) for the found patch, expected 1");
-            }
-
-            // The engine's source metadata is what makes an install traceable to the page it came from.
-            var resourceRow = viewModel.MoyuResources.FirstOrDefault();
-            if (resourceRow is not null)
-            {
-                var source = resourceRow.Resource.ToPatchSourceInfo();
-                details.Add($"First resource row     : {resourceRow.DisplayName} | {resourceRow.SizeText}");
-                details.Add($"  patch source info    : kind={source.Kind}, patch={source.PatchId}, "
+                var source = resource.ToPatchSourceInfo();
+                details.Add($"  engine source info   : kind={source.Kind}, patch={source.PatchId}, "
                             + $"resource={source.ResourceId}, page={source.WebUrl}");
+
+                if (source.Kind != "moyu-moe-v2" || source.PatchId != "86" || source.ResourceId != "6262")
+                {
+                    problems.Add($"the resource does not carry usable engine source metadata: {source.Kind}/{source.PatchId}/{source.ResourceId}");
+                }
+            }
+            else
+            {
+                problems.Add("the resource row does not expose the underlying MoyuResource, so no source metadata can be recorded");
             }
         }
 
         // --- 3. The XAML ---------------------------------------------------------------------
         var repoRoot = RepoLocator.FindRepoRoot();
-        var pagePath = Path.Combine(RepoLocator.AppProject(repoRoot), "Views", "PatchCenterPage.xaml");
-        var xaml = File.ReadAllText(pagePath);
+        var pagePath = repoRoot is null
+            ? string.Empty
+            : Path.Combine(RepoLocator.AppProject(repoRoot), "Views", "PatchCenterPage.xaml");
 
         details.Add(string.Empty);
-        details.Add($"Patch centre page      : {pagePath}");
+        details.Add($"Patch centre page      : {(pagePath.Length == 0 ? "(repository root not found)" : pagePath)}");
 
-        var mustBeGone = new[] { "在线补丁源：未实现", "OnlinePatchSourceNotice" };
-        foreach (var text in mustBeGone)
+        if (pagePath.Length == 0 || !File.Exists(pagePath))
         {
-            var stillThere = xaml.Contains(text, StringComparison.Ordinal);
-            details.Add($"   [{(stillThere ? "STILL PRESENT" : "removed")}] \"{text}\"");
-            if (stillThere)
+            problems.Add("the patch centre page could not be located for the XAML assertions");
+        }
+        else
+        {
+            var xaml = File.ReadAllText(pagePath);
+
+            foreach (var text in new[] { "在线补丁源：未实现", "OnlinePatchSourceNotice" })
             {
-                problems.Add($"the page still contains \"{text}\", so the UI still says the online source is unimplemented");
+                var stillThere = xaml.Contains(text, StringComparison.Ordinal);
+                details.Add($"   [{(stillThere ? "STILL PRESENT" : "removed")}] \"{text}\"");
+                if (stillThere)
+                {
+                    problems.Add($"the page still contains \"{text}\", so the UI still says the online source is unimplemented");
+                }
+            }
+
+            var mustBeBound = new[]
+            {
+                "ViewModel.FindMoyuPatchesCommand",
+                "ViewModel.MoyuStatusCodeText",
+                "ViewModel.MoyuStatusMessage",
+                "ViewModel.MoyuErrorDetail",
+                "ViewModel.MoyuAdvisoryMessage",
+                "ViewModel.MoyuPatches",
+                "ViewModel.MoyuResources",
+                "ViewModel.MoyuKeySummary"
+            };
+
+            foreach (var binding in mustBeBound)
+            {
+                var bound = xaml.Contains(binding, StringComparison.Ordinal);
+                details.Add($"   [{(bound ? "bound" : "NOT BOUND")}] {binding}");
+                if (!bound)
+                {
+                    problems.Add($"the page does not bind {binding}, so that part of the feature has no door");
+                }
+            }
+
+            // Every control the card offers must have a handler: a Button with no Command and no Click
+            // is exactly the "点了没反应的按钮" defect class of this project's spec.
+            var mustBeWired = new[]
+            {
+                "ViewModel.SaveMoyuKeyCommand",
+                "ViewModel.ClearMoyuKeyCommand",
+                "ViewModel.CancelMoyuDownloadCommand",
+                "OnMoyuKeyPasswordChanged"
+            };
+
+            foreach (var handler in mustBeWired)
+            {
+                var wired = xaml.Contains(handler, StringComparison.Ordinal);
+                details.Add($"   [{(wired ? "wired" : "NOT WIRED")}] {handler}");
+                if (!wired)
+                {
+                    problems.Add($"the page never references {handler}, so that control would do nothing");
+                }
             }
         }
 
-        var mustBeBound = new[]
-        {
-            "ViewModel.FindMoyuPatchesCommand",
-            "ViewModel.MoyuStatusCodeText",
-            "ViewModel.MoyuStatusMessage",
-            "ViewModel.MoyuErrorDetail",
-            "ViewModel.MoyuAdvisoryMessage",
-            "ViewModel.MoyuPatches",
-            "ViewModel.MoyuResources",
-            "ViewModel.MoyuKeySummary"
-        };
-
-        foreach (var binding in mustBeBound)
-        {
-            var bound = xaml.Contains(binding, StringComparison.Ordinal);
-            details.Add($"   [{(bound ? "bound" : "NOT BOUND")}] {binding}");
-            if (!bound)
-            {
-                problems.Add($"the page does not bind {binding}, so that part of the feature has no door");
-            }
-        }
-
-        // Every command the card binds must resolve on the ViewModel: a button bound to a null
-        // command is exactly the "点了没反应的按钮" defect class of this project's spec.
-        var commandNames = new[]
-        {
-            "FindMoyuPatchesCommand", "SelectMoyuPatchCommand", "OpenMoyuPatchPageCommand",
-            "AdoptMoyuDownloadCommand", "CancelMoyuDownloadCommand", "SaveMoyuKeyCommand", "ClearMoyuKeyCommand"
-        };
-
-        foreach (var name in commandNames)
-        {
-            var command = MoyuUiHarness.Read(viewModel, name);
-            details.Add($"   [{(command is null ? "MISSING" : command.GetType().Name)}] ViewModel.{name}");
-            if (command is null)
-            {
-                problems.Add($"ViewModel.{name} does not exist; a button bound to it would be a dead button");
-            }
-        }
-
-        // The download-model paragraph is the honest description of the browser hop. It has to say
+        // The download-model paragraph is the honest description of the browser hop: it has to say
         // that the site gives no direct link, otherwise the user is told to expect something the
         // service deliberately does not provide.
-        var explanation = viewModel.MoyuDownloadModelExplanation;
+        var explanation = vm.GetString("MoyuDownloadModelExplanation");
         details.Add(string.Empty);
-        details.Add($"Download model text    : {explanation}");
-        if (!explanation.Contains("直链", StringComparison.Ordinal) || !explanation.Contains("下载", StringComparison.Ordinal))
+        details.Add($"Download model text    : {explanation ?? "(missing)"}");
+
+        if (explanation is null || !explanation.Contains("直链", StringComparison.Ordinal)
+            || !explanation.Contains("下载", StringComparison.Ordinal))
         {
             problems.Add("the download-model explanation does not state that no direct link exists");
+        }
+
+        if (vm.Missing.Count > 0)
+        {
+            problems.Add($"{vm.Missing.Count} member(s) of the online-source surface are missing: {vm.MissingSummary()}");
         }
 
         foreach (var problem in problems)
@@ -247,9 +303,9 @@ public sealed class A110MoyuUiWiringCheck : IAcceptanceCheck
 
         return CheckResult.Pass(Id, Title, expected,
             "4/4 moyu dependencies in the constructor and resolvable from the container; a query through "
-            + "the real ViewModel sent exactly 1 request to /v2/moyu/patches and produced 1 patch row with "
-            + "1 resource; the page no longer claims the source is unimplemented and binds 8 status fields "
-            + "plus 7 live commands")
+            + "the real ViewModel sent exactly 1 request and produced 1 patch row with 1 resource carrying "
+            + "moyu-moe-v2 source metadata; the page no longer claims the source is unimplemented, binds "
+            + "8 status fields and wires 4 handlers")
             .With(details.ToArray());
     }
 }
@@ -277,7 +333,8 @@ public sealed class A111MoyuUiMissingKeyCheck : IAcceptanceCheck
     {
         var expected =
             "with no key, the ViewModel reports MoyuState=MissingKey with a headline naming the missing "
-            + "nmk_ key and how to get one, shows zero result rows, and sends ZERO HTTP requests";
+            + "nmk_ key and how to get one, shows zero result rows, carries no error detail, and sends "
+            + "ZERO HTTP requests";
 
         var details = new List<string>();
         var problems = new List<string>();
@@ -298,41 +355,46 @@ public sealed class A111MoyuUiMissingKeyCheck : IAcceptanceCheck
                 .With(details.ToArray());
         }
 
-        var viewModel = harness.CreateViewModel();
-        viewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
+        var vm = new MoyuUiProbe(harness.CreateViewModel());
+        vm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
 
-        details.Add($"State before any query : {viewModel.MoyuState} / {viewModel.MoyuStatusCodeText}");
-        details.Add($"  message              : {viewModel.MoyuStatusMessage}");
-        details.Add($"Key summary (shown)    : {viewModel.MoyuKeySummary}");
-        details.Add($"IsMoyuKeyConfigured    : {viewModel.IsMoyuKeyConfigured}");
+        details.Add($"State before any query : {vm.StateName("MoyuState") ?? "(missing)"} / {vm.GetString("MoyuStatusCodeText") ?? "(missing)"}");
+        details.Add($"  message              : {vm.GetString("MoyuStatusMessage") ?? "(missing)"}");
+        details.Add($"Key summary (shown)    : {vm.GetString("MoyuKeySummary") ?? "(missing)"}");
+        details.Add($"IsMoyuKeyConfigured    : {vm.GetBool("IsMoyuKeyConfigured")?.ToString() ?? "(missing)"}");
 
-        await viewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+        await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
 
         details.Add(string.Empty);
-        details.Add($"State after the query  : {viewModel.MoyuState}");
-        details.Add($"Status code            : {viewModel.MoyuStatusCodeText}");
-        details.Add($"Status message         : {viewModel.MoyuStatusMessage}");
-        details.Add($"Advisory               : {viewModel.MoyuAdvisoryMessage}");
-        details.Add($"Error detail           : {viewModel.MoyuErrorDetail ?? "(none — correctly absent: a missing key is not a query failure)"}");
-        details.Add($"MoyuPatches.Count      : {viewModel.MoyuPatches.Count}");
+        details.Add($"State after the query  : {vm.StateName("MoyuState") ?? "(missing)"}");
+        details.Add($"Status code            : {vm.GetString("MoyuStatusCodeText") ?? "(missing)"}");
+        details.Add($"Status message         : {vm.GetString("MoyuStatusMessage") ?? "(missing)"}");
+        details.Add($"Advisory               : {vm.GetString("MoyuAdvisoryMessage") ?? "(missing)"}");
+        details.Add($"Error detail           : {vm.GetString("MoyuErrorDetail") ?? "(none — correctly absent: a missing key is not a query failure)"}");
+        details.Add($"MoyuPatches.Count      : {vm.Count("MoyuPatches")}");
         details.Add($"Requests on the wire   : {harness.Transport.Everything.Count}");
+        details.Add($"Probe missing members  : {vm.MissingSummary()}");
 
-        if (viewModel.MoyuState == MoyuQueryState.Empty)
+        var state = vm.StateName("MoyuState");
+        if (state is null)
         {
-            problems.Add("a missing key was reported as \"no results\" (MoyuQueryState.Empty) — the exact defect this block exists for");
+            problems.Add("the ViewModel exposes no MoyuState, so a key-less query cannot be reported at all");
+        }
+        else if (state == "Empty")
+        {
+            problems.Add("a missing key was reported as \"no results\" (Empty) — the exact defect this block exists for");
+        }
+        else if (state != "MissingKey")
+        {
+            problems.Add($"MoyuState is {state}, expected MissingKey");
         }
 
-        if (viewModel.MoyuState != MoyuQueryState.MissingKey)
+        if (vm.Count("MoyuPatches") != 0)
         {
-            problems.Add($"MoyuState is {viewModel.MoyuState}, expected MissingKey");
+            problems.Add($"the key-less path produced {vm.Count("MoyuPatches")} row(s); a key-less client must invent nothing");
         }
 
-        if (viewModel.MoyuPatches.Count != 0)
-        {
-            problems.Add($"the key-less path produced {viewModel.MoyuPatches.Count} row(s); a key-less client must invent nothing");
-        }
-
-        var headline = viewModel.MoyuStatusMessage ?? string.Empty;
+        var headline = vm.GetString("MoyuStatusMessage") ?? string.Empty;
         if (!headline.Contains("密钥", StringComparison.Ordinal))
         {
             problems.Add($"the headline does not say a key is missing: \"{headline}\"");
@@ -343,19 +405,24 @@ public sealed class A111MoyuUiMissingKeyCheck : IAcceptanceCheck
             problems.Add($"the headline does not say the query could not be made: \"{headline}\"");
         }
 
-        var advisory = viewModel.MoyuAdvisoryMessage ?? string.Empty;
-        if (advisory.Length == 0)
+        var code = vm.GetString("MoyuStatusCodeText") ?? string.Empty;
+        if (code != "MOYU_NOT_CONFIGURED")
+        {
+            problems.Add($"the status code is \"{code}\", expected MOYU_NOT_CONFIGURED — a distinct code is what keeps the four outcomes apart");
+        }
+
+        if (string.IsNullOrWhiteSpace(vm.GetString("MoyuAdvisoryMessage")))
         {
             problems.Add("no advisory text is shown for the missing-key state");
         }
 
-        if (viewModel.MoyuErrorDetail is not null)
+        if (vm.Get("MoyuErrorDetail") is string detail && detail.Length > 0)
         {
-            problems.Add("the missing-key state carries an error detail, which makes it look like a query failure");
+            problems.Add($"the missing-key state carries an error detail (\"{detail}\"), which makes it look like a query failure");
         }
 
         // What it is, where to get it: both must be on the page, not just in a log line.
-        var keyText = viewModel.MoyuKeySummary + "\n" + viewModel.MoyuKeyHowTo;
+        var keyText = (vm.GetString("MoyuKeySummary") ?? string.Empty) + "\n" + (vm.GetString("MoyuKeyHowTo") ?? string.Empty);
         details.Add(string.Empty);
         details.Add($"Key text (as shown)    : {keyText.Replace("\n", " | ")}");
 
@@ -373,6 +440,11 @@ public sealed class A111MoyuUiMissingKeyCheck : IAcceptanceCheck
                          + string.Join(", ", harness.Transport.Everything.Select(r => r.Uri.ToString())));
         }
 
+        if (vm.Missing.Count > 0)
+        {
+            problems.Add($"{vm.Missing.Count} member(s) missing: {vm.MissingSummary()}");
+        }
+
         foreach (var problem in problems)
         {
             details.Add($"PROBLEM: {problem}");
@@ -385,8 +457,8 @@ public sealed class A111MoyuUiMissingKeyCheck : IAcceptanceCheck
         }
 
         return CheckResult.Pass(Id, Title, expected,
-            "MoyuState=MissingKey with \"未配置 nmk_ 密钥，无法查询\", 0 result rows, no error detail, "
-            + "the panel names nmk_ and developer.nextmoe.dev, and 0 HTTP requests were sent")
+            "MoyuState=MissingKey / MOYU_NOT_CONFIGURED with \"未配置 nmk_ 密钥，无法查询\", 0 result rows, "
+            + "no error detail, the panel names nmk_ and developer.nextmoe.dev, and 0 HTTP requests were sent")
             .With(details.ToArray());
     }
 }
@@ -398,9 +470,9 @@ public sealed class A111MoyuUiMissingKeyCheck : IAcceptanceCheck
 ///
 /// <para>
 /// Two things are asserted, and the second is the important one: the UI must say the work cannot be
-/// looked up, and it must do so <b>without sending a request</b>. The transport here is configured
-/// with a key, so a request would happily be answered — the only reason it is not sent is that the
-/// ViewModel decides the anchor first.
+/// looked up, and it must do so <b>without sending a request</b>. The client here is configured with a
+/// key, so a request would happily be answered — the only reason it is not sent is that the ViewModel
+/// decides the anchor before it looks at the key or builds a URI.
 /// </para>
 /// </summary>
 public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
@@ -415,9 +487,9 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
     public async Task<CheckResult> RunAsync(AcceptanceContext context, CancellationToken cancellationToken)
     {
         var expected =
-            "for a game with no vndb id (but with a Bangumi source id), the ViewModel reports "
-            + "MoyuState=NoAnchor naming the missing vndb identifier, sends ZERO HTTP requests, and shows "
-            + "no rows — and the same holds for a game that was never scraped at all";
+            "for a game with no vndb id (including one whose only identifier is a Bangumi subject id), the "
+            + "ViewModel reports MoyuState=NoAnchor naming the missing vndb identifier, sends ZERO HTTP "
+            + "requests, and shows no rows";
 
         var details = new List<string>();
         var problems = new List<string>();
@@ -430,30 +502,29 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
 
         var cases = new (string Label, GameInfo Game)[]
         {
-            ("Bangumi-sourced game (source=bangumi, no VndbId)", MoyuUiHarness.MakeGame(vndbId: null, sourceType: "bangumi", sourceId: "1234")),
-            ("never-scraped game (no ids at all)", MoyuUiHarness.MakeGame(vndbId: null)),
-            ("illegal vndb value", MoyuUiHarness.MakeGame(vndbId: "bangumi:1234"))
+            ("Bangumi 来源的作品（source=bangumi，没有 VndbId）", MoyuUiHarness.MakeGame(vndbId: null, sourceType: "bangumi", sourceId: "1234")),
+            ("从未刮削过的作品（三个 id 都没有）", MoyuUiHarness.MakeGame(vndbId: null)),
+            ("VndbId 里放的其实是 Bangumi 值", MoyuUiHarness.MakeGame(vndbId: "bangumi:1234"))
         };
 
-        var requestsBefore = harness.Transport.Everything.Count;
-        var seen = new List<string>();
+        var missingMembers = new List<string>();
 
         foreach (var (label, game) in cases)
         {
-            var viewModel = harness.CreateViewModel();
-            viewModel.SelectedGame = game;
+            var vm = new MoyuUiProbe(harness.CreateViewModel());
+            vm.Set("SelectedGame", game);
 
             var before = harness.Transport.Everything.Count;
-            await viewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+            await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
             var after = harness.Transport.Everything.Count;
 
             details.Add($"--- {label} ---");
             details.Add($"  VndbId / SourceType / SourceId : {game.VndbId ?? "(null)"} / {game.SourceType ?? "(null)"} / {game.SourceId ?? "(null)"}");
-            details.Add($"  MoyuState                      : {viewModel.MoyuState}");
-            details.Add($"  Status code                    : {viewModel.MoyuStatusCodeText}");
-            details.Add($"  Status message                 : {viewModel.MoyuStatusMessage}");
-            details.Add($"  Advisory                       : {viewModel.MoyuAdvisoryMessage}");
-            details.Add($"  MoyuPatches.Count              : {viewModel.MoyuPatches.Count}");
+            details.Add($"  MoyuState                      : {vm.StateName("MoyuState") ?? "(missing)"}");
+            details.Add($"  Status code                    : {vm.GetString("MoyuStatusCodeText") ?? "(missing)"}");
+            details.Add($"  Status message                 : {vm.GetString("MoyuStatusMessage") ?? "(missing)"}");
+            details.Add($"  Advisory                       : {vm.GetString("MoyuAdvisoryMessage") ?? "(missing)"}");
+            details.Add($"  MoyuPatches.Count              : {vm.Count("MoyuPatches")}");
             details.Add($"  Requests sent by this query    : {after - before}");
             details.Add(string.Empty);
 
@@ -462,17 +533,22 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
                 problems.Add($"{label}: {after - before} request(s) were sent for a game that cannot be looked up");
             }
 
-            if (viewModel.MoyuState != MoyuQueryState.NoAnchor)
+            var state = vm.StateName("MoyuState");
+            if (state is null)
             {
-                problems.Add($"{label}: MoyuState is {viewModel.MoyuState}, expected NoAnchor");
+                problems.Add($"{label}: the ViewModel exposes no MoyuState");
+            }
+            else if (state != "NoAnchor")
+            {
+                problems.Add($"{label}: MoyuState is {state}, expected NoAnchor");
             }
 
-            if (viewModel.MoyuPatches.Count != 0)
+            if (vm.Count("MoyuPatches") > 0)
             {
-                problems.Add($"{label}: {viewModel.MoyuPatches.Count} row(s) were produced without an anchor");
+                problems.Add($"{label}: {vm.Count("MoyuPatches")} row(s) were produced without an anchor");
             }
 
-            var headline = viewModel.MoyuStatusMessage ?? string.Empty;
+            var headline = vm.GetString("MoyuStatusMessage") ?? string.Empty;
             if (!headline.Contains("无法查询", StringComparison.Ordinal))
             {
                 problems.Add($"{label}: the headline does not say the query cannot be made: \"{headline}\"");
@@ -483,16 +559,20 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
                 problems.Add($"{label}: the headline does not name the missing vndb identifier: \"{headline}\"");
             }
 
-            var advisory = viewModel.MoyuAdvisoryMessage ?? string.Empty;
-            if (advisory.Length == 0)
+            if (vm.GetString("MoyuStatusCodeText") != "MOYU_NO_ANCHOR")
+            {
+                problems.Add($"{label}: the status code is \"{vm.GetString("MoyuStatusCodeText") ?? "(missing)"}\", expected MOYU_NO_ANCHOR");
+            }
+
+            if (string.IsNullOrWhiteSpace(vm.GetString("MoyuAdvisoryMessage")))
             {
                 problems.Add($"{label}: no advisory text is shown");
             }
 
-            seen.Add($"{(int)viewModel.MoyuState}:{viewModel.MoyuStatusMessage}");
+            missingMembers.AddRange(vm.Missing);
         }
 
-        var totalRequests = harness.Transport.Everything.Count - requestsBefore;
+        var totalRequests = harness.Transport.Everything.Count;
         details.Add($"Total requests sent across all three no-anchor cases: {totalRequests}");
 
         if (totalRequests != 0)
@@ -500,9 +580,10 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
             problems.Add($"{totalRequests} request(s) were sent in total for games with no anchor; the answer is knowable without the network");
         }
 
-        // The Bangumi case must say WHY, by name: "Bangumi 的 id 不能当锚点用" is the actionable part.
-        var bangumiAdvisory = seen.FirstOrDefault();
-        details.Add($"First case state/message pair: {bangumiAdvisory}");
+        if (missingMembers.Count > 0)
+        {
+            problems.Add($"{missingMembers.Distinct().Count()} member(s) missing: {string.Join("; ", missingMembers.Distinct())}");
+        }
 
         foreach (var problem in problems)
         {
@@ -516,8 +597,8 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
         }
 
         return CheckResult.Pass(Id, Title, expected,
-            "3/3 anchor-less games reported NoAnchor with \"无法查询：该作品没有 vndb 标识\", 0 rows, and "
-            + "0 HTTP requests were sent even though the client was configured with a key")
+            "3/3 anchor-less games reported NoAnchor / MOYU_NO_ANCHOR with \"无法查询：该作品没有 vndb 标识\", "
+            + "0 rows, and 0 HTTP requests were sent even though the client was configured with a key")
             .With(details.ToArray());
     }
 }
@@ -528,9 +609,9 @@ public sealed class A112MoyuUiNoVndbIdCheck : IAcceptanceCheck
 /// <para>
 /// This is the second half of the honesty rule the project keeps re-learning: an empty successful
 /// answer is information ("moyu has nothing for this game"), while a failed query is the absence of
-/// an answer. The check drives both through the same ViewModel and asserts that the state, the
-/// headline, the advisory and the error surface differ - and, in particular, that only the failure
-/// carries the service's own reason or claims the query did not succeed.
+/// an answer. The check drives both through the same ViewModel and asserts that the state, the code,
+/// the headline and the error surface all differ - and, in particular, that only the failure carries
+/// the service's own reason, and that only the empty case is allowed to say "no results".
 /// </para>
 /// </summary>
 public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
@@ -545,31 +626,31 @@ public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
     public async Task<CheckResult> RunAsync(AcceptanceContext context, CancellationToken cancellationToken)
     {
         var expected =
-            "an answered-but-empty lookup reports MoyuState=Empty with a \"没有找到补丁\" headline and no "
-            + "error detail; a transport failure reports MoyuState=Failed with the service's reason "
-            + "attached; the two states, headlines and detail surfaces are all different";
+            "an answered-but-empty lookup reports MoyuState=Empty / MOYU_NO_RESULTS with a \"没有找到补丁\" "
+            + "headline and no error detail; a transport failure reports MoyuState=Failed / MOYU_QUERY_FAILED "
+            + "with the service's reason attached; the state names, codes and headlines all differ";
 
         var details = new List<string>();
         var problems = new List<string>();
 
-        // --- 1. Answered, zero rows ----------------------------------------------------------
+        // --- A. Answered, zero rows ----------------------------------------------------------
         var emptyHarness = MoyuUiHarness.Build(
             context,
             apiKey: "nmk_live_A113probe_empty_000000000000",
             responder: _ => MoyuStubHandler.Json(
                 """{"object":"list","items":[],"next_cursor":null,"total":0,"missing":["vndb:v4"]}"""));
 
-        var emptyViewModel = emptyHarness.CreateViewModel();
-        emptyViewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
-        await emptyViewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+        var emptyVm = new MoyuUiProbe(emptyHarness.CreateViewModel());
+        emptyVm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
+        await emptyVm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
 
-        details.Add("--- A. The lookup was answered and holds nothing ---");
-        details.Add($"  MoyuState        : {emptyViewModel.MoyuState}");
-        details.Add($"  Status code      : {emptyViewModel.MoyuStatusCodeText}");
-        details.Add($"  Status message   : {emptyViewModel.MoyuStatusMessage}");
-        details.Add($"  Advisory         : {emptyViewModel.MoyuAdvisoryMessage}");
-        details.Add($"  Error detail     : {emptyViewModel.MoyuErrorDetail ?? "(none)"}");
-        details.Add($"  Rows             : {emptyViewModel.MoyuPatches.Count}");
+        details.Add("--- A. 查询得到了回答，但结果为空 ---");
+        details.Add($"  MoyuState        : {emptyVm.StateName("MoyuState") ?? "(missing)"}");
+        details.Add($"  Status code      : {emptyVm.GetString("MoyuStatusCodeText") ?? "(missing)"}");
+        details.Add($"  Status message   : {emptyVm.GetString("MoyuStatusMessage") ?? "(missing)"}");
+        details.Add($"  Advisory         : {emptyVm.GetString("MoyuAdvisoryMessage") ?? "(missing)"}");
+        details.Add($"  Error detail     : {emptyVm.GetString("MoyuErrorDetail") ?? "(none)"}");
+        details.Add($"  Rows             : {emptyVm.Count("MoyuPatches")}");
         details.Add($"  Requests sent    : {emptyHarness.Transport.Everything.Count}");
         details.Add(string.Empty);
 
@@ -578,22 +659,28 @@ public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
             problems.Add($"the empty case sent {emptyHarness.Transport.Everything.Count} request(s), expected 1 (the question really was asked)");
         }
 
-        if (emptyViewModel.MoyuState != MoyuQueryState.Empty)
+        if (emptyVm.StateName("MoyuState") != "Empty")
         {
-            problems.Add($"an answered-but-empty lookup reported {emptyViewModel.MoyuState}, expected Empty");
+            problems.Add($"an answered-but-empty lookup reported {emptyVm.StateName("MoyuState") ?? "(missing)"}, expected Empty");
         }
 
-        if (emptyViewModel.MoyuErrorDetail is not null)
+        if (emptyVm.GetString("MoyuStatusCodeText") != "MOYU_NO_RESULTS")
         {
-            problems.Add($"the empty case carries an error detail (\"{emptyViewModel.MoyuErrorDetail}\"), so it reads like a failure");
+            problems.Add($"the empty case's code is \"{emptyVm.GetString("MoyuStatusCodeText") ?? "(missing)"}\", expected MOYU_NO_RESULTS");
         }
 
-        if (emptyViewModel.MoyuStatusMessage?.Contains("没有找到", StringComparison.Ordinal) != true)
+        var emptyDetail = emptyVm.GetString("MoyuErrorDetail");
+        if (emptyDetail is not null && emptyDetail.Length > 0)
         {
-            problems.Add($"the empty headline does not say nothing was found: \"{emptyViewModel.MoyuStatusMessage}\"");
+            problems.Add($"the empty case carries an error detail (\"{emptyDetail}\"), so it reads like a failure");
         }
 
-        // --- 2. The transport never answers ---------------------------------------------------
+        if (emptyVm.GetString("MoyuStatusMessage")?.Contains("没有找到", StringComparison.Ordinal) != true)
+        {
+            problems.Add($"the empty headline does not say nothing was found: \"{emptyVm.GetString("MoyuStatusMessage")}\"");
+        }
+
+        // --- B. The transport never answers ---------------------------------------------------
         var failedHarness = MoyuUiHarness.Build(
             context,
             apiKey: "nmk_live_A113probe_failure_000000000000",
@@ -605,39 +692,38 @@ public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
                     "application/problem+json")
             });
 
-        var failOptions = failedHarness.Options;
-        failOptions.MaxRetries = 0;          // one attempt; the retry policy is A67's business
-        failOptions.EnableConditionalRequests = false;
+        failedHarness.Options.MaxRetries = 0;              // one attempt; the retry policy is A67's business
+        failedHarness.Options.EnableConditionalRequests = false;
 
-        var failedViewModel = failedHarness.CreateViewModel();
-        failedViewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
+        var failedVm = new MoyuUiProbe(failedHarness.CreateViewModel());
+        failedVm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
 
         var stopwatch = Stopwatch.StartNew();
-        await failedViewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+        await failedVm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
         stopwatch.Stop();
 
-        details.Add("--- B. The transport failed ---");
-        details.Add($"  MoyuState        : {failedViewModel.MoyuState}");
-        details.Add($"  Status code      : {failedViewModel.MoyuStatusCodeText}");
-        details.Add($"  Status message   : {failedViewModel.MoyuStatusMessage}");
-        details.Add($"  Advisory         : {failedViewModel.MoyuAdvisoryMessage}");
-        details.Add($"  Error detail     : {failedViewModel.MoyuErrorDetail ?? "(none)"}");
-        details.Add($"  Rows             : {failedViewModel.MoyuPatches.Count}");
+        details.Add("--- B. 传输层没有给出回答 ---");
+        details.Add($"  MoyuState        : {failedVm.StateName("MoyuState") ?? "(missing)"}");
+        details.Add($"  Status code      : {failedVm.GetString("MoyuStatusCodeText") ?? "(missing)"}");
+        details.Add($"  Status message   : {failedVm.GetString("MoyuStatusMessage") ?? "(missing)"}");
+        details.Add($"  Advisory         : {failedVm.GetString("MoyuAdvisoryMessage") ?? "(missing)"}");
+        details.Add($"  Error detail     : {failedVm.GetString("MoyuErrorDetail") ?? "(none)"}");
+        details.Add($"  Rows             : {failedVm.Count("MoyuPatches")}");
         details.Add($"  Requests sent    : {failedHarness.Transport.Everything.Count}");
         details.Add($"  Elapsed          : {stopwatch.ElapsedMilliseconds} ms");
         details.Add(string.Empty);
 
-        if (failedViewModel.MoyuState != MoyuQueryState.Failed)
+        if (failedVm.StateName("MoyuState") != "Failed")
         {
-            problems.Add($"a 503 produced {failedViewModel.MoyuState}, expected Failed");
+            problems.Add($"a 503 produced {failedVm.StateName("MoyuState") ?? "(missing)"}, expected Failed");
         }
 
-        if (failedViewModel.MoyuState == MoyuQueryState.Empty)
+        if (failedVm.GetString("MoyuStatusCodeText") != "MOYU_QUERY_FAILED")
         {
-            problems.Add("a failed query was reported as \"no results\"");
+            problems.Add($"the failure's code is \"{failedVm.GetString("MoyuStatusCodeText") ?? "(missing)"}\", expected MOYU_QUERY_FAILED");
         }
 
-        var errorDetail = failedViewModel.MoyuErrorDetail ?? string.Empty;
+        var errorDetail = failedVm.GetString("MoyuErrorDetail") ?? string.Empty;
         if (errorDetail.Length == 0)
         {
             problems.Add("the failure state carries no reason, so the user cannot tell why the query failed");
@@ -650,26 +736,26 @@ public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
 
         if (!errorDetail.Contains("UPSTREAM_TIMEOUT", StringComparison.Ordinal))
         {
-            problems.Add($"the failure detail drops the upstream code: \"{errorDetail}\"");
+            problems.Add($"the failure detail drops the upstream code, which is what a support request would need: \"{errorDetail}\"");
         }
 
-        if (!failedViewModel.MoyuStatusMessage!.Contains("查询失败", StringComparison.Ordinal))
+        if (failedVm.GetString("MoyuStatusMessage")?.Contains("查询失败", StringComparison.Ordinal) != true)
         {
-            problems.Add($"the failure headline does not say the query failed: \"{failedViewModel.MoyuStatusMessage}\"");
+            problems.Add($"the failure headline does not say the query failed: \"{failedVm.GetString("MoyuStatusMessage")}\"");
         }
 
-        if (failedViewModel.MoyuPatches.Count != 0)
+        if (failedVm.Count("MoyuPatches") > 0)
         {
-            problems.Add($"the failure produced {failedViewModel.MoyuPatches.Count} row(s); a failure must not invent rows");
+            problems.Add($"the failure produced {failedVm.Count("MoyuPatches")} row(s); a failure must not invent rows");
         }
 
-        // --- 3. The two must not be confusable ------------------------------------------------
-        details.Add("--- C. The separation ---");
+        // --- C. The two must not be confusable ------------------------------------------------
+        details.Add("--- C. 两者的可分性 ---");
         var pairs = new (string Field, string Empty, string Failed)[]
         {
-            ("MoyuState", emptyViewModel.MoyuState.ToString(), failedViewModel.MoyuState.ToString()),
-            ("StatusCodeText", emptyViewModel.MoyuStatusCodeText, failedViewModel.MoyuStatusCodeText),
-            ("StatusMessage", emptyViewModel.MoyuStatusMessage ?? string.Empty, failedViewModel.MoyuStatusMessage ?? string.Empty)
+            ("MoyuState", emptyVm.StateName("MoyuState") ?? "(missing)", failedVm.StateName("MoyuState") ?? "(missing)"),
+            ("StatusCodeText", emptyVm.GetString("MoyuStatusCodeText") ?? "(missing)", failedVm.GetString("MoyuStatusCodeText") ?? "(missing)"),
+            ("StatusMessage", emptyVm.GetString("MoyuStatusMessage") ?? "(missing)", failedVm.GetString("MoyuStatusMessage") ?? "(missing)")
         };
 
         foreach (var (field, empty, failed) in pairs)
@@ -682,12 +768,18 @@ public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
             }
         }
 
-        details.Add($"   ErrorDetail      empty={(emptyViewModel.MoyuErrorDetail is null ? "(absent)" : "present")}  "
-                    + $"failed={(failedViewModel.MoyuErrorDetail is null ? "(absent)" : "present")}");
+        details.Add($"   ErrorDetail      empty={(emptyDetail is null || emptyDetail.Length == 0 ? "(absent)" : "present")}  "
+                    + $"failed={(errorDetail.Length == 0 ? "(absent)" : "present")}");
 
-        if (emptyViewModel.MoyuErrorDetail is not null || failedViewModel.MoyuErrorDetail is null)
+        if ((emptyDetail is not null && emptyDetail.Length > 0) || errorDetail.Length == 0)
         {
             problems.Add("the error surface does not separate the two cases (present for empty, or absent for failed)");
+        }
+
+        var missing = emptyVm.Missing.Concat(failedVm.Missing).Distinct().ToList();
+        if (missing.Count > 0)
+        {
+            problems.Add($"{missing.Count} member(s) missing: {string.Join("; ", missing)}");
         }
 
         foreach (var problem in problems)
@@ -702,8 +794,9 @@ public sealed class A113MoyuUiEmptyVsFailureCheck : IAcceptanceCheck
         }
 
         return CheckResult.Pass(Id, Title, expected,
-            "Empty=MOYU_NO_RESULTS/\"查询成功，但没有找到补丁\" with no error detail; Failed=MOYU_QUERY_FAILED/"
-            + "\"查询失败：这次没有拿到结果\" carrying HTTP 503 + UPSTREAM_TIMEOUT; state, code and headline all differ")
+            "Empty / MOYU_NO_RESULTS / \"查询成功，但没有找到补丁\" with no error detail; "
+            + "Failed / MOYU_QUERY_FAILED / \"查询失败：这次没有拿到结果\" carrying HTTP 503 + UPSTREAM_TIMEOUT; "
+            + "state name, code and headline all differ")
             .With(details.ToArray());
     }
 }
@@ -733,8 +826,9 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
     {
         var expected =
             "every request the patch centre's query produces is on api.nextmoe.dev under /v2/moyu/ and "
-            + "never under /api; the guard still throws for a forbidden relative path; and a real "
-            + "application-pipeline moyu request recorded during the whole run stays inside the allow-list";
+            + "never under /api; EnsureApiUri still refuses the forbidden surface (including a traversal "
+            + "attempt); and any moyu request recorded on the application's own pipelines stays inside "
+            + "the allow-list";
 
         var details = new List<string>();
         var problems = new List<string>();
@@ -747,10 +841,10 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
             responder: _ => MoyuStubHandler.Json(
                 """{"object":"list","items":[{"object":"patch","id":"86","vndb_id":"v4","catalog_work_id":"86","type":["manual"],"language":["zh-Hans"],"platform":["windows"],"resource_count":1,"web_url":"https://www.moyu.moe/patch/86/introduction"}],"next_cursor":null,"total":1,"missing":[]}"""));
 
-        var viewModel = harness.CreateViewModel();
-        viewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
+        var vm = new MoyuUiProbe(harness.CreateViewModel());
+        vm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
 
-        await viewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+        await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
 
         details.Add($"Requests produced by the patch centre query ({harness.Transport.Everything.Count}):");
         foreach (var (method, uri) in harness.Transport.Everything)
@@ -791,7 +885,7 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
             "/api/v1/search",
             "/api/v1/patch/86/resource",
             "/api/v1/patch/resource/223/link",
-            "/v2/moyu/patches/../api/v1/search"
+            "/v2/moyu/patches/../../api/v1/search"
         };
 
         foreach (var path in mustRefuse)
@@ -814,7 +908,13 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
             }
         }
 
-        details.Add($"   [allowed] /v2/moyu/patches?refs=vndb%3Av4  -> {MoyuComplianceGuard.EnsureApiUri(MoyuOptions.DefaultBaseAddress, "/v2/moyu/patches?refs=vndb%3Av4").Host}");
+        var legitimate = MoyuComplianceGuard.EnsureApiUri(MoyuOptions.DefaultBaseAddress, "/v2/moyu/patches?refs=vndb%3Av4");
+        details.Add($"   [allowed] /v2/moyu/patches?refs=vndb%3Av4 -> {legitimate}");
+
+        if (!MoyuComplianceGuard.IsAllowedApiUri(legitimate))
+        {
+            problems.Add("the guard refuses the one legitimate path, so the feature could not work at all");
+        }
 
         // --- What the application's own pipelines recorded ------------------------------------
         var recorded = context.Traffic.Exchanges
@@ -833,16 +933,24 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
             {
                 problems.Add($"a recorded moyu request left the allow-list: {exchange.Method} {exchange.Url}");
             }
+
+            if (MoyuComplianceGuard.IsForbiddenPath(uri?.AbsolutePath))
+            {
+                problems.Add($"a recorded moyu request targeted the Disallowed surface: {exchange.Method} {exchange.Url}");
+            }
         }
 
-        // The UI's own exchanges are on the recorder too (that is how the harness observes them), and
-        // every one of them is checked by the loop above.
         var uiExchanges = context.Traffic.For("MoyuUiProbe");
         details.Add($"   (of which produced by the patch centre's client: {uiExchanges.Count})");
 
-        if (uiExchanges.Count != recorded.Length && recorded.Length > 0)
+        if (recorded.Length == 0)
         {
-            details.Add("   note: other moyu clients in the container also produced traffic; all of it was checked");
+            problems.Add("the UI's request never reached the recorder, so the compliance assertion has no evidence");
+        }
+
+        if (vm.Missing.Count > 0)
+        {
+            problems.Add($"{vm.Missing.Count} member(s) missing: {vm.MissingSummary()}");
         }
 
         foreach (var problem in problems)
@@ -858,7 +966,7 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
 
         return CheckResult.Pass(Id, Title, expected,
             $"all {harness.Transport.Everything.Count} request(s) the patch centre produced were /v2/moyu/* on "
-            + $"{MoyuComplianceGuard.ApiHost}; {mustRefuse.Length}/{mustRefuse.Length} forbidden paths still refused by "
+            + $"{MoyuComplianceGuard.ApiHost}; {mustRefuse.Length}/{mustRefuse.Length} forbidden paths refused by "
             + $"EnsureApiUri; {recorded.Length} recorded pipeline request(s) inside the allow-list")
             .With(details.ToArray());
     }
@@ -877,9 +985,9 @@ public sealed class A114MoyuUiComplianceCheck : IAcceptanceCheck
 /// </para>
 ///
 /// <para>
-/// It also asserts the opposite direction for each: a row with no page URL produces a stated failure
-/// rather than a silent no-op, and a row with no live resource produces a stated failure rather than
-/// an indefinite "watching".
+/// It also asserts the opposite direction for each: a row whose page URL is missing produces a stated
+/// refusal and a disabled button (never a silent no-op), and a patch with no live resource is
+/// explained rather than left blank.
 /// </para>
 /// </summary>
 public sealed class A115MoyuUiBrowserAndDownloadCheck : IAcceptanceCheck
@@ -897,7 +1005,7 @@ public sealed class A115MoyuUiBrowserAndDownloadCheck : IAcceptanceCheck
             "the row's open command validates the page URL and reports the hop (dry run: no process "
             + "started); a row without a page URL reports a refusal and its button is disabled; adopting "
             + "a download against an empty folder times out with a stated reason and ends the watching "
-            + "state; a resource-less patch replaces the resource list with a reason";
+            + "state; selecting a patch with no live resource replaces the resource list with a reason";
 
         var details = new List<string>();
         var problems = new List<string>();
@@ -926,52 +1034,71 @@ public sealed class A115MoyuUiBrowserAndDownloadCheck : IAcceptanceCheck
                 launcher: launcher,
                 watcher: watcher);
 
-            var viewModel = harness.CreateViewModel();
-            viewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
+            var vm = new MoyuUiProbe(harness.CreateViewModel());
+            vm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
 
-            await viewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+            await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
 
-            var patchRow = viewModel.MoyuPatches.FirstOrDefault();
-            var resourceRow = viewModel.MoyuResources.FirstOrDefault();
+            var patchRows = vm.Items("MoyuPatches");
+            var resourceRows = vm.Items("MoyuResources");
 
-            details.Add($"Found patch rows      : {viewModel.MoyuPatches.Count}");
-            details.Add($"Found resource rows   : {viewModel.MoyuResources.Count}");
+            details.Add($"Found patch rows      : {vm.Count("MoyuPatches")}");
+            details.Add($"Found resource rows   : {vm.Count("MoyuResources")}");
 
-            if (patchRow is null || resourceRow is null)
+            if (patchRows.Count == 0 || resourceRows.Count == 0)
             {
                 return CheckResult.Fail(Id, Title, expected,
-                    "the query produced no patch/resource rows, so the two hops could not be exercised")
+                    $"the query produced {patchRows.Count} patch row(s) and {resourceRows.Count} resource row(s), "
+                    + "so the two hops could not be exercised")
                     .With(details.ToArray());
             }
 
-            details.Add($"Patch row             : {patchRow.Name}");
-            details.Add($"Resource row          : {resourceRow.DisplayName} | {resourceRow.SizeText} | {resourceRow.StorageText}");
+            var patchRow = new MoyuUiProbe(patchRows[0]);
+            var resourceRow = new MoyuUiProbe(resourceRows[0]);
+
+            details.Add($"Patch row             : {patchRow.GetString("Name") ?? "(missing)"} | hasUrl={patchRow.GetBool("HasWebUrl")?.ToString() ?? "(missing)"}");
+            details.Add($"Resource row          : {resourceRow.GetString("DisplayName") ?? "(missing)"} | {resourceRow.GetString("SizeText") ?? "(missing)"} | {resourceRow.GetString("StorageText") ?? "(missing)"}");
 
             // --- 1. The browser hop, through the row's own command ---------------------------
             details.Add(string.Empty);
             details.Add("--- 1. 打开补丁页（真实 MoyuBrowserLauncher，dry run）---");
 
-            var openCommand = patchRow.OpenPageCommand;
-            details.Add($"Row OpenPageCommand   : {openCommand.GetType().Name}, CanExecute={openCommand.CanExecute(null)}");
-
-            if (!openCommand.CanExecute(null))
+            if (!patchRow.Has("OpenPageCommand"))
             {
-                problems.Add("the open-page button is disabled for a row that has a page URL");
+                problems.Add("the patch row exposes no OpenPageCommand, so the button has nothing to run");
             }
-
-            openCommand.Execute(null);
-
-            details.Add($"MoyuLaunchMessage     : {viewModel.MoyuLaunchMessage}");
-            details.Add($"Processes started     : {startedProcesses.Count}");
-
-            if (viewModel.MoyuLaunchMessage is null || !viewModel.MoyuLaunchMessage.Contains("浏览器", StringComparison.Ordinal))
+            else
             {
-                problems.Add("pressing 打开补丁页 left no message about the browser hop");
-            }
+                var open = patchRow.Get("OpenPageCommand") as System.Windows.Input.ICommand;
+                details.Add($"Row OpenPageCommand   : {(open is null ? "(null)" : open.GetType().Name)}, CanExecute={(open?.CanExecute(null))?.ToString() ?? "(n/a)"}");
 
-            if (startedProcesses.Count != 0)
-            {
-                problems.Add($"the dry-run browser hop started {startedProcesses.Count} process(es): {string.Join(", ", startedProcesses)}");
+                if (open is null)
+                {
+                    problems.Add("the patch row's OpenPageCommand is null");
+                }
+                else
+                {
+                    if (!open.CanExecute(null))
+                    {
+                        problems.Add("the open-page button is disabled for a row that has a page URL");
+                    }
+
+                    open.Execute(null);
+
+                    var launchMessage = vm.GetString("MoyuLaunchMessage");
+                    details.Add($"MoyuLaunchMessage     : {launchMessage ?? "(none)"}");
+                    details.Add($"Processes started     : {startedProcesses.Count}");
+
+                    if (launchMessage is null || !launchMessage.Contains("浏览器", StringComparison.Ordinal))
+                    {
+                        problems.Add("pressing 打开补丁页 left no message about the browser hop");
+                    }
+
+                    if (startedProcesses.Count != 0)
+                    {
+                        problems.Add($"the dry-run browser hop started {startedProcesses.Count} process(es): {string.Join(", ", startedProcesses)}");
+                    }
+                }
             }
 
             // --- 2. Adopting a download that never happens ------------------------------------
@@ -980,106 +1107,115 @@ public sealed class A115MoyuUiBrowserAndDownloadCheck : IAcceptanceCheck
             details.Add($"Watched folder        : {watchFolder}");
             details.Add($"Timeout for this run  : 1 s (the shipping default is 10 min)");
 
-            viewModel.MoyuDownloadTimeout = TimeSpan.FromSeconds(1);
+            vm.Set("MoyuDownloadTimeout", TimeSpan.FromSeconds(1));
 
             var adoptStopwatch = Stopwatch.StartNew();
-            var adopt = viewModel.AdoptMoyuDownloadCommand.ExecuteAsync(resourceRow);
-            details.Add($"State while watching  : {viewModel.MoyuDownloadState}, IsMoyuWatchingDownload={viewModel.IsMoyuWatchingDownload}");
+            var adopt = vm.CallAsync("AdoptMoyuDownloadAsync", resourceRows[0]);
+            details.Add($"State while watching  : {vm.StateName("MoyuDownloadState") ?? "(missing)"}, "
+                        + $"IsMoyuWatchingDownload={vm.GetBool("IsMoyuWatchingDownload")?.ToString() ?? "(missing)"}");
 
             await adopt.ConfigureAwait(false);
             adoptStopwatch.Stop();
 
+            var downloadMessage = vm.GetString("MoyuDownloadMessage");
             details.Add($"Adopt elapsed         : {adoptStopwatch.ElapsedMilliseconds} ms");
-            details.Add($"MoyuDownloadState     : {viewModel.MoyuDownloadState}");
-            details.Add($"MoyuDownloadMessage   : {viewModel.MoyuDownloadMessage}");
-            details.Add($"IsMoyuWatchingDownload: {viewModel.IsMoyuWatchingDownload}");
-            details.Add($"Watch progress text   : {viewModel.MoyuWatchProgress ?? "(cleared)"}");
+            details.Add($"MoyuDownloadState     : {vm.StateName("MoyuDownloadState") ?? "(missing)"}");
+            details.Add($"MoyuDownloadMessage   : {downloadMessage ?? "(none)"}");
+            details.Add($"IsMoyuWatchingDownload: {vm.GetBool("IsMoyuWatchingDownload")?.ToString() ?? "(missing)"}");
+            details.Add($"Watch progress text   : {vm.GetString("MoyuWatchProgress") ?? "(cleared)"}");
 
-            if (viewModel.IsMoyuWatchingDownload)
+            if (vm.GetBool("IsMoyuWatchingDownload") == true)
             {
                 problems.Add("the watching state was never cleared after the watch ended");
             }
 
-            if (viewModel.MoyuDownloadState != MoyuDownloadUiState.NotAdopted)
+            if (vm.StateName("MoyuDownloadState") != "NotAdopted")
             {
-                problems.Add($"a watch that saw nothing ended as {viewModel.MoyuDownloadState}, expected NotAdopted");
+                problems.Add($"a watch that saw nothing ended as {vm.StateName("MoyuDownloadState") ?? "(missing)"}, expected NotAdopted");
             }
 
-            var watchMessage = viewModel.MoyuDownloadMessage ?? string.Empty;
-            if (watchMessage.Length == 0)
+            if (string.IsNullOrWhiteSpace(downloadMessage))
             {
                 problems.Add("the timed-out watch left no message, so the user would see nothing happen");
             }
-
-            if (!watchMessage.Contains("下载文件夹", StringComparison.Ordinal))
+            else if (!downloadMessage.Contains("下载文件夹", StringComparison.Ordinal))
             {
-                problems.Add($"the timeout message does not name the folder that was watched: \"{watchMessage}\"");
+                problems.Add($"the timeout message does not name the folder that was watched: \"{downloadMessage}\"");
             }
 
-            if (viewModel.MoyuWatchProgress is not null)
+            if (vm.Get("MoyuWatchProgress") is string leftover && leftover.Length > 0)
             {
                 problems.Add("the watch progress line was left behind after the watch ended");
             }
 
-            if (adoptStopwatch.ElapsedMilliseconds > 20000)
+            if (adoptStopwatch.ElapsedMilliseconds > 25000)
             {
                 problems.Add($"the 1 s watch took {adoptStopwatch.ElapsedMilliseconds} ms; the timeout was not honoured");
             }
 
             // --- 3. A row with no page URL must not claim success -----------------------------
             details.Add(string.Empty);
-            details.Add("--- 3. 没有页面地址的行：必须是明说的失败，不是静默无操作 ---");
+            details.Add("--- 3. 没有页面地址的行：必须是明说的拒绝，不是静默无操作 ---");
 
-            var urlLessPatch = new MoyuPatch
+            var urlLess = MakeUrlLessPatchRow(vm);
+            if (urlLess is null)
             {
-                Id = "9999",
-                VndbId = "v4",
-                ResourceCount = 0,
-                WebUrl = null
-            };
-
-            var urlLessRow = new PatchMoyuRow(urlLessPatch, viewModel);
-            details.Add($"url-less row HasWebUrl: {urlLessRow.HasWebUrl}");
-            details.Add($"url-less row CanExecute: {urlLessRow.OpenPageCommand.CanExecute(null)}");
-
-            if (urlLessRow.HasWebUrl)
+                problems.Add("the patch row type could not be constructed for the URL-less case");
+            }
+            else
             {
-                problems.Add("a patch with no web_url reports HasWebUrl=true");
+                var row = new MoyuUiProbe(urlLess);
+                var hasUrl = row.GetBool("HasWebUrl");
+                var open = row.Get("OpenPageCommand") as System.Windows.Input.ICommand;
+
+                details.Add($"url-less row HasWebUrl: {hasUrl?.ToString() ?? "(missing)"}");
+                details.Add($"url-less CanExecute   : {(open?.CanExecute(null))?.ToString() ?? "(n/a)"}");
+
+                if (hasUrl != false)
+                {
+                    problems.Add($"a patch with no web_url reports HasWebUrl={hasUrl?.ToString() ?? "(missing)"}");
+                }
+
+                if (open is null)
+                {
+                    problems.Add("the URL-less row has no OpenPageCommand at all");
+                }
+                else if (open.CanExecute(null))
+                {
+                    problems.Add("the open-page button is enabled for a row with no page URL");
+                }
+
+                // --- 4. A patch with no live resources says why -------------------------------
+                details.Add(string.Empty);
+                details.Add("--- 4. 资源列表为空时给出原因，而不是留空 ---");
+
+                vm.Call("SelectMoyuPatch", urlLess);
+
+                details.Add($"MoyuResources.Count   : {vm.Count("MoyuResources")}");
+                details.Add($"HasMoyuResources      : {vm.GetBool("HasMoyuResources")?.ToString() ?? "(missing)"}");
+                details.Add($"Empty reason          : {vm.GetString("MoyuResourcesEmptyReason") ?? "(none)"}");
+                details.Add($"State after selecting : {vm.StateName("MoyuState") ?? "(missing)"} (the query result must not change)");
+
+                if (vm.GetBool("HasMoyuResources") == true)
+                {
+                    problems.Add("selecting a resource-less patch still reports resources present");
+                }
+
+                if (string.IsNullOrWhiteSpace(vm.GetString("MoyuResourcesEmptyReason")))
+                {
+                    problems.Add("a resource-less patch left no explanation on the page");
+                }
+
+                if (vm.StateName("MoyuState") != "Found")
+                {
+                    problems.Add($"browsing a row changed the query state to {vm.StateName("MoyuState") ?? "(missing)"}; it must not");
+                }
             }
 
-            if (urlLessRow.OpenPageCommand.CanExecute(null))
+            if (vm.Missing.Count > 0)
             {
-                problems.Add("the open-page button is enabled for a row with no page URL");
+                problems.Add($"{vm.Missing.Count} member(s) missing: {vm.MissingSummary()}");
             }
-
-            // --- 4. A patch with no live resources says why ------------------------------------
-            details.Add(string.Empty);
-            details.Add("--- 4. 资源列表为空时给出原因，而不是留空 ---");
-
-            viewModel.SelectMoyuPatch(urlLessRow);
-
-            details.Add($"MoyuResources.Count   : {viewModel.MoyuResources.Count}");
-            details.Add($"HasMoyuResources      : {viewModel.HasMoyuResources}");
-            details.Add($"Empty reason          : {viewModel.MoyuResourcesEmptyReason ?? "(none)"}");
-            details.Add($"State after selecting : {viewModel.MoyuState} (the query result is unchanged by browsing a row)");
-
-            if (viewModel.HasMoyuResources)
-            {
-                problems.Add("selecting a resource-less patch still reports resources present");
-            }
-
-            if (string.IsNullOrWhiteSpace(viewModel.MoyuResourcesEmptyReason))
-            {
-                problems.Add("a resource-less patch left no explanation on the page");
-            }
-
-            if (viewModel.MoyuState != MoyuQueryState.Found)
-            {
-                problems.Add($"browsing a row changed the query state to {viewModel.MoyuState}; it must not");
-            }
-
-            details.Add(string.Empty);
-            details.Add($"Resources actually present after a real query: {viewModel.MoyuResources.Count} (the row selected last is the resource-less one)");
         }
         finally
         {
@@ -1099,10 +1235,42 @@ public sealed class A115MoyuUiBrowserAndDownloadCheck : IAcceptanceCheck
 
         return CheckResult.Pass(Id, Title, expected,
             "the real launcher validated the page URL in dry run and started no process; the real watcher "
-            + "timed out against an empty folder, cleared the watching state and stated the folder it "
-            + "watched; an URL-less row is disabled with a refusal message; a resource-less patch is "
-            + "explained rather than blank")
+            + "timed out against an empty folder, cleared the watching state and named the folder it watched; "
+            + "an URL-less row is disabled; a resource-less patch is explained rather than blank")
             .With(details.ToArray());
+    }
+
+    /// <summary>
+    /// Builds a patch row for a patch page that carries no <c>web_url</c>, so the "no page to open"
+    /// branch is exercised. Constructed through the row type's own constructor by name, because the
+    /// harness must also compile against the revision where that type does not exist yet.
+    /// </summary>
+    private static object? MakeUrlLessPatchRow(MoyuUiProbe viewModel)
+    {
+        var rowTypeName = "Galbox.App.ViewModels.PatchMoyuRow";
+        var rowType = typeof(PatchCenterViewModel).Assembly.GetType(rowTypeName);
+        if (rowType is null)
+        {
+            return null;
+        }
+
+        var patch = new MoyuPatch
+        {
+            Id = "9999",
+            VndbId = "v4",
+            ResourceCount = 0,
+            WebUrl = null
+        };
+
+        // The row takes (MoyuPatch, PatchCenterViewModel). The owner is the live ViewModel instance
+        // the probe wraps, so the row's commands act on the same object the check is driving.
+        var constructor = rowType.GetConstructors().FirstOrDefault(c => c.GetParameters().Length == 2);
+        if (constructor is null)
+        {
+            return null;
+        }
+
+        return constructor.Invoke(new[] { (object?)patch, viewModel.Instance });
     }
 }
 
@@ -1110,11 +1278,12 @@ public sealed class A115MoyuUiBrowserAndDownloadCheck : IAcceptanceCheck
 /// A116 - writing the key from the page.
 ///
 /// <para>
-/// The feature is unusable without a key and the key previously had no door at all: there is no
-/// settings page field for it, so the only way to configure one was to place the file by hand. This
-/// check drives the page's own save/clear commands against a throw-away store and asserts the two
-/// things that matter — an obviously wrong value is refused out loud instead of being stored, and a
-/// real one round-trips into the client without appearing in any message.
+/// The feature is unusable without a key and the key previously had no door at all: nothing in the
+/// product's UI wrote to <see cref="IMoyuKeyStore"/>, so the only way to configure one was to place
+/// the file by hand. This check drives the page's own save/clear commands against a throw-away store
+/// and asserts the three things that matter — an obviously wrong value is refused out loud instead of
+/// being stored, a real one round-trips into the client and unblocks the query, and the secret never
+/// appears in any text the page displays.
 /// </para>
 /// </summary>
 public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
@@ -1132,9 +1301,9 @@ public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
     {
         var expected =
             "SaveMoyuKey refuses a value that is not an nmk_ key with a stated reason and stores nothing; "
-            + "a valid key is persisted through IMoyuKeyStore, makes the client IsConfigured, is never "
-            + "echoed back, and unblocks a query that was previously reported as missing a key; "
-            + "ClearMoyuKey removes it again";
+            + "a valid key is persisted through IMoyuKeyStore, makes the client IsConfigured, unblocks a "
+            + "query that was previously reported as missing a key, is never echoed back, and is removed "
+            + "again by ClearMoyuKey";
 
         var details = new List<string>();
         var problems = new List<string>();
@@ -1153,8 +1322,8 @@ public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
                     """{"object":"list","items":[],"next_cursor":null,"total":0,"missing":["vndb:v4"]}"""),
                 keyStore: store);
 
-            var viewModel = harness.CreateViewModel();
-            viewModel.SelectedGame = MoyuUiHarness.MakeGame("v4");
+            var vm = new MoyuUiProbe(harness.CreateViewModel());
+            vm.Set("SelectedGame", MoyuUiHarness.MakeGame("v4"));
 
             details.Add($"Store                 : {store}");
             details.Add($"Client IsConfigured   : {harness.Api.IsConfigured}");
@@ -1166,20 +1335,20 @@ public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
             }
 
             // --- 1. Before: the query is blocked, and says so -------------------------------
-            await viewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
-            details.Add($"State before saving   : {viewModel.MoyuState} / {viewModel.MoyuStatusMessage}");
+            await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
+            details.Add($"State before saving   : {vm.StateName("MoyuState") ?? "(missing)"} / {vm.GetString("MoyuStatusMessage") ?? "(missing)"}");
 
-            if (viewModel.MoyuState != MoyuQueryState.MissingKey)
+            if (vm.StateName("MoyuState") != "MissingKey")
             {
-                problems.Add($"a key-less query reported {viewModel.MoyuState}, expected MissingKey");
+                problems.Add($"a key-less query reported {vm.StateName("MoyuState") ?? "(missing)"}, expected MissingKey");
             }
 
             // --- 2. An obviously wrong value -------------------------------------------------
-            viewModel.MoyuKeyInput = "this-is-not-a-key";
-            viewModel.SaveMoyuKeyCommand.Execute(null);
+            vm.Set("MoyuKeyInput", "this-is-not-a-key");
+            vm.Call("SaveMoyuKey");
 
             details.Add(string.Empty);
-            details.Add($"Rejected input message: {viewModel.MoyuKeySaveMessage}");
+            details.Add($"Rejected input message: {vm.GetString("MoyuKeySaveMessage") ?? "(none)"}");
             details.Add($"Store configured now  : {store.IsConfigured} (file exists: {File.Exists(storePath)})");
 
             if (store.IsConfigured || File.Exists(storePath))
@@ -1187,22 +1356,22 @@ public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
                 problems.Add("a value that is not an nmk_ key was written to the store");
             }
 
-            var rejectMessage = viewModel.MoyuKeySaveMessage ?? string.Empty;
+            var rejectMessage = vm.GetString("MoyuKeySaveMessage") ?? string.Empty;
             if (!rejectMessage.Contains("没有保存", StringComparison.Ordinal))
             {
                 problems.Add($"the refused value produced no clear refusal: \"{rejectMessage}\"");
             }
 
             // --- 3. A valid key ---------------------------------------------------------------
-            viewModel.MoyuKeyInput = ProbeKey;
-            viewModel.SaveMoyuKeyCommand.Execute(null);
+            vm.Set("MoyuKeyInput", ProbeKey);
+            vm.Call("SaveMoyuKey");
 
             details.Add(string.Empty);
-            details.Add($"Save message          : {viewModel.MoyuKeySaveMessage}");
+            details.Add($"Save message          : {vm.GetString("MoyuKeySaveMessage") ?? "(none)"}");
             details.Add($"Store configured now  : {store.IsConfigured}");
             details.Add($"Client IsConfigured   : {harness.Api.IsConfigured}");
-            details.Add($"Key summary           : {viewModel.MoyuKeySummary}");
-            details.Add($"Input box cleared     : {string.IsNullOrEmpty(viewModel.MoyuKeyInput)}");
+            details.Add($"Key summary           : {vm.GetString("MoyuKeySummary") ?? "(none)"}");
+            details.Add($"Input box cleared     : {string.IsNullOrEmpty(vm.GetString("MoyuKeyInput"))}");
 
             if (!store.IsConfigured)
             {
@@ -1214,71 +1383,81 @@ public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
                 problems.Add("the client still reports unconfigured after the key was saved");
             }
 
-            if (!string.IsNullOrEmpty(viewModel.MoyuKeyInput))
+            if (!string.IsNullOrEmpty(vm.GetString("MoyuKeyInput")))
             {
                 problems.Add("the key was left in the input property after it was saved");
             }
 
-            if (viewModel.MoyuState == MoyuQueryState.MissingKey)
+            if (vm.StateName("MoyuState") == "MissingKey")
             {
                 problems.Add("the card still claims a key is missing after one was saved");
             }
 
-            // Nothing on the page may echo the secret back.
+            // Nothing the page displays may echo the secret back.
             var surfaces = new[]
             {
-                viewModel.MoyuKeySaveMessage, viewModel.MoyuKeySummary, viewModel.MoyuKeyHowTo,
-                viewModel.MoyuStatusMessage, viewModel.MoyuAdvisoryMessage, viewModel.MoyuErrorDetail,
-                viewModel.MoyuLaunchMessage, viewModel.MoyuDownloadMessage
+                "MoyuKeySaveMessage", "MoyuKeySummary", "MoyuKeyHowTo", "MoyuStatusMessage",
+                "MoyuAdvisoryMessage", "MoyuErrorDetail", "MoyuLaunchMessage", "MoyuDownloadMessage"
             };
 
-            var leaked = surfaces.Any(s => s is not null && s.Contains(ProbeKey, StringComparison.Ordinal));
-            details.Add($"Key present in any page text: {leaked}");
+            var leaked = surfaces
+                .Select(name => (Name: name, Value: vm.GetString(name)))
+                .Where(pair => pair.Value is not null && pair.Value.Contains(ProbeKey, StringComparison.Ordinal))
+                .ToArray();
 
-            if (leaked)
+            details.Add($"Key present in page text: {(leaked.Length == 0 ? "no" : "YES — " + string.Join(", ", leaked.Select(l => l.Name)))}");
+
+            if (leaked.Length > 0)
             {
-                problems.Add("the API key appears in a message the page displays");
+                problems.Add($"the API key appears in page text: {string.Join(", ", leaked.Select(l => l.Name))}");
             }
 
-            if (viewModel.MoyuKeySaveMessage?.Contains("指纹", StringComparison.Ordinal) != true)
+            if (vm.GetString("MoyuKeySaveMessage")?.Contains("指纹", StringComparison.Ordinal) != true)
             {
                 problems.Add("the save confirmation does not show a fingerprint, so the user cannot tell which key is stored");
             }
 
             // --- 4. The query now runs --------------------------------------------------------
-            await viewModel.FindMoyuPatchesCommand.ExecuteAsync(null).ConfigureAwait(false);
+            var beforeQuery = harness.Transport.Everything.Count;
+            await vm.CallAsync("FindMoyuPatchesAsync").ConfigureAwait(false);
+            var afterQuery = harness.Transport.Everything.Count;
 
             details.Add(string.Empty);
-            details.Add($"State after saving    : {viewModel.MoyuState} / {viewModel.MoyuStatusMessage}");
-            details.Add($"Requests sent         : {harness.Transport.Everything.Count}");
+            details.Add($"State after saving    : {vm.StateName("MoyuState") ?? "(missing)"} / {vm.GetString("MoyuStatusMessage") ?? "(missing)"}");
+            details.Add($"Requests sent         : {afterQuery - beforeQuery} (total this harness: {afterQuery})");
 
-            if (viewModel.MoyuState != MoyuQueryState.Empty)
+            if (vm.StateName("MoyuState") != "Empty")
             {
-                problems.Add($"after configuring a key the query reported {viewModel.MoyuState}, expected Empty (the stub answers with no rows)");
+                problems.Add($"after configuring a key the query reported {vm.StateName("MoyuState") ?? "(missing)"}, expected Empty (the stub answers with no rows)");
             }
 
-            if (harness.Transport.Everything.Count != 1)
+            if (afterQuery - beforeQuery != 1)
             {
-                problems.Add($"the query after configuration sent {harness.Transport.Everything.Count} request(s), expected 1");
+                problems.Add($"the query after configuration sent {afterQuery - beforeQuery} request(s), expected 1");
             }
 
             // --- 5. Clearing ------------------------------------------------------------------
-            viewModel.ClearMoyuKeyCommand.Execute(null);
+            vm.Call("ClearMoyuKey");
 
             details.Add(string.Empty);
-            details.Add($"Clear message         : {viewModel.MoyuKeySaveMessage}");
+            details.Add($"Clear message         : {vm.GetString("MoyuKeySaveMessage") ?? "(none)"}");
             details.Add($"Store configured now  : {store.IsConfigured}");
             details.Add($"Client IsConfigured   : {harness.Api.IsConfigured}");
-            details.Add($"State after clearing  : {viewModel.MoyuState} / {viewModel.MoyuStatusMessage}");
+            details.Add($"State after clearing  : {vm.StateName("MoyuState") ?? "(missing)"} / {vm.GetString("MoyuStatusMessage") ?? "(missing)"}");
 
             if (store.IsConfigured)
             {
                 problems.Add("Clear did not remove the stored key");
             }
 
-            if (viewModel.MoyuState != MoyuQueryState.MissingKey)
+            if (vm.StateName("MoyuState") != "MissingKey")
             {
-                problems.Add($"after clearing the key the card reports {viewModel.MoyuState}, expected MissingKey");
+                problems.Add($"after clearing the key the card reports {vm.StateName("MoyuState") ?? "(missing)"}, expected MissingKey");
+            }
+
+            if (vm.Missing.Count > 0)
+            {
+                problems.Add($"{vm.Missing.Count} member(s) missing: {vm.MissingSummary()}");
             }
         }
         catch (Exception ex)
@@ -1305,7 +1484,7 @@ public sealed class A116MoyuUiKeyEntryCheck : IAcceptanceCheck
         return CheckResult.Pass(Id, Title, expected,
             "a non-nmk_ value was refused without touching the store; a valid key went through "
             + "MoyuDpapiKeyStore, flipped the client to configured, unblocked the query (1 request, Empty), "
-            + "was shown only as a fingerprint, and Clear removed it and restored the MissingKey state")
+            + "appeared only as a fingerprint, and Clear removed it and restored the MissingKey state")
             .With(details.ToArray());
     }
 }

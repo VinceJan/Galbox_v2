@@ -13,6 +13,7 @@
     <Page.Resources>
         <!-- Register Converters -->
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter"/>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         <converters:InverseNullToVisibilityConverter x:Key="InverseNullToVisibilityConverter"/>
@@ -564,7 +565,7 @@
                                             <Button
                                                 Command="{x:Bind ViewModel.FindMoyuPatchesCommand}"
                                                 CommandParameter="{Binding SelectedGame}"
-                                                IsEnabled="{x:Bind ViewModel.IsMoyuQuerying, Mode=OneWay, Converter={StaticResource InverseBooleanToVisibilityConverter}}"
+                                                IsEnabled="{x:Bind ViewModel.IsMoyuQuerying, Mode=OneWay, Converter={StaticResource InverseBooleanConverter}}"
                                                 CornerRadius="8">
                                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                                     <FontIcon FontSize="14" Glyph="&#xE721;"/>

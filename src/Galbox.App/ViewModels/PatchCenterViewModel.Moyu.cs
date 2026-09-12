@@ -585,7 +585,10 @@ public partial class PatchCenterViewModel
 
         var timeout = MoyuDownloadTimeout ?? TimeSpan.FromMinutes(10);
 
-        using var linked = new CancellationTokenSource(timeout);
+        // User cancel only. The watcher already ends itself when request.Timeout elapses; putting
+        // the same deadline on this CTS made WatchAsync report Cancelled (token fired during Delay)
+        // instead of TimedOut, so the page showed the cancel sentence and never named the folder.
+        using var linked = new CancellationTokenSource();
         _moyuDownloadCts = linked;
 
         IsMoyuWatchingDownload = true;
@@ -636,6 +639,15 @@ public partial class PatchCenterViewModel
 
                 case MoyuDownloadWatchState.TimedOut:
                     MoyuDownloadState = MoyuDownloadUiState.NotAdopted;
+                    if (string.IsNullOrWhiteSpace(MoyuDownloadMessage)
+                        || !MoyuDownloadMessage.Contains("下载文件夹", StringComparison.Ordinal))
+                    {
+                        var folder = MoyuDownloadsFolder.Resolve();
+                        MoyuDownloadMessage =
+                            $"等待超时，仍未在下载文件夹（{folder}）里发现匹配的文件。"
+                            + "如果浏览器还在下载，或者文件存到了别处，可以用下面的「选择补丁压缩包...」手动指给 Galbox。";
+                    }
+
                     break;
 
                 default:

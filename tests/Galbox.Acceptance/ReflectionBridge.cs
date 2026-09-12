@@ -29,6 +29,111 @@ internal static class ReflectionBridge
     }
 
     /// <summary>
+    /// Finds an instance method that can be called with <paramref name="argumentCount"/> supplied
+    /// arguments, filling any remaining optional parameters with their defaults.
+    /// </summary>
+    /// <remarks>
+    /// Reflection <c>Invoke</c> does not apply C# optional-parameter defaults. A method that grew a
+    /// trailing optional argument (for example <c>SelectPatchArchiveAsync</c> gaining
+    /// <c>moyuPatchName</c>) would otherwise throw <c>TargetParameterCountException</c> against
+    /// callers that still pass the original arity. Private <c>[RelayCommand]</c> source methods are
+    /// included when <paramref name="includeNonPublic"/> is set, because the generator leaves those
+    /// methods private and only exposes the command property.
+    /// </remarks>
+    internal static MethodInfo? FindCallableInstanceMethod(
+        Type type,
+        string name,
+        int argumentCount,
+        bool includeNonPublic)
+    {
+        var flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        if (includeNonPublic)
+        {
+            flags |= BindingFlags.NonPublic;
+        }
+
+        MethodInfo? match = null;
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var candidate in current.GetMethods(flags))
+            {
+                if (candidate.Name != name)
+                {
+                    continue;
+                }
+
+                var parameters = candidate.GetParameters();
+                var required = parameters.Count(parameter => !parameter.IsOptional);
+                if (argumentCount < required || argumentCount > parameters.Length)
+                {
+                    continue;
+                }
+
+                if (match is null || parameters.Length < match.GetParameters().Length)
+                {
+                    match = candidate;
+                }
+            }
+
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        return match;
+    }
+
+    /// <summary>
+    /// Builds an argument array whose length matches <paramref name="method"/>, copying the
+    /// supplied values and filling trailing optional parameters with their defaults.
+    /// </summary>
+    internal static object?[] PadOptionalArguments(MethodInfo method, object?[] arguments)
+    {
+        arguments ??= Array.Empty<object?>();
+        var parameters = method.GetParameters();
+        if (arguments.Length == parameters.Length)
+        {
+            return arguments;
+        }
+
+        var padded = new object?[parameters.Length];
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            if (i < arguments.Length)
+            {
+                padded[i] = arguments[i];
+                continue;
+            }
+
+            padded[i] = DefaultFor(parameters[i]);
+        }
+
+        return padded;
+    }
+
+    private static object? DefaultFor(ParameterInfo parameter)
+    {
+        if (parameter.HasDefaultValue)
+        {
+            var value = parameter.DefaultValue;
+            if (value is not null && value != DBNull.Value && value != Type.Missing)
+            {
+                return value;
+            }
+        }
+
+        if (!parameter.ParameterType.IsValueType)
+        {
+            return null;
+        }
+
+        return Nullable.GetUnderlyingType(parameter.ParameterType) is null
+            ? Activator.CreateInstance(parameter.ParameterType)
+            : null;
+    }
+
+    /// <summary>
     /// Invokes an instance method by name and awaits it when it returns a Task, giving back the
     /// Task's Result (or null for a non-generic Task).
     /// </summary>

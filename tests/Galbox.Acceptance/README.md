@@ -10,7 +10,7 @@ It exists because "it compiles" was being treated as "it works".
 ## What it does
 
 > The table below explains only the checks that were documented when it was written
-> (A0–A10, A40–A42). The runner registers **43** checks in total; the authoritative list — ids,
+> (A0–A10, A40–A42). The runner registers **52** checks in total; the authoritative list — ids,
 > titles and execution order — is the array in `Program.cs`, and a readable inventory is in the
 > repository README. Update this table when you add a check.
 
