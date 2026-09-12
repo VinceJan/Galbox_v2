@@ -35,6 +35,14 @@ namespace Galbox.Acceptance.Checks;
 /// (200 switches, 40 ms apart). Under heavy machine load the loop stops early at
 /// <see cref="MinimumSwitches"/>, which is still well above the 10-55 switch band in which the
 /// unfixed build always died.
+///
+/// <para><b>The 200 switches happen off-screen.</b> Nothing about the stress is reduced for it: the
+/// same real window is created, the same UI Automation selects the same menu items the same number
+/// of times at the same 40 ms pace. The only difference is that the window's rectangle is outside
+/// every monitor (<see cref="OffscreenWindow"/>), because a developer who runs the acceptance suite -
+/// or several work lines doing it at once - must not have a window popping up and paging through the
+/// product on their desk. The placement is measured on the live window and the check fails if it
+/// turns up on a monitor.</para>
 /// </summary>
 public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
 {
@@ -70,7 +78,8 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
     {
         var target = ReadSwitchTarget();
         var expected = $"{MinimumSwitches}-{target} rapid navigation switches with no crash "
-                     + "(no {x:Bind} inside a resource dictionary, and Galbox.App.exe still alive at the end)";
+                     + "(no {x:Bind} inside a resource dictionary, and Galbox.App.exe still alive at the end) "
+                     + "in a window that is outside every monitor (the run must not disturb the desktop)";
 
         var details = new List<string>();
 
@@ -170,9 +179,22 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
                 .With("(set GALBOX_FIRSTCHANCE_TRACE=1) and the Application event log for the faulting module.");
         }
 
+        // Surviving is not enough on its own: the survival must not have been bought by putting the
+        // 200 switches on somebody's desktop. The window really exists, is really visible and was
+        // really driven - it is simply outside every monitor. A window on a monitor is a FAIL.
+        if (outcome.Placement is not { IsWindowVisible: true, IsOffscreen: true })
+        {
+            return CheckResult.Fail(Id, Title, expected,
+                    $"the stress loop ran in a window that was not off-screen: "
+                  + $"{outcome.Placement?.Describe() ?? "(never measured - the window may never have appeared)"}")
+                .With(details.ToArray())
+                .With($"FAIL REASON: {OffscreenWindow.WouldBeVisibleReason}");
+        }
+
         return CheckResult.Pass(Id, Title, expected,
                 $"survived {outcome.SwitchesCompleted} rapid switch(es) over {outcome.Elapsed.TotalSeconds:F1}s, "
-              + $"exit code never observed")
+              + $"exit code never observed, window off-screen at {outcome.Placement.Rect} with "
+              + $"IsWindowVisible={outcome.Placement.IsWindowVisible}")
             .With(details.ToArray());
     }
 
@@ -191,6 +213,9 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
 
         public TimeSpan Elapsed { get; init; }
 
+        /// <summary>Where the driven window really was, measured before the loop started.</summary>
+        public WindowPlacement? Placement { get; init; }
+
         public List<string> Details { get; init; } = new();
     }
 
@@ -206,12 +231,7 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
         List<string> details,
         CancellationToken cancellationToken)
     {
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = applicationPath,
-            WorkingDirectory = Path.GetDirectoryName(applicationPath)!,
-            UseShellExecute = false
-        });
+        using var process = Process.Start(CreateStartInfo(applicationPath));
 
         if (process is null)
         {
@@ -288,6 +308,15 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
             };
         }
 
+        // Where the window actually is, measured on the live window before the loop starts. This is
+        // the check's guarantee that 200 page switches are not performed in front of a developer:
+        // the window is real, visible and driven by UI Automation, but its rectangle is outside
+        // every monitor. GetWindowRect is only readable while the process is alive, so it is taken
+        // here and carried in the outcome.
+        var placement = OffscreenWindow.Measure(new IntPtr(window.Current.NativeWindowHandle));
+        localDetails.Add($"Window placement     : {placement.Describe()}");
+        localDetails.Add($"Off-screen monitors  : {placement.MonitorSummary}");
+
         // Resolve the menu items. A NavigationViewItem exposes SelectionItemPattern; an item that
         // does not is not something a user can click, so it is not driven either.
         var selections = new List<(string Name, SelectionItemPattern Pattern)>();
@@ -316,6 +345,7 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
                 Crashed = false,
                 SwitchesCompleted = 0,
                 SwitchesAttempted = 0,
+                Placement = placement,
                 Details = localDetails
                     .Append("FAIL REASON: fewer than 2 navigation items exposed SelectionItemPattern, so the")
                     .Append("rapid navigation loop could not be driven.")
@@ -408,8 +438,31 @@ public sealed class A50RapidNavigationSurvivalCheck : IAcceptanceCheck
             SwitchesAttempted = attempted,
             LastItem = lastItem,
             Elapsed = stopwatch.Elapsed,
+            Placement = placement,
             Details = localDetails
         };
+    }
+
+    /// <summary>
+    /// Builds the launch the stress loop uses.
+    /// </summary>
+    /// <remarks>
+    /// The switch count and the pacing are untouched - this is only about <i>where</i> the window
+    /// that gets switched 200 times lives. It is started off-screen (see <see cref="OffscreenWindow"/>)
+    /// so the two hundred page changes happen in a real window that nobody has to watch; UI Automation
+    /// drives off-screen windows exactly like on-screen ones.
+    /// </remarks>
+    private static ProcessStartInfo CreateStartInfo(string applicationPath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = applicationPath,
+            WorkingDirectory = Path.GetDirectoryName(applicationPath)!,
+            UseShellExecute = false
+        };
+
+        OffscreenWindow.Request(startInfo);
+        return startInfo;
     }
 
     /// <summary>Waits for the process to own a visible top-level window and returns it.</summary>

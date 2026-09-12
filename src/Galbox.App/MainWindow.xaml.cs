@@ -74,6 +74,19 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
+        var appWindow = AppWindow;
+
+        // Take the window off every monitor when - and only when - a test asked for it, BEFORE the
+        // size clamp below. Ordering matters: this is the last word on where the window is, so
+        // nothing later in the startup path can paint it back onto the desktop. See
+        // OffscreenWindowVariable for why the switch exists and why it is inert by default.
+        _offscreenWindowRequested = IsOffscreenWindowRequested();
+        if (_offscreenWindowRequested)
+        {
+            HideFromTaskbarAndAltTab();
+            MoveWindowOffscreen(appWindow);
+        }
+
         // Set initial size.
         //
         // AppWindow sizes are PHYSICAL pixels. With a fixed 1200x800 the application opened an
@@ -82,7 +95,6 @@ public sealed partial class MainWindow : Window
         // (measured with UI Automation: the 补丁中心 card's content extended past the window's right
         // border). Scale the design size by the window's own DPI and clamp it to the work area so the
         // window is actually the size the layout assumes.
-        var appWindow = AppWindow;
         appWindow.Resize(CalculateInitialWindowSize(appWindow));
 
         // Subscribe to window closed event for cleanup
@@ -160,6 +172,161 @@ public sealed partial class MainWindow : Window
 
         return new Windows.Graphics.SizeInt32(Math.Max(960, width), Math.Max(640, height));
     }
+
+    #region Test-only off-screen startup
+
+    /// <summary>
+    /// Test-only switch: set it to <c>1</c> and the application opens its window entirely outside
+    /// every monitor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The acceptance suite starts this executable for real in four checks (A9, A18, A19, A50), and
+    /// two of them drive the whole navigation menu inside the running window - A50 two hundred times
+    /// back to back. When several work lines build and accept in parallel, that is a window that
+    /// keeps popping up on the developer's own desktop and pages through the product by itself.
+    /// </para>
+    /// <para>
+    /// Win32 does not care where a window is. A window at
+    /// (<see cref="OffscreenCoordinate"/>, <see cref="OffscreenCoordinate"/>) is still
+    /// <c>IsWindowVisible</c>, still has a non-zero <c>Process.MainWindowHandle</c>, still carries
+    /// its title, is still a child of the UI Automation root and still loads and switches pages.
+    /// Nothing is weakened by moving it: it simply is not painted anywhere the developer can see.
+    /// </para>
+    /// <para>
+    /// <b>It is inert unless the value is exactly "1".</b> Unset, empty, "0" or "false" all leave the
+    /// startup path untouched: same size, same position, same title, same navigation, same process
+    /// monitoring. The shipping application never sets this variable for itself.
+    /// </para>
+    /// </remarks>
+    public const string OffscreenWindowVariable = "GALBOX_TEST_OFFSCREEN_WINDOW";
+
+    /// <summary>
+    /// The one value that enables <see cref="OffscreenWindowVariable"/>.
+    /// </summary>
+    /// <remarks>
+    /// Declared next to the variable so a caller never has to spell the value itself: every
+    /// harness that starts this executable writes
+    /// <c>OffscreenWindowVariable = OffscreenWindowEnabledValue</c>, and a change to the accepted
+    /// format breaks the build instead of silently putting windows back on somebody's desktop.
+    /// </remarks>
+    public const string OffscreenWindowEnabledValue = "1";
+
+    /// <summary>
+    /// Where an off-screen window is put. Far outside any monitor layout this machine can have, and
+    /// deliberately above the 16-bit trap at -32768 that legacy window messages still carry.
+    /// </summary>
+    private const int OffscreenCoordinate = -32000;
+
+    /// <summary>Whether this instance was asked to start off-screen.</summary>
+    private readonly bool _offscreenWindowRequested;
+
+    /// <summary>
+    /// Reads <see cref="OffscreenWindowVariable"/>. Only the literal <c>1</c> enables the switch, so
+    /// a stray "0", "false" or an empty value can never move a real user's window.
+    /// </summary>
+    private static bool IsOffscreenWindowRequested()
+        => string.Equals(
+            Environment.GetEnvironmentVariable(OffscreenWindowVariable)?.Trim(),
+            OffscreenWindowEnabledValue,
+            StringComparison.Ordinal);
+
+    /// <summary>Moves the window off every monitor, leaving its size and z-order alone.</summary>
+    private static void MoveWindowOffscreen(Microsoft.UI.Windowing.AppWindow appWindow)
+        => appWindow.Move(new Windows.Graphics.PointInt32(OffscreenCoordinate, OffscreenCoordinate));
+
+    private const int GwlExStyle = -20;
+    private const long WsExToolWindow = 0x00000080L;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpFrameChanged = 0x0020;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    /// <summary>
+    /// Takes the window out of the taskbar and the Alt-Tab list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the second half of "the suite may not disturb the desktop": a window that is off every
+    /// monitor but still gets a taskbar button is still something the developer has to look at, and
+    /// the button appears and disappears once per GUI check.
+    /// </para>
+    /// <para>
+    /// <b>Measured, not assumed.</b> <c>WS_EX_TOOLWINDOW</c> was long avoided here on the theory that
+    /// it would make <c>Process.MainWindowHandle</c> return zero - which is exactly what A9
+    /// exists to assert. That theory was tested and is <i>false</i> on .NET 8: .NET's main-window
+    /// search only requires <c>GW_OWNER == 0</c> and <c>IsWindowVisible</c>, and it ignores
+    /// <c>WS_EX_TOOLWINDOW</c>. Measured on a live window (2026-09-12): after setting the bit,
+    /// <c>MainWindowHandle</c> was still 0x80A7A, <c>IsWindowVisible</c> was still TRUE, the window
+    /// rectangle was still (-32000, -32000), and the taskbar's Galbox entry went from PRESENT to
+    /// ABSENT. All three requirements hold, so it is applied - and only for a window this class has
+    /// already been asked to start off-screen.
+    /// </para>
+    /// <para>
+    /// <c>AppWindow.IsShownInSwitchers = false</c> is deliberately not used: measured on the same
+    /// build (WinAppSDK 1.6.250205002) it left <c>GetWindowLongPtr(GWL_EXSTYLE)</c> at 0x00000100
+    /// and the taskbar entry in place, i.e. it did nothing at all for this unpackaged window.
+    /// </para>
+    /// </remarks>
+    private void HideFromTaskbarAndAltTab()
+    {
+        var hwnd = WindowHandle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            var style = GetWindowLongPtr(hwnd, GwlExStyle).ToInt64();
+            if ((style & WsExToolWindow) != 0)
+            {
+                return; // already applied
+            }
+
+            SetWindowLongPtr(hwnd, GwlExStyle, new IntPtr(style | WsExToolWindow));
+
+            // The shell only re-reads the extended style when the frame is recalculated.
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SwpNoSize | SwpNoMove | SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
+        }
+        catch (Exception ex)
+        {
+            // A window that stays in the taskbar is not worth taking the application down for.
+            System.Diagnostics.Debug.WriteLine($"Could not hide the window from the task switcher: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the off-screen placement once the window has been activated.
+    /// </summary>
+    /// <remarks>
+    /// The constructor already put the window off-screen and out of the task switcher, so on a
+    /// healthy start this call writes the same coordinates and the same style it already found and
+    /// changes nothing. It is here so that a runtime or shell step that re-centres the window, or
+    /// resets its extended style, during <c>Activate()</c> cannot put it back on somebody's desktop.
+    /// It is a no-op unless <see cref="OffscreenWindowVariable"/> is set to "1".
+    /// </remarks>
+    internal void ReapplyOffscreenPlacementForTests()
+    {
+        if (_offscreenWindowRequested)
+        {
+            HideFromTaskbarAndAltTab();
+            MoveWindowOffscreen(AppWindow);
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Composes the window caption from the product name and the assembly version.

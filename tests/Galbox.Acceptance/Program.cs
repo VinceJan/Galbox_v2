@@ -18,6 +18,12 @@ namespace Galbox.Acceptance;
 /// </summary>
 internal static class Program
 {
+    /// <summary>PER_MONITOR_AWARE_V2 from <c>SetProcessDpiAwarenessContext</c>.</summary>
+    private static readonly IntPtr PerMonitorAwareV2 = new(-4);
+
+    /// <summary>Whether this process ended up per-monitor DPI aware (see <see cref="PinDpiAwareness"/>).</summary>
+    private static bool _perMonitorDpiAware;
+
     private static async Task<int> Main(string[] args)
     {
         try
@@ -28,6 +34,8 @@ internal static class Program
         {
             // Redirected consoles can reject the encoding change; the report is ASCII-safe anyway.
         }
+
+        PinDpiAwareness();
 
         var options = AcceptanceOptions.Parse(args);
         var timeoutSeconds = ParseTimeoutSeconds(args);
@@ -161,6 +169,36 @@ internal static class Program
     }
 
     /// <summary>
+    /// Pins this host to per-monitor DPI awareness before anything is measured.
+    /// </summary>
+    /// <remarks>
+    /// The checks report raw <c>GetWindowRect</c> / <c>GetMonitorInfo</c> values, and Windows scales
+    /// those coordinates for a process that is not DPI aware. Left to itself this process starts
+    /// unaware and is promoted part-way through the run - which was measurable: with the application
+    /// window deliberately placed at physical (-32000, -32000), A9/A18/A19 printed (-21333, -21333)
+    /// while A50, running after UI Automation had touched the process, printed (-32000, -32000) for
+    /// the very same position. Both readings are self-consistent (the monitor rectangles are scaled
+    /// the same way), so no verdict was ever wrong, but a report whose units change halfway through
+    /// cannot be checked by hand. Fixing the awareness at startup removes that.
+    /// </remarks>
+    private static void PinDpiAwareness()
+    {
+        try
+        {
+            _perMonitorDpiAware = SetProcessDpiAwarenessContext(PerMonitorAwareV2);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // Pre-1703 Windows. The coordinates stay virtualised and <see cref="_perMonitorDpiAware"/>
+            // says so in the report.
+            _perMonitorDpiAware = false;
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+    /// <summary>
     /// Prints the environment and proves that the UI-free container can construct every
     /// non-UI service the shipping app registers. A resolution failure here is reported before
     /// any check runs, because it would make every later result meaningless.
@@ -177,6 +215,7 @@ internal static class Program
         Console.WriteLine($" Runtime            : {RuntimeInformation.FrameworkDescription}");
         Console.WriteLine($" Executable         : {Environment.ProcessPath}");
         Console.WriteLine($" Working directory  : {Environment.CurrentDirectory}");
+        Console.WriteLine($" DPI awareness      : {(_perMonitorDpiAware ? "per-monitor-v2 (window/monitor coordinates below are PHYSICAL pixels)" : "NOT pinned - window/monitor coordinates are DPI-virtualised")}");
         Console.WriteLine($" Game folder        : {context.Options.GameFolder} (exists: {Directory.Exists(context.Options.GameFolder)})");
         Console.WriteLine($" Scraping query     : \"{context.Options.GameName}\"");
         Console.WriteLine($" Acceptance DB      : {AcceptanceContainer.DatabasePath}");

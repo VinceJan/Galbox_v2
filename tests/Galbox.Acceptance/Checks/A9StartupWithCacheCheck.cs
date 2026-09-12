@@ -46,6 +46,16 @@ namespace Galbox.Acceptance.Checks;
 /// Win32-API quirk can never turn a real window into a false failure). On failure the startup log
 /// written by this launch is attached, which is also what proves the startup-failure reporting is
 /// no longer silent.
+///
+/// <para><b>What the window is allowed to do to the desktop: nothing.</b> The requirement above is
+/// unchanged - a real, visible, top-level window is still mandatory, because "process alive, window
+/// missing" is the defect this check exists for. What the check additionally measures is <i>where</i>
+/// that window is: it is started with <see cref="OffscreenWindow.Variable"/> set, so the application
+/// puts the window outside every monitor while Win32 still reports it visible and the shell still
+/// gives it a title. A window that turns up on a monitor fails the check (see
+/// <see cref="OffscreenWindow.WouldBeVisibleReason"/>): this suite is run repeatedly, sometimes by
+/// several work lines at once, and it may not flash windows in front of whoever is using the
+/// machine.</para>
 /// </summary>
 public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 {
@@ -64,6 +74,7 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
     {
         var expected = "with at least one search_*.json cache file present, Galbox.App.exe is still "
                      + $"alive and owns a visible top-level window within {WindowTimeout.TotalSeconds:F0}s, "
+                     + "that window is outside every monitor (the run must not disturb the desktop), "
                      + "and the startup log OF THAT PROCESS (its own private data folder) reports completion";
 
         var details = new List<string>();
@@ -137,6 +148,7 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
         Process? process = null;
         var windowHandle = IntPtr.Zero;
         var windowTitle = string.Empty;
+        WindowPlacement? placement = null;
         int visibleTopLevelWindows = 0;
         var elapsed = TimeSpan.Zero;
         var exitBeforeWindow = false;
@@ -153,6 +165,11 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 
             // The child's whole world: database, scrape cache and startup log live under this path.
             startInfo.Environment[GalboxDataDirectory.DataDirectoryVariable] = dataDirectory;
+
+            // The window this check requires must not be on anybody's desktop. It stays a real,
+            // visible, top-level window - only its rectangle moves outside every monitor. See
+            // OffscreenWindow.
+            OffscreenWindow.Request(startInfo);
 
             process = Process.Start(startInfo);
             if (process is null)
@@ -223,6 +240,9 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
             process.Refresh();
             aliveBeforeCleanup = !process.HasExited;
             windowTitle = windowHandle != IntPtr.Zero ? ReadWindowTitle(windowHandle) : string.Empty;
+
+            // Also before the kill: GetWindowRect can only be read while the window exists.
+            placement = OffscreenWindow.Measure(windowHandle);
         }
         finally
         {
@@ -309,18 +329,25 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
 
         details.Add($"Window title         : \"{windowTitle}\"");
         details.Add($"Window is the startup-failure dialog: {windowIsFailureDialog}");
+        details.Add($"Window placement     : {placement?.Describe() ?? "(no window handle, nothing to measure)"}");
+        details.Add($"Off-screen monitors  : {placement?.MonitorSummary ?? "(not measured)"}");
         details.Add($"Startup log says     : completed={startupCompleted}, failed={startupFailed}");
 
         var isolationProven = foreignLines.Count == 0 && beginCount == 1 && privateDatabaseExists;
 
+        // A window is required; a window ON A MONITOR is not acceptable. The rectangle is measured,
+        // never assumed - see OffscreenWindow.
+        var offscreenProven = placement is { IsWindowVisible: true, IsOffscreen: true };
+
         if (processAlive && hasWindow && !windowIsFailureDialog && startupCompleted && !startupFailed
-            && isolationProven)
+            && isolationProven && offscreenProven)
         {
             return CheckResult.Pass(
                     Id, Title, expected,
                     $"window present: MainWindowHandle=0x{windowHandle.ToInt64():X} (\"{windowTitle}\"), "
                   + $"startup log reports completion, pid alive after {elapsed.TotalMilliseconds:F0} ms, "
-                  + $"log isolated to pid {ownProcessId} ({logTail.Count} lines, 0 foreign)")
+                  + $"log isolated to pid {ownProcessId} ({logTail.Count} lines, 0 foreign), "
+                  + $"window off-screen at {placement!.Rect} with IsWindowVisible={placement.IsWindowVisible}")
                 .With(details.ToArray());
         }
 
@@ -339,16 +366,19 @@ public sealed class A9StartupWithCacheCheck : IAcceptanceCheck
                             + $"{foreignLines.Count} line(s) from another process, {beginCount} "
                             + "\"startup sequence begins\" line(s), private database created="
                             + $"{privateDatabaseExists}"
-                            : "the process stayed alive but never created a visible top-level window "
-                            + "(the classic 'double-click does nothing' failure: the startup exception "
-                            + "was swallowed)";
+                            : !offscreenProven
+                                ? OffscreenWindow.WouldBeVisibleReason
+                                : "the process stayed alive but never created a visible top-level window "
+                                + "(the classic 'double-click does nothing' failure: the startup exception "
+                                + "was swallowed)";
 
         details.Add($"FAIL REASON: {reason}");
         return CheckResult.Fail(Id, Title, expected,
                 $"MainWindowHandle=0x{windowHandle.ToInt64():X} (\"{windowTitle}\"), "
               + $"visibleTopLevelWindows={visibleTopLevelWindows}, alive={processAlive}, "
               + $"exitedEarly={exitBeforeWindow}, completed={startupCompleted}, failed={startupFailed}, "
-              + $"foreignLogLines={foreignLines.Count}, beginsLines={beginCount}")
+              + $"foreignLogLines={foreignLines.Count}, beginsLines={beginCount}, "
+              + $"placement=[{placement?.Describe() ?? "(none)"}]")
             .With(details.ToArray());
     }
 

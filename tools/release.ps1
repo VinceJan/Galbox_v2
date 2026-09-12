@@ -8,6 +8,9 @@
 #   发布目录  $OutputRoot\Galbox-<version>-win-x64\
 #   分发包    $OutputRoot\Galbox-<version>-win-x64.zip
 #
+# 第 3 步的实机验证默认让窗口**离屏**启动，不会在跑脚本的人的桌面上弹窗；
+# 想亲眼看一次用户看到的样子加 -OnScreen。原因与全仓的规矩见 docs/DEVELOPER-GUIDE.md §6.1。
+#
 # 这个脚本把「发布 → 核对产物 → 实机验证 → 打包」四步固化下来，避免每次手敲命令时漏步。
 # 每一步都会打印实测值，任一步失败即以非零码退出（不会带着坏产物继续往下走）。
 #
@@ -23,6 +26,9 @@ param(
 
     # 跳过实机启动验证（只做发布与打包时用）。
     [switch] $SkipLaunchProbe,
+
+    # 让发布出来的程序按用户看到的样子出现在屏幕上（默认离屏，见第 3 步的说明）。
+    [switch] $OnScreen,
 
     # 保留已存在的输出目录内容（默认会先清理）。
     [switch] $NoClean
@@ -116,7 +122,51 @@ if (-not $SkipLaunchProbe) {
     }
 
     $exe = Join-Path $publishDir 'Galbox.App.exe'
-    $proc = Start-Process -FilePath $exe -WorkingDirectory $publishDir -PassThru
+
+    # ---------------------------------------------------------------- 离屏启动（默认）
+    #
+    # 这个脚本由发布工程师在自己机器上反复运行，每跑一次就弹一次窗口正是要避免的打扰。
+    # 所以探针默认让窗口落在所有显示器之外（docs/DEVELOPER-GUIDE.md §6.1 是同一条规矩）。
+    #
+    # 为什么这里也敢离屏 —— 本步的每一条断言都与窗口位置无关，全部实测过：
+    #   * MainWindowHandle 非零：实测离屏后仍非零（.NET 找主窗口只要求无属主 + IsWindowVisible）
+    #   * 窗口标题可读         ：实测仍是 "Galbox 1.0.0"
+    #   * CloseMainWindow() 能正常退出：它按句柄投递 WM_CLOSE，与位置无关
+    # 「必须看用户看到的那一版」这个理由在这里不成立：离屏只是 MainWindow 构造里一个
+    # if (环境变量) 分支，启动路径上其它每一步（DI、迁移、缓存预热、建窗口、导航、进程监控）
+    # 走的都是同一条代码。想亲眼看一次用户实际看到的样子，加 -OnScreen。
+    #
+    # ⚠️ 时序：这个变量由「被启动的那个 exe」决定要不要理会。本次发布之前的产物
+    #（例如 Galbox-1.0.0-win-x64，来自 967ed5e）根本不认识它，会被静默忽略、窗口照样出现在屏幕上。
+    # 所以「设置了变量但窗口还是出现了」不是 bug，而是那份产物还没有这个能力 —— 本改动要到
+    # 下一次发布才生效。
+    $probeOffscreen = -not $OnScreen
+    $offscreenVariable = $null
+    if ($probeOffscreen) {
+        # 变量名与取值从应用源码里读出来，不在脚本里另抄一份 —— 抄的那份会随时间腐烂，
+        # 而且腐烂的方式是「悄悄又开始弹窗」，正是这次要根除的问题。
+        $mainWindowSource = Join-Path $repoRoot 'src\Galbox.App\MainWindow.xaml.cs'
+        $source = Get-Content $mainWindowSource -Raw
+        $nameMatch = [regex]::Match($source, 'OffscreenWindowVariable\s*=\s*"([^"]+)"')
+        $valueMatch = [regex]::Match($source, 'OffscreenWindowEnabledValue\s*=\s*"([^"]+)"')
+        if (-not $nameMatch.Success -or -not $valueMatch.Success) {
+            Fail "在 $mainWindowSource 里找不到离屏开关的常量定义（OffscreenWindowVariable / OffscreenWindowEnabledValue）。发布探针默认离屏，找不到就不敢猜；传 -SkipLaunchProbe 或 -OnScreen 后重跑。"
+        }
+
+        $offscreenVariable = $nameMatch.Groups[1].Value
+        [System.Environment]::SetEnvironmentVariable($offscreenVariable, $valueMatch.Groups[1].Value, 'Process')
+        Write-Host "  探针以离屏方式启动（$offscreenVariable=$($valueMatch.Groups[1].Value)），不会打扰正在用这台机器的人；加 -OnScreen 可改回屏幕内" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  探针以 -OnScreen 启动：窗口会真的出现在屏幕上（用户看到的那一版）" -ForegroundColor Yellow
+    }
+
+    try {
+        $proc = Start-Process -FilePath $exe -WorkingDirectory $publishDir -PassThru
+    } finally {
+        if ($offscreenVariable) {
+            [System.Environment]::SetEnvironmentVariable($offscreenVariable, $null, 'Process')
+        }
+    }
     Write-Host "  PID $($proc.Id) 于 $(Get-Date -Format 'HH:mm:ss.fff') 启动"
 
     $deadline = (Get-Date).AddSeconds(60)

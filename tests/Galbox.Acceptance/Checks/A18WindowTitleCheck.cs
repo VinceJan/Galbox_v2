@@ -14,6 +14,11 @@ namespace Galbox.Acceptance.Checks;
 ///
 /// The check starts the shipping executable and reads the real caption from the window handle, so
 /// the verdict is the measured value the shell displays, not a source-code claim.
+///
+/// <para>The window is started off-screen (<see cref="OffscreenWindow"/>): the caption comes from a
+/// genuine top-level window with <c>IsWindowVisible = TRUE</c>, but the window's rectangle is
+/// outside every monitor, so reading it costs nobody a window popping up on their desktop. A window
+/// that lands on a monitor fails the check rather than passing quietly.</para>
 /// </summary>
 public sealed class A18WindowTitleCheck : IAcceptanceCheck
 {
@@ -29,8 +34,9 @@ public sealed class A18WindowTitleCheck : IAcceptanceCheck
     /// <inheritdoc />
     public async Task<CheckResult> RunAsync(AcceptanceContext context, CancellationToken cancellationToken)
     {
-        var expected = "the window the shipping executable creates has a MainWindowTitle that starts with \"Galbox\" "
-                     + "and is not the host default \"WinUI Desktop\"";
+        var expected = "the window the shipping executable creates has a MainWindowTitle that starts with \"Galbox\", "
+                     + "is not the host default \"WinUI Desktop\", and is outside every monitor "
+                     + "(a real window, just not on the developer's desktop)";
 
         var details = new List<string>();
 
@@ -65,6 +71,7 @@ public sealed class A18WindowTitleCheck : IAcceptanceCheck
         Process? process = null;
         var windowHandle = IntPtr.Zero;
         var windowTitle = string.Empty;
+        WindowPlacement? placement = null;
         var elapsed = TimeSpan.Zero;
         var attempts = 0;
         const int maxAttempts = 3;
@@ -84,12 +91,17 @@ public sealed class A18WindowTitleCheck : IAcceptanceCheck
                 attempts++;
 
                 process?.Dispose();
-                process = Process.Start(new ProcessStartInfo
+                var startInfo = new ProcessStartInfo
                 {
                     FileName = applicationPath,
                     WorkingDirectory = Path.GetDirectoryName(applicationPath)!,
                     UseShellExecute = false
-                });
+                };
+
+                // The title must be read from a real window, but that window has no business being
+                // on the developer's desktop while this suite runs. See OffscreenWindow.
+                OffscreenWindow.Request(startInfo);
+                process = Process.Start(startInfo);
 
                 if (process is null)
                 {
@@ -130,6 +142,11 @@ public sealed class A18WindowTitleCheck : IAcceptanceCheck
                 if (windowHandle != IntPtr.Zero)
                 {
                     windowTitle = ReadWindowTitle(windowHandle);
+
+                    // GetWindowRect is only readable while the window (and the process) still exist:
+                    // the finally block below kills it before the verdict is computed.
+                    placement = OffscreenWindow.Measure(windowHandle);
+
                     if (windowTitle.Length > 0)
                     {
                         break;
@@ -177,6 +194,8 @@ public sealed class A18WindowTitleCheck : IAcceptanceCheck
 
         details.Add($"MainWindowHandle     : 0x{windowHandle.ToInt64():X}");
         details.Add($"Window title (Win32) : \"{windowTitle}\"");
+        details.Add($"Window placement     : {placement?.Describe() ?? "(no window handle, nothing to measure)"}");
+        details.Add($"Off-screen monitors  : {placement?.MonitorSummary ?? "(not measured)"}");
         details.Add($"Elapsed              : {elapsed.TotalMilliseconds:F0} ms (launch attempts: {attempts})");
 
         if (windowHandle == IntPtr.Zero)
@@ -192,20 +211,28 @@ public sealed class A18WindowTitleCheck : IAcceptanceCheck
         // "WinUI Desktop" is the value the host assigns when the application never sets one.
         var isHostDefault = windowTitle.Equals("WinUI Desktop", StringComparison.OrdinalIgnoreCase);
         var startsWithProductName = windowTitle.StartsWith("Galbox", StringComparison.Ordinal);
-        var pass = windowHandle != IntPtr.Zero && startsWithProductName && !isHostDefault;
+        var offscreen = placement is { IsWindowVisible: true, IsOffscreen: true };
+        var pass = windowHandle != IntPtr.Zero && startsWithProductName && !isHostDefault && offscreen;
 
         details.Add(string.Empty);
         details.Add("--- interpretation ---");
         details.Add($"  window was created          : {windowHandle != IntPtr.Zero}");
         details.Add($"  title starts with \"Galbox\"  : {startsWithProductName}");
         details.Add($"  title is the host default   : {isHostDefault}");
-        if (!pass && windowHandle != IntPtr.Zero)
+        details.Add($"  window is visible           : {placement?.IsWindowVisible.ToString() ?? "(not measured)"}");
+        details.Add($"  window is off every monitor : {placement?.IsOffscreen.ToString() ?? "(not measured)"}");
+        if (!pass && windowHandle != IntPtr.Zero && startsWithProductName && !isHostDefault)
+        {
+            details.Add($"  VERDICT: {OffscreenWindow.WouldBeVisibleReason}");
+        }
+        else if (!pass && windowHandle != IntPtr.Zero)
         {
             details.Add("  VERDICT: the taskbar / Alt-Tab entry shows the host default instead of the product name");
             details.Add("           - the W16 missing Window.Title defect.");
         }
 
-        var actual = $"title=\"{windowTitle}\", startsWithGalbox={startsWithProductName}, hostDefault={isHostDefault}";
+        var actual = $"title=\"{windowTitle}\", startsWithGalbox={startsWithProductName}, hostDefault={isHostDefault}, "
+                   + $"placement=[{placement?.Describe() ?? "(none)"}]";
 
         var result = pass
             ? CheckResult.Pass(Id, Title, expected, actual)
