@@ -71,7 +71,9 @@ public sealed class PatchCenterProbe
     /// </summary>
     public async Task<object?> CallAsync(string methodName, params object?[] arguments)
     {
-        var method = ViewModelType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
+        arguments ??= Array.Empty<object?>();
+        var method = ReflectionBridge.FindCallableInstanceMethod(
+            ViewModelType, methodName, arguments.Length, includeNonPublic: false);
         if (method is null)
         {
             Missing.Add($"method {ViewModelType.Name}.{methodName}");
@@ -81,7 +83,7 @@ public sealed class PatchCenterProbe
         object? result;
         try
         {
-            result = method.Invoke(_viewModel, arguments);
+            result = method.Invoke(_viewModel, ReflectionBridge.PadOptionalArguments(method, arguments));
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         {
@@ -101,7 +103,9 @@ public sealed class PatchCenterProbe
     /// <summary>Calls a void method by name. Missing methods are recorded, not thrown.</summary>
     public void Call(string methodName, params object?[] arguments)
     {
-        var method = ViewModelType.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
+        arguments ??= Array.Empty<object?>();
+        var method = ReflectionBridge.FindCallableInstanceMethod(
+            ViewModelType, methodName, arguments.Length, includeNonPublic: false);
         if (method is null)
         {
             Missing.Add($"method {ViewModelType.Name}.{methodName}");
@@ -110,7 +114,7 @@ public sealed class PatchCenterProbe
 
         try
         {
-            method.Invoke(_viewModel, arguments);
+            method.Invoke(_viewModel, ReflectionBridge.PadOptionalArguments(method, arguments));
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         {

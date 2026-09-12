@@ -266,15 +266,6 @@ public partial class PatchCenterViewModel
     [ObservableProperty]
     private PatchRollbackResult? _recoveryResult;
 
-    // ===================================================================== 未实现的部分
-
-    /// <summary>
-    /// The honest placeholder for the part of the product that is blocked on unresolved decisions.
-    /// There is no button behind it.
-    /// </summary>
-    public string OnlinePatchSourceNotice =>
-        "在线补丁源：未实现。本页只处理你已经下载到本机的补丁包 —— 不联网、不调用补丁站 API、不需要任何密钥。";
-
     // ===================================================================== 命令
 
     /// <summary>Re-runs the preview for the package that is currently selected.</summary>
@@ -319,7 +310,16 @@ public partial class PatchCenterViewModel
     /// available; a refused package returns false <b>and</b> fills
     /// <see cref="PackageRejectionMessage"/>, so the refusal is visible rather than an empty page.
     /// </summary>
-    public async Task<bool> SelectPatchArchiveAsync(string archivePath, CancellationToken ct = default)
+    /// <param name="archivePath">The package the user picked, or the file the online source adopted.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <param name="moyuPatchName">
+    /// Set only by the online source: the patch name to record in the install ledger when the package
+    /// was discovered on moyu.moe. The local-file path passes nothing and keeps its previous wording.
+    /// </param>
+    public async Task<bool> SelectPatchArchiveAsync(
+        string archivePath,
+        CancellationToken ct = default,
+        string? moyuPatchName = null)
     {
         ResetPatchWorkflow();
 
@@ -372,8 +372,20 @@ public partial class PatchCenterViewModel
                 return false;
             }
 
+            // Where the package came from. For a file the user downloaded from a moyu page, this is
+            // the site's own metadata (patch id, resource id and the page they were sent to), so the
+            // ledger can say "installed from moyu.moe" rather than "local file".
+            var options = _stagedMoyuResource is not null
+                ? new PatchPreviewOptions
+                {
+                    PatchName = moyuPatchName ?? Path.GetFileNameWithoutExtension(archivePath),
+                    Source = _stagedMoyuResource.ToPatchSourceInfo()
+                }
+                : PatchPreviewOptions.ForLocalFile(
+                    moyuPatchName ?? Path.GetFileNameWithoutExtension(archivePath));
+
             var attempt = await _patchService
-                .PreviewAsync(archivePath, gameRoot, gameId, PatchPreviewOptions.ForLocalFile(Path.GetFileNameWithoutExtension(archivePath)), ct)
+                .PreviewAsync(archivePath, gameRoot, gameId, options, ct)
                 .ConfigureAwait(true);
 
             PreviewAttempt = attempt;

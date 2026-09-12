@@ -29,10 +29,31 @@ public partial class PatchCenterViewModel : ObservableObject
 
     /// <summary>
     /// The door onto the local patch installer. Patch <b>packages</b> come from this; patch
-    /// <b>records</b> still come from the database. Online sources are a separate work line and are
-    /// deliberately not represented here.
+    /// <b>records</b> still come from the database. The online source (moyu.moe) is a third input:
+    /// it finds out <i>which</i> package to fetch, and the file it produces is handed to this same
+    /// service, so extraction, preview, backup and rollback stay in one place.
     /// </summary>
     private readonly ILocalPatchService _patchService;
+
+    /// <summary>
+    /// The online source: moyu.moe's official public face, the browser hop it is designed around, and
+    /// the downloads-folder watcher that adopts the file the user downloads. All three are the
+    /// verified service-layer components; this ViewModel only drives them. See
+    /// <c>PatchCenterViewModel.Moyu.cs</c> for the query, the four distinct outcomes and the wording.
+    /// </summary>
+    private readonly Galbox.Core.Api.MoyuApi _moyuApi;
+
+    /// <summary>The browser hop. The same instance the container holds, so a dry run stays a dry run.</summary>
+    private readonly Galbox.Core.Api.MoyuBrowserLauncher _moyuLauncher;
+
+    /// <summary>Adopts the file the user just downloaded from the page we opened.</summary>
+    private readonly Galbox.Core.Api.MoyuDownloadWatcher _moyuWatcher;
+
+    /// <summary>
+    /// Where the <c>nmk_</c> key lives: the same singleton the moyu client was built from, so
+    /// "configure a key" cannot write somewhere the client does not read.
+    /// </summary>
+    private readonly Galbox.Core.Api.IMoyuKeyStore _moyuKeyStore;
 
     /// The DispatcherQueue of the UI thread, captured once while this ViewModel is being built on
     /// the UI thread.
@@ -153,21 +174,40 @@ public partial class PatchCenterViewModel : ObservableObject
     /// <summary>
     /// Creates a PatchCenterViewModel with injected dependencies.
     /// </summary>
+    /// <remarks>
+    /// The four moyu arguments are what makes the online patch source a real door rather than a
+    /// paragraph of text: this page can now ask the site which patches a game has, open the page,
+    /// adopt the downloaded file and hand it to the local engine. They were missing entirely before -
+    /// no file under <c>Views/</c> or <c>ViewModels/</c> referenced the moyu layer at all.
+    /// </remarks>
     public PatchCenterViewModel(
         IDbContextFactory<GalboxDbContext> dbContextFactory,
         INavigationService navigationService,
         ILogger<PatchCenterViewModel> logger,
-        ILocalPatchService patchService)
+        ILocalPatchService patchService,
+        Galbox.Core.Api.MoyuApi moyuApi,
+        Galbox.Core.Api.IMoyuKeyStore moyuKeyStore,
+        Galbox.Core.Api.MoyuBrowserLauncher moyuLauncher,
+        Galbox.Core.Api.MoyuDownloadWatcher moyuWatcher)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _patchService = patchService ?? throw new ArgumentNullException(nameof(patchService));
+        _moyuApi = moyuApi ?? throw new ArgumentNullException(nameof(moyuApi));
+        _moyuKeyStore = moyuKeyStore ?? throw new ArgumentNullException(nameof(moyuKeyStore));
+        _moyuLauncher = moyuLauncher ?? throw new ArgumentNullException(nameof(moyuLauncher));
+        _moyuWatcher = moyuWatcher ?? throw new ArgumentNullException(nameof(moyuWatcher));
 
         // Captured on the UI thread (see the field's remarks). Null only if something ever
         // constructs this ViewModel off the UI thread - in which case the callers below keep their
         // previous behaviour instead of silently dropping updates.
         _uiDispatcher = TryGetUiDispatcher();
+
+        // Deliberately NOT applying a state here. The page opens on "not queried yet", and the key
+        // panel below the button states the missing-key condition on its own (MoyuKeySummary). That
+        // way "no query has been run" and "a query was refused because there is no key" stay two
+        // different things on screen, and the acceptance harness can tell them apart.
     }
 
     /// <summary>
