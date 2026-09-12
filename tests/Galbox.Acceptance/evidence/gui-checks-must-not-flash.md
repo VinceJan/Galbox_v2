@@ -131,30 +131,32 @@ pacing untouched**, and the window was 200 × (`-32000, -32000`).
 
 ## 4. Nothing appeared on the desktop for the whole run
 
-A separate watchdog process sampled every top-level window of every `Galbox.App` process every
-5 ms (about 2000 scans / 30 s) for the entire acceptance run and classified each sample:
+A separate watchdog process sampled every top-level window of every `Galbox.App` process
+continuously (5 ms requested, ~13.6 ms achieved - 66095 scans over 900 s, 90729 window samples)
+while `dotnet test` **and** the complete acceptance suite ran under it. Final report, verbatim:
 
 ```
-=== Galbox desktop watcher (independent of the acceptance harness) ===
-DPI awareness     : per-monitor-v2 set=True (physical pixels)
-Monitors          : (left=3840, top=208, right=6400, bottom=1648) | (left=0, top=0, right=3840, bottom=2160)
-Rule              : a VISIBLE Galbox.App window whose rectangle intersects a monitor is a violation.
-
- 12782 ms : hwnd=0x30228 BECAME VISIBLE at (left=-32000, top=-32000, right=-30200, bottom=-30800) [1800x1200] (on a monitor: False)
- 19804 ms : hwnd=0x50838 BECAME VISIBLE at (left=-32000, top=-32000, right=-30200, bottom=-30800) [1800x1200] (on a monitor: False)
- 21905 ms : hwnd=0x3909DC BECAME VISIBLE at (left=-32000, top=-32000, right=-30200, bottom=-30800) [1800x1200] (on a monitor: False)
-    30 s : scans=2099, distinct Galbox windows=11, violations so far=0
- 49131 ms : hwnd=0xC083C BECAME VISIBLE at (left=-32000, top=-32000, right=-30200, bottom=-30800) [1800x1200] (on a monitor: False)
-    60 s : scans=4241, distinct Galbox windows=14, violations so far=0
-
+Scans             : 66095
+Window samples of Galbox.App windows: 90729
 VIOLATIONS (visible Galbox window overlapping a monitor): 0
+
 RESULT: no Galbox window ever appeared on this desktop during the watch.
 ```
 
-Exactly **four** windows became visible - one per GUI check - and each was already off every monitor
-at the instant it became visible. (The watchdog also saw three extra WinUI helper windows per
-process at `(0, 0, 0, 0)`, never visible and never on a monitor; they are counted in
-`distinct Galbox windows`.)
+Exit code 0. Every window that became visible during those 15 minutes did so at
+`(-32000, -32000)`; 35 of them did, one per launch (the acceptance suite retries a launch when
+another tool kills the process, which is why there are more launches than checks). The per-window
+detail the watchdog printed for each of them reads:
+
+```
+hwnd=0x3B0A4A  pid=31896  first=(left=152, top=152, right=3032, bottom=1689) [2880x1537]
+                           last=(left=-32000, top=-32000, right=-30200, bottom=-30800) [1800x1200]
+       first visible at 799214 ms : (left=-32000, top=-32000, right=-30200, bottom=-30800) (on a monitor: False)
+```
+
+`first visible at ... on a monitor: False` is the sentence that matters: the window existed at an
+interim position before it was shown (the platform sizes it once before `MainWindow` runs), but the
+**first moment it was visible** was already off every monitor, so there was nothing to see.
 
 ### The watchdog was validated against a known-positive first
 
@@ -169,6 +171,47 @@ RESULT: the watched run put a visible Galbox window on the desktop.
 ```
 
 465 violation samples against the old build, 0 against the new one, same instrument, same machine.
+
+### A 15-minute watch that *did* report violations - and why that is the strongest evidence here
+
+One watchdog run (10:54:13, 62575 scans) reported **1093** violation samples and exited 1. That run
+is kept rather than hidden, because every one of those samples belongs to a **deliberate control
+launch with the switch unset** - the three baseline measurements in sections 2 and 6 - and the
+timeline shows the instrument telling the two cases apart in the same session, minutes apart:
+
+```
+=== every window that BECAME VISIBLE during the 15-minute watch ===
+10:54:25  hwnd=0x30228   onMonitor=False      <- acceptance run, A9
+10:54:32  hwnd=0x50838   onMonitor=False      <- acceptance run, A18
+10:54:34  hwnd=0x3909DC  onMonitor=False      <- acceptance run, A19
+10:55:02  hwnd=0xC083C   onMonitor=False      <- acceptance run, A50
+10:55:50  hwnd=0x80838   onMonitor=True       <- CONTROL, launched by hand with the switch UNSET
+10:55:58  hwnd=0x1C082E  onMonitor=False
+10:56:28  hwnd=0x3B0976  onMonitor=True       <- CONTROL, "normal start" row of the taskbar table
+10:56:36  hwnd=0x3C0976  onMonitor=False
+10:57:25  hwnd=0x20A34   onMonitor=False
+10:57:49  hwnd=0x50A88   onMonitor=False
+10:58:15  hwnd=0x80A7A   onMonitor=False      <- the WS_EX_TOOLWINDOW experiment
+10:59:27  hwnd=0x70A70   onMonitor=True       <- CONTROL, "switch unset" row of the four-value check
+10:59:36  hwnd=0x50A32   onMonitor=False
+11:02:29  hwnd=0xA09EA   onMonitor=False      <- tools/release.ps1 launch probe
+11:03:12  hwnd=0x1E001E  onMonitor=False      <- dotnet test
+11:04:41  hwnd=0xF09EA   onMonitor=False      <- final acceptance run, A9
+11:04:52  hwnd=0x120A34  onMonitor=False      <- final acceptance run, A18
+11:05:02  hwnd=0x220810  onMonitor=False
+11:05:05  hwnd=0x160A34  onMonitor=False
+11:05:27  hwnd=0x120926  onMonitor=False
+11:05:29  hwnd=0x1308B4  onMonitor=False
+11:05:34  hwnd=0x4609A8  onMonitor=False
+11:05:36  hwnd=0x33099A  onMonitor=False      <- final acceptance run, A50
+11:06:00  hwnd=0xB0A7E   onMonitor=False
+```
+
+Every window opened by a harness - the acceptance suite, `dotnet test`, the release probe - became
+visible at `(-32000, -32000)`. The only three that became visible on a monitor are the three times
+this investigation started the application **by hand with the switch left unset**, on purpose, to
+measure what a normal start does. Put differently: the harness runs never appear in the
+`onMonitor=True` rows, and the control launches never fail to.
 
 ## 5. The two launch sites outside the acceptance suite
 

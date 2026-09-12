@@ -83,6 +83,9 @@ dotnet build Galbox.sln -c Debug
   `AcceptanceContext.cs` 的 `MinimumFolderSizeBytes`）；指一个空目录会让 A1–A3 失败。
 * A5/A7 是**真实联网查询**（刮削缓存被显式关闭），没有网络时这两项会失败。
 * A9 会**真的启动一次 `Galbox.App.exe`**，检查窗口是否出现；它需要 Windows App SDK 运行时已安装。
+  窗口会**落在所有显示器之外**（A18/A19/A50 同理，`dotnet test` 与 `tools\release.ps1` 也是），
+  所以你跑验收时桌面上不会弹窗、不会自己翻页——这条规矩见
+  [`docs/DEVELOPER-GUIDE.md` §6.1](docs/DEVELOPER-GUIDE.md)。
 * 它只使用 `%LocalAppData%\Galbox\acceptance\acceptance.db`，并在每次运行时删除重建，
   **不会读写你的真实游戏库**（`AcceptanceContainer.cs`）。
 
